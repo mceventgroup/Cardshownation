@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Remove default margin/padding and prevent scroll during canvas editing */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+}
+
+/* Konva canvas cursor helpers */
+.canvas-select   { cursor: default; }
+.canvas-place    { cursor: crosshair; }
+.canvas-pan      { cursor: grab; }
+.canvas-panning  { cursor: grabbing; }
