@@ -5,7 +5,7 @@
 // Pure functions — same input always produces the same output.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Door, LayoutSettings, VendorAssignment } from './types'
+import type { TableObject, Door, Room, LayoutSettings, VendorAssignment } from './types'
 import type {
   WarningsModule,
   WarningResult,
@@ -15,6 +15,7 @@ import type {
   DoorBlockedWarning,
   DuplicateLabelWarning,
   UnassignedTableWarning,
+  OutOfBoundsWarning,
 } from './warnings'
 import { geometry } from './geometry.impl'
 import { spacingModule } from './spacing.impl'
@@ -26,6 +27,7 @@ function computeWarnings(
   vendorAssignments: ReadonlyArray<VendorAssignment>,
   settings: LayoutSettings,
   checkUnassigned: boolean,
+  room?: Room | null,
 ): WarningResult {
   const warnings: LayoutWarning[] = []
 
@@ -100,6 +102,27 @@ function computeWarnings(
     }
   }
 
+  // 6. Out-of-bounds (only when a room is defined)
+  if (room) {
+    for (const t of tables) {
+      const bounds = geometry.getBounds(t).bounds
+      const inside =
+        bounds.x >= room.x &&
+        bounds.y >= room.y &&
+        bounds.x + bounds.width <= room.x + room.width &&
+        bounds.y + bounds.height <= room.y + room.height
+      if (!inside) {
+        warnings.push({
+          type: 'out-of-bounds',
+          severity: 'warning',
+          tableId: t.id,
+          tableLabel: t.label,
+          message: `Table ${t.label} is outside the room boundary`,
+        } satisfies OutOfBoundsWarning)
+      }
+    }
+  }
+
   // Build result
   const affectedTableIds = new Set<string>()
   let errorCount = 0
@@ -126,6 +149,7 @@ function computeWarnings(
         for (const id of w.tableIds) affectedTableIds.add(id)
         break
       case 'unassigned-table':
+      case 'out-of-bounds':
         affectedTableIds.add(w.tableId)
         break
     }
@@ -149,6 +173,7 @@ function warningsForTable(result: WarningResult, tableId: string): LayoutWarning
       case 'duplicate-label':
         return w.tableIds.includes(tableId)
       case 'unassigned-table':
+      case 'out-of-bounds':
         return w.tableId === tableId
     }
   })

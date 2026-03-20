@@ -32,6 +32,7 @@ export type {
   Obstacle,
   DoorSide,
   Door,
+  Room,
   LayoutSettings,
   ResolvedTableColor,
 } from './types'
@@ -57,6 +58,11 @@ export type {
   UpdateVendorAssignmentCommand,
   ClearVendorAssignmentCommand,
   ApplyImportCommand,
+  SetRoomCommand,
+  PlaceDoorCommand,
+  MoveDoorCommand,
+  ResizeDoorCommand,
+  DeleteDoorCommand,
   UpdateSettingsCommand,
 } from './commands'
 export { EMPTY_HISTORY } from './commands'
@@ -89,6 +95,6 @@ export type { RowConfig, BuiltRow, RepositionedTable, RowModule } from './rows'
 export type { NumberingStyle, NumberingScheme, DuplicateLabelGroup, LabelChange, NumberingModule } from './numbering'
 export { DEFAULT_NUMBERING_SCHEME } from './numbering'
 export type { DistanceMeasurement, AisleMeasurement, SelectionMeasurement, MeasurementModule } from './measurement'
-export type { WarningSeverity, OverlapWarning, NarrowAisleWarning, DoorBlockedWarning, DuplicateLabelWarning, UnassignedTableWarning, LayoutWarning, WarningResult, WarningsModule } from './warnings'
+export type { WarningSeverity, OverlapWarning, NarrowAisleWarning, DoorBlockedWarning, DuplicateLabelWarning, UnassignedTableWarning, OutOfBoundsWarning, LayoutWarning, WarningResult, WarningsModule } from './warnings'
 export { EMPTY_WARNING_RESULT } from './warnings'
 export type { ParsedCSV, DetectedMapping, RowValidationError, CSVImportModule } from './csv-import'

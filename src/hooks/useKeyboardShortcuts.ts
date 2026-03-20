@@ -116,6 +116,11 @@ export function useKeyboardShortcuts() {
         return
       }
 
+      if (e.key === 'b') {
+        setActiveTool('draw-room')
+        return
+      }
+
       if (e.key === 'v') {
         useEditorStore.getState().togglePanelCollapsed('vendors')
         return

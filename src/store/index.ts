@@ -15,7 +15,7 @@ import { immer } from 'zustand/middleware/immer'
 import { enableMapSet } from 'immer'
 
 enableMapSet()
-import type { TableObject, Row, Section, Vendor, VendorAssignment, LayoutSettings, Point, SectionId, VendorId, RowId } from '@/domain/types'
+import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, Room, LayoutSettings, Point, SectionId, VendorId, RowId } from '@/domain/types'
 import type { LayoutCommand, CommandHistory } from '@/domain/commands'
 import { EMPTY_HISTORY } from '@/domain/commands'
 import { DEFAULT_SETTINGS } from '@/lib/defaults'
@@ -25,7 +25,7 @@ import { applyCommand, reverseCommand } from './executor'
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ActiveTool = 'select' | 'place-table' | 'place-row'
+export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room'
 
 export interface EditorState {
   // ── Canvas (document) state ─────────────────────────────────────────────
@@ -34,6 +34,8 @@ export interface EditorState {
   sections: Record<string, Section>
   vendors: Record<string, Vendor>
   vendorAssignments: Record<string, VendorAssignment>
+  room: Room | null
+  doors: Record<string, Door>
   settings: LayoutSettings
 
   // ── History ─────────────────────────────────────────────────────────────
@@ -97,6 +99,8 @@ export const useEditorStore = create<EditorState>()(
     sections:      {},
     vendors:       {},
     vendorAssignments: {},
+    room:          null,
+    doors:         {},
     settings:      DEFAULT_SETTINGS,
     history:       EMPTY_HISTORY,
     selectedIds:   new Set<string>(),
@@ -293,6 +297,9 @@ export const selectSections  = (s: EditorState) => s.sections
 export const selectVendors  = (s: EditorState) => s.vendors
 export const selectActiveVendorId = (s: EditorState) => s.activeVendorId
 export const selectVendorAssignments = (s: EditorState) => s.vendorAssignments
+export const selectRoom      = (s: EditorState) => s.room
+export const selectDoors     = (s: EditorState) => s.doors
+export const selectDoorList  = (s: EditorState) => Object.values(s.doors)
 export const selectCanUndo = (s: EditorState) => s.history.past.length > 0
 export const selectCanRedo = (s: EditorState) => s.history.future.length > 0
 export const selectCollapsedPanels = (s: EditorState) => s.collapsedPanels

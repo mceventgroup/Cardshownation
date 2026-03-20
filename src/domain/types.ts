@@ -169,6 +169,19 @@ export interface Door {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ROOM
+// A single axis-aligned rectangle representing the venue boundary (walls).
+// Only one room per layout. Position and size in canvas units.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Room {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // LAYOUT SETTINGS
 // Stored per-layout. Controls canvas dimensions, snapping, and default sizes.
 // minAisleWidth and doorClearance drive the warnings engine.

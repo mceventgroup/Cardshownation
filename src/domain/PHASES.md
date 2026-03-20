@@ -122,25 +122,46 @@ No implementation code exists yet. Every phase below consumes these types.
 
 ---
 
-## Phase 6 — Persistence and Templates
+## Phase 6 — Room Border & Doors
 
 **Implements:**
-- Database schema (Prisma): User, Event, Layout, VenueTemplate, LayoutSnapshot
-- API routes: layout CRUD, snapshot create/list, template CRUD
-- Autosave: debounced 2s after last mutation, serializes LayoutDocument
-- LayoutDocument serializer/deserializer
-- Template instantiation: `TemplateInstantiationResult` with fresh ID generation
+- Room boundary: drawable/resizable rectangular room outline (walls)
+- Door placement: position door openings along walls with configurable width
+- Door clearance zones: rectangular keep-clear area extending inward from each door
+- `DoorBlocked` warning: fires when a table overlaps a door clearance zone
+- Room bounds constraint: optional snap/warn when tables are placed outside the room
+- Canvas rendering: wall lines, door openings, clearance zone overlays
+- Command executor: adds `SET_ROOM`, `PLACE_DOOR`, `MOVE_DOOR`, `RESIZE_DOOR`,
+  `DELETE_DOOR`
 
 **Consumes from domain:**
-- `document.ts` — LayoutDocument (serialized to DB), LayoutSnapshot,
-  VenueTemplate, TemplateInstantiationResult, CURRENT_DOCUMENT_VERSION
+- `types.ts` — Door, Room (new), Point, Rect
+- `commands.ts` — Room/door commands (new)
+- `warnings.ts` — `DoorBlocked` warning type (already defined)
+- `geometry.ts` — GeometryModule (overlap detection for clearance zones)
 
-**NOTE:** This is the first phase that requires a backend. Phases 1–5 can
-run entirely in memory. Phase 6 adds the persistence layer underneath.
+**Depends on Phase 5:** DoorBlocked warning needs the warnings engine in place.
 
 ---
 
-## Phase 7 — CSV Import
+## Phase 7 — Persistence and Templates
+
+**Implements:**
+- localStorage save/load (first pass, no backend)
+- LayoutDocument serializer/deserializer
+- Autosave: debounced 2s after last mutation, serializes LayoutDocument
+- Later: Database schema (Prisma), API routes, VenueTemplate, LayoutSnapshot
+
+**Consumes from domain:**
+- `document.ts` — LayoutDocument (serialized), LayoutSnapshot,
+  VenueTemplate, TemplateInstantiationResult, CURRENT_DOCUMENT_VERSION
+
+**NOTE:** localStorage first, backend later. Phases 1–6 can
+run entirely in memory. Phase 7 adds the persistence layer underneath.
+
+---
+
+## Phase 8 — CSV Import
 
 **Implements:**
 - `CSVImportModule` → `csv-import.impl.ts`
@@ -156,12 +177,12 @@ run entirely in memory. Phase 6 adds the persistence layer underneath.
 - `commands.ts` — ApplyImportCommand
 
 **Depends on Phase 4:** VendorAssignment must exist before import can write to it.
-**Depends on Phase 6:** ImportSession is persisted; the 'before-import' snapshot
+**Depends on Phase 7:** ImportSession is persisted; the 'before-import' snapshot
   requires persistence to be in place for revert to work.
 
 ---
 
-## Phase 8 — Export
+## Phase 9 — Export
 
 **Implements:**
 - Print route: `/print/[layoutId]` — HTML/CSS render of layout (no canvas)
@@ -173,7 +194,7 @@ run entirely in memory. Phase 6 adds the persistence layer underneath.
 - `document.ts` — LayoutDocument (read from DB for print route)
 - `types.ts` — TableObject, VendorAssignment, Section (render in print view)
 
-**Depends on Phase 6:** Must be able to load a saved document to render it.
+**Depends on Phase 7:** Must be able to load a saved document to render it.
 **Depends on Phase 4:** Vendor assignments render in the print view.
 
 ---

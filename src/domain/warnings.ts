@@ -20,7 +20,7 @@
 // it creates noise for every table placed during layout design.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Door, LayoutSettings } from './types'
+import type { TableObject, Door, Room, LayoutSettings } from './types'
 import type { VendorAssignment } from './types'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,12 +74,22 @@ export interface UnassignedTableWarning {
   message: string
 }
 
+/** A table is placed outside the room boundary. Severity: warning. */
+export interface OutOfBoundsWarning {
+  type: 'out-of-bounds'
+  severity: 'warning'
+  tableId: string
+  tableLabel: string
+  message: string
+}
+
 export type LayoutWarning =
   | OverlapWarning
   | NarrowAisleWarning
   | DoorBlockedWarning
   | DuplicateLabelWarning
   | UnassignedTableWarning
+  | OutOfBoundsWarning
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WARNING RESULT
@@ -126,6 +136,7 @@ export interface WarningsModule {
     vendorAssignments: ReadonlyArray<VendorAssignment>,
     settings: LayoutSettings,
     checkUnassigned: boolean,
+    room?: Room | null,
   ): WarningResult
 
   /**

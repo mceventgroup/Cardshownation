@@ -30,9 +30,12 @@ import type {
   SectionId,
   VendorAssignmentId,
   ImportSessionId,
+  DoorId,
   TableObject,
   Row,
   Section,
+  Door,
+  Room,
   VendorAssignment,
   LayoutSettings,
 } from './types'
@@ -222,6 +225,45 @@ export interface ApplyImportCommand extends CommandBase {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ROOM & DOOR COMMANDS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Set or update the room boundary. null means "delete room". */
+export interface SetRoomCommand extends CommandBase {
+  readonly type: 'SET_ROOM'
+  readonly prevRoom: Room | null
+  readonly nextRoom: Room | null
+}
+
+/** Place a door on a wall. */
+export interface PlaceDoorCommand extends CommandBase {
+  readonly type: 'PLACE_DOOR'
+  readonly door: Door
+}
+
+/** Move a door along its wall or to a different wall. */
+export interface MoveDoorCommand extends CommandBase {
+  readonly type: 'MOVE_DOOR'
+  readonly doorId: DoorId
+  readonly prev: Pick<Door, 'x' | 'y' | 'side'>
+  readonly next: Pick<Door, 'x' | 'y' | 'side'>
+}
+
+/** Resize a door opening width. */
+export interface ResizeDoorCommand extends CommandBase {
+  readonly type: 'RESIZE_DOOR'
+  readonly doorId: DoorId
+  readonly prevWidth: number
+  readonly nextWidth: number
+}
+
+/** Delete a door. Stores full snapshot for undo. */
+export interface DeleteDoorCommand extends CommandBase {
+  readonly type: 'DELETE_DOOR'
+  readonly door: Door
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SETTINGS COMMAND
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -253,6 +295,11 @@ export type LayoutCommand =
   | UpdateVendorAssignmentCommand
   | ClearVendorAssignmentCommand
   | ApplyImportCommand
+  | SetRoomCommand
+  | PlaceDoorCommand
+  | MoveDoorCommand
+  | ResizeDoorCommand
+  | DeleteDoorCommand
   | UpdateSettingsCommand
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@
 // (pre-commit local drag state), not from the store after the fact.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Row, Section, VendorAssignment, LayoutSettings } from '@/domain/types'
+import type { TableObject, Row, Section, Door, Room, VendorAssignment, LayoutSettings } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
 
 export type MutableCanvasState = {
@@ -22,6 +22,8 @@ export type MutableCanvasState = {
   rows: Record<string, Row>
   sections: Record<string, Section>
   vendorAssignments: Record<string, VendorAssignment>
+  room: Room | null
+  doors: Record<string, Door>
   settings: LayoutSettings
 }
 
@@ -165,6 +167,39 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
 
     case 'CLEAR_VENDOR_ASSIGNMENT': {
       delete state.vendorAssignments[command.assignment.id]
+      break
+    }
+
+    // ── Room & door commands ────────────────────────────────────────────
+
+    case 'SET_ROOM': {
+      state.room = command.nextRoom ? { ...command.nextRoom } : null
+      break
+    }
+
+    case 'PLACE_DOOR': {
+      state.doors[command.door.id] = { ...command.door }
+      break
+    }
+
+    case 'MOVE_DOOR': {
+      const d = state.doors[command.doorId]
+      if (d) {
+        d.x = command.next.x
+        d.y = command.next.y
+        d.side = command.next.side
+      }
+      break
+    }
+
+    case 'RESIZE_DOOR': {
+      const d = state.doors[command.doorId]
+      if (d) d.width = command.nextWidth
+      break
+    }
+
+    case 'DELETE_DOOR': {
+      delete state.doors[command.door.id]
       break
     }
 
@@ -320,6 +355,39 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
 
     case 'CLEAR_VENDOR_ASSIGNMENT': {
       state.vendorAssignments[command.assignment.id] = { ...command.assignment }
+      break
+    }
+
+    // ── Room & door commands ────────────────────────────────────────────
+
+    case 'SET_ROOM': {
+      state.room = command.prevRoom ? { ...command.prevRoom } : null
+      break
+    }
+
+    case 'PLACE_DOOR': {
+      delete state.doors[command.door.id]
+      break
+    }
+
+    case 'MOVE_DOOR': {
+      const d = state.doors[command.doorId]
+      if (d) {
+        d.x = command.prev.x
+        d.y = command.prev.y
+        d.side = command.prev.side
+      }
+      break
+    }
+
+    case 'RESIZE_DOOR': {
+      const d = state.doors[command.doorId]
+      if (d) d.width = command.prevWidth
+      break
+    }
+
+    case 'DELETE_DOOR': {
+      state.doors[command.door.id] = { ...command.door }
       break
     }
 

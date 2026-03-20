@@ -14,11 +14,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Stage, Layer } from 'react-konva'
+import { Stage, Layer, Rect } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Point, TableObject, TableId, RowId } from '@/domain/types'
-import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendors, selectVendorAssignments } from '@/store/index'
+import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendors, selectVendorAssignments, selectRoom, selectDoors } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
 import { rowModule } from '@/domain/rows.impl'
@@ -26,6 +26,7 @@ import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
 import { createTableId, createRowId, createAssignmentId } from '@/lib/id'
 import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID } from '@/lib/defaults'
 import GridLayer from './GridLayer'
+import RoomLayer from './RoomLayer'
 import TableNode from './TableNode'
 import SelectionRect from './SelectionRect'
 import TransformerControl from './TransformerControl'
@@ -89,6 +90,8 @@ export default function KonvaCanvas() {
   const activeVendorId  = useEditorStore(selectActiveVendorId)
   const vendors         = useEditorStore(selectVendors)
   const vendorAssignments = useEditorStore(selectVendorAssignments)
+  const room              = useEditorStore(selectRoom)
+  const doorsRecord       = useEditorStore(selectDoors)
 
   // Store actions
   const dispatch      = useEditorStore(s => s.dispatch)
@@ -159,6 +162,10 @@ export default function KonvaCanvas() {
     selectionStateRef.current = s
     setSelectionState(s)
   }
+
+  // Room drawing state
+  const roomDrawRef = useRef<{ startX: number; startY: number } | null>(null)
+  const [roomDrawPreview, setRoomDrawPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
 
   // Space-key pan tracking
   const isPanningRef  = useRef(false)
@@ -361,6 +368,13 @@ export default function KonvaCanvas() {
       return
     }
 
+    if (activeTool === 'draw-room') {
+      const snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
+      roomDrawRef.current = { startX: snapped.x, startY: snapped.y }
+      setRoomDrawPreview({ x: snapped.x, y: snapped.y, width: 0, height: 0 })
+      return
+    }
+
     // ── Active vendor assignment: click table to assign ──────────────────
     if (activeVendorRef.current && isTable && tableId) {
       const vid = activeVendorRef.current
@@ -477,6 +491,20 @@ export default function KonvaCanvas() {
 
     const canvasPos = toCanvas(pointer)
 
+    // Room drawing
+    if (roomDrawRef.current) {
+      const snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
+      const startX = roomDrawRef.current.startX
+      const startY = roomDrawRef.current.startY
+      setRoomDrawPreview({
+        x: Math.min(startX, snapped.x),
+        y: Math.min(startY, snapped.y),
+        width: Math.abs(snapped.x - startX),
+        height: Math.abs(snapped.y - startY),
+      })
+      return
+    }
+
     // Table drag
     if (dragStateRef.current) {
       const drag = dragStateRef.current
@@ -541,6 +569,21 @@ export default function KonvaCanvas() {
       return
     }
 
+    // Commit room draw
+    if (roomDrawRef.current && roomDrawPreview) {
+      roomDrawRef.current = null
+      if (roomDrawPreview.width >= 24 && roomDrawPreview.height >= 24) {
+        dispatch({
+          type: 'SET_ROOM',
+          prevRoom: useEditorStore.getState().room,
+          nextRoom: { ...roomDrawPreview },
+          timestamp: Date.now(),
+        })
+      }
+      setRoomDrawPreview(null)
+      return
+    }
+
     // Commit drag
     if (dragStateRef.current) {
       const drag = dragStateRef.current
@@ -602,7 +645,9 @@ export default function KonvaCanvas() {
       ? 'canvas-pan'
       : (activeTool === 'place-table' || activeTool === 'place-row')
         ? 'canvas-place'
-        : 'canvas-select'
+        : activeTool === 'draw-room'
+          ? 'canvas-place'
+          : 'canvas-select'
 
   // ── Double-click to rename ─────────────────────────────────────────────────
 
@@ -644,6 +689,10 @@ export default function KonvaCanvas() {
     setEditingPos(null)
   }, [])
 
+  // ── Door list for rendering ────────────────────────────────────────────────
+
+  const doorList = useMemo(() => Object.values(doorsRecord), [doorsRecord])
+
   // ── Table list for rendering ───────────────────────────────────────────────
 
   const tableList = Object.values(tables)
@@ -675,6 +724,15 @@ export default function KonvaCanvas() {
           height={settings.canvasHeight}
           gridSize={settings.gridSize}
         />
+
+        {/* Room boundary, doors, and clearance zones */}
+        <Layer listening={false}>
+          <RoomLayer
+            room={room}
+            doors={doorList}
+            doorClearance={settings.doorClearance}
+          />
+        </Layer>
 
         {/* Tables */}
         <Layer>
@@ -722,6 +780,24 @@ export default function KonvaCanvas() {
         {selectionState && (
           <Layer listening={false}>
             <SelectionRect selectionState={selectionState} />
+          </Layer>
+        )}
+
+        {/* Overlay: room draw preview */}
+        {roomDrawPreview && roomDrawPreview.width > 0 && roomDrawPreview.height > 0 && (
+          <Layer listening={false}>
+            <Rect
+              x={roomDrawPreview.x}
+              y={roomDrawPreview.y}
+              width={roomDrawPreview.width}
+              height={roomDrawPreview.height}
+              stroke="#334155"
+              strokeWidth={2}
+              dash={[8, 4]}
+              fill="#334155"
+              opacity={0.05}
+              listening={false}
+            />
           </Layer>
         )}
       </Stage>

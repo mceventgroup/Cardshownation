@@ -18,6 +18,7 @@ const SECTIONS = [
       { keys: 'S', desc: 'Select tool' },
       { keys: 'T', desc: 'Place single table' },
       { keys: 'R', desc: 'Place row of tables' },
+      { keys: 'B', desc: 'Draw room boundary' },
       { keys: 'Esc', desc: 'Back to select tool' },
     ],
   },

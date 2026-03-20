@@ -29,6 +29,7 @@ function warningTableIds(w: LayoutWarning): string[] {
     case 'duplicate-label':
       return [...w.tableIds]
     case 'unassigned-table':
+    case 'out-of-bounds':
       return [w.tableId]
   }
 }
