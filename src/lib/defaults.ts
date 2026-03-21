@@ -2,13 +2,15 @@ import type { LayoutSettings, LayoutId } from '@/domain/types'
 
 // 1 canvas unit = 1 inch
 export const DEFAULT_SETTINGS: LayoutSettings = {
-  canvasWidth: 6000,    // ~500 ft venue width (41.7 ft)
-  canvasHeight: 4800,   // ~400 ft venue depth (33.3 ft)
+  canvasWidth: 2400,    // 200 ft — auto-resized when room is set
+  canvasHeight: 2400,   // 200 ft — auto-resized when room is set
   gridSize: 12,         // snap every 12 inches (1 foot)
   snapToGrid: true,
   snapToObjects: false,
   minAisleWidth: 36,    // 36 in = 3 ft minimum aisle
   doorClearance: 48,    // 48 in = 4 ft door clearance
+  wallSetback: 36,      // 36 in = 3 ft from wall to nearest table
+  showWallSetback: false,
   defaultTableWidth: 72,  // 6 ft table length
   defaultTableHeight: 30, // 30 in table width
   defaultTableShape: 'rectangle',

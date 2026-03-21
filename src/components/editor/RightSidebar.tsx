@@ -2,8 +2,9 @@
 
 import { useWarnings } from '@/hooks/useWarnings'
 import CollapsibleSection from './CollapsibleSection'
-import SectionsPanel from './SectionsPanel'
 import RoomPanel from './RoomPanel'
+import DoorsPanel from './DoorsPanel'
+import SectionsPanel from './SectionsPanel'
 import WarningsPanel from './WarningsPanel'
 
 function WarningsBadge() {
@@ -19,8 +20,12 @@ function WarningsBadge() {
 export default function RightSidebar() {
   return (
     <div className="w-72 shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-      <CollapsibleSection title="Room & Doors" panelId="room">
+      <CollapsibleSection title="Room" panelId="room">
         <RoomPanel />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Doors" panelId="doors">
+        <DoorsPanel />
       </CollapsibleSection>
 
       <CollapsibleSection title="Sections" panelId="sections">

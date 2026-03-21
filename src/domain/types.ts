@@ -31,6 +31,7 @@ export type VendorAssignmentId= string & { readonly __brand: 'VendorAssignmentId
 export type VendorId          = string & { readonly __brand: 'VendorId' }
 export type ObstacleId        = string & { readonly __brand: 'ObstacleId' }
 export type DoorId            = string & { readonly __brand: 'DoorId' }
+export type RoomSegmentId     = string & { readonly __brand: 'RoomSegmentId' }
 export type LayoutId          = string & { readonly __brand: 'LayoutId' }
 export type EventId           = string & { readonly __brand: 'EventId' }
 export type UserId            = string & { readonly __brand: 'UserId' }
@@ -169,17 +170,30 @@ export interface Door {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ROOM
-// A single axis-aligned rectangle representing the venue boundary (walls).
-// Only one room per layout. Position and size in canvas units.
+// ROOM (COMPOSITE)
+// A venue boundary composed of one or more axis-aligned rectangular segments.
+// Multiple segments merge visually — internal walls between touching/overlapping
+// segments disappear. Supports L-shaped, T-shaped, U-shaped rooms, etc.
+//
+// When freehandVertices is set, the room boundary is defined by an arbitrary
+// polygon (drawn freehand) instead of by rectangular segments.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface Room {
+export interface RoomSegment {
+  id: RoomSegmentId
   x: number
   y: number
   width: number
   height: number
 }
+
+export interface CompositeRoom {
+  segments: RoomSegment[]
+  freehandVertices: Point[] | null  // null = use segments; non-null = freehand polygon
+}
+
+/** @deprecated Use CompositeRoom. Kept as alias for migration convenience. */
+export type Room = CompositeRoom
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LAYOUT SETTINGS
@@ -195,6 +209,8 @@ export interface LayoutSettings {
   snapToObjects: boolean
   minAisleWidth: number         // minimum aisle in canvas units; drives warnings
   doorClearance: number         // minimum clearance in front of any door
+  wallSetback: number           // minimum distance from wall to nearest table edge (canvas units)
+  showWallSetback: boolean      // render yellow setback zone overlay
   defaultTableWidth: number
   defaultTableHeight: number
   defaultTableShape: TableShape

@@ -16,8 +16,10 @@ import {
   selectVendorAssignments,
   selectTables,
 } from '@/store/index'
-import { createVendorId } from '@/lib/id'
-import type { Vendor, VendorId, PaymentStatus } from '@/domain/types'
+import { createVendorId, createAssignmentId } from '@/lib/id'
+import type { Vendor, VendorId, PaymentStatus, TableId } from '@/domain/types'
+import { autoAssignVendors } from '@/domain/auto-assign'
+import { DRAFT_LAYOUT_ID } from '@/lib/defaults'
 
 const PAYMENT_BADGE: Record<PaymentStatus, { label: string; bg: string }> = {
   unknown: { label: '?',      bg: '#9ca3af' },
@@ -32,11 +34,13 @@ export default function VendorRosterPanel() {
   const activeVendorId = useEditorStore(selectActiveVendorId)
   const assignments    = useEditorStore(selectVendorAssignments)
   const tables         = useEditorStore(selectTables)
+  const dispatch       = useEditorStore(s => s.dispatch)
   const addVendor      = useEditorStore(s => s.addVendor)
   const updateVendor   = useEditorStore(s => s.updateVendor)
   const removeVendor   = useEditorStore(s => s.removeVendor)
   const setActiveVendor = useEditorStore(s => s.setActiveVendor)
 
+  const [autoAssignMsg, setAutoAssignMsg] = useState<string | null>(null)
   const [addMode, setAddMode] = useState(false)
   const [bulkText, setBulkText] = useState('')
   const [newName, setNewName] = useState('')
@@ -132,12 +136,62 @@ export default function VendorRosterPanel() {
     removeVendor(vendorId)
   }
 
+  function handleAutoAssign() {
+    const result = autoAssignVendors(tables, vendors, assignments)
+    if (result.assignments.length === 0) {
+      setAutoAssignMsg('No tables could be assigned. Add vendors and unassigned tables first.')
+      setTimeout(() => setAutoAssignMsg(null), 4000)
+      return
+    }
+
+    // Dispatch each assignment
+    for (const a of result.assignments) {
+      const existing = Object.values(assignments).find(x => x.tableId === a.tableId)
+      dispatch({
+        type: 'ASSIGN_VENDOR',
+        assignment: {
+          id: createAssignmentId(),
+          tableId: a.tableId,
+          layoutId: DRAFT_LAYOUT_ID,
+          vendorName: a.vendorName,
+          vendorCategory: a.vendorCategory,
+          colorOverride: null,
+          notes: null,
+          paymentStatus: a.paymentStatus,
+          importSessionId: null,
+        },
+        prevAssignment: existing ?? null,
+        timestamp: Date.now(),
+      })
+    }
+
+    const msgs: string[] = [`Assigned ${result.assignments.length} tables.`]
+    if (result.unassignedVendors.length > 0) {
+      msgs.push(`${result.unassignedVendors.length} vendor(s) couldn't be fully placed.`)
+    }
+    setAutoAssignMsg(msgs.join(' '))
+    setTimeout(() => setAutoAssignMsg(null), 5000)
+  }
+
   return (
     <div className="text-sm flex flex-col">
-      {/* Summary */}
+      {/* Summary + Auto Assign */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 shrink-0">
         <span className="text-xs text-gray-400">{totalAssigned}/{totalTables} tables assigned</span>
+        {vendorList.length > 0 && totalTables > totalAssigned && (
+          <button
+            onClick={handleAutoAssign}
+            className="px-2 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700"
+          >
+            Auto Assign
+          </button>
+        )}
       </div>
+      {autoAssignMsg && (
+        <div className="px-3 py-1.5 bg-emerald-50 border-b border-emerald-100 text-xs text-emerald-700 shrink-0">
+          {autoAssignMsg}
+        </div>
+      )}
 
       {/* Active vendor indicator */}
       {activeVendorId && vendors[activeVendorId] && (

@@ -20,7 +20,7 @@
 // it creates noise for every table placed during layout design.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Door, Room, LayoutSettings } from './types'
+import type { TableObject, Door, CompositeRoom, LayoutSettings } from './types'
 import type { VendorAssignment } from './types'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,6 +83,15 @@ export interface OutOfBoundsWarning {
   message: string
 }
 
+/** A table is within the wall setback zone. Severity: warning. */
+export interface WallSetbackWarning {
+  type: 'wall-setback'
+  severity: 'warning'
+  tableId: string
+  tableLabel: string
+  message: string
+}
+
 export type LayoutWarning =
   | OverlapWarning
   | NarrowAisleWarning
@@ -90,6 +99,7 @@ export type LayoutWarning =
   | DuplicateLabelWarning
   | UnassignedTableWarning
   | OutOfBoundsWarning
+  | WallSetbackWarning
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WARNING RESULT
@@ -136,7 +146,7 @@ export interface WarningsModule {
     vendorAssignments: ReadonlyArray<VendorAssignment>,
     settings: LayoutSettings,
     checkUnassigned: boolean,
-    room?: Room | null,
+    room?: CompositeRoom | null,
   ): WarningResult
 
   /**

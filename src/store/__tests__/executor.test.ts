@@ -3,7 +3,7 @@ import type { TableObject } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
 
 function makeState(tables: Record<string, TableObject>): MutableCanvasState {
-  return { tables, rows: {}, sections: {}, vendorAssignments: {}, settings: { canvasWidth: 6000, canvasHeight: 4800, gridSize: 6, snapToGrid: true, snapToObjects: false, minAisleWidth: 36, doorClearance: 48, defaultTableWidth: 72, defaultTableHeight: 30, defaultTableShape: 'rectangle', unitLabel: 'in' } }
+  return { tables, rows: {}, sections: {}, vendorAssignments: {}, room: null, doors: {}, settings: { canvasWidth: 6000, canvasHeight: 4800, gridSize: 6, snapToGrid: true, snapToObjects: false, minAisleWidth: 36, doorClearance: 48, wallSetback: 36, showWallSetback: false, defaultTableWidth: 72, defaultTableHeight: 30, defaultTableShape: 'rectangle', unitLabel: 'in' } }
 }
 
 function makeTable(id: string, overrides: Partial<TableObject> = {}): TableObject {

@@ -31,11 +31,14 @@ import type {
   VendorAssignmentId,
   ImportSessionId,
   DoorId,
+  RoomSegmentId,
   TableObject,
   Row,
   Section,
   Door,
-  Room,
+  RoomSegment,
+  CompositeRoom,
+  Point,
   VendorAssignment,
   LayoutSettings,
 } from './types'
@@ -228,11 +231,39 @@ export interface ApplyImportCommand extends CommandBase {
 // ROOM & DOOR COMMANDS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Set or update the room boundary. null means "delete room". */
+/** Set or replace the entire composite room. null means "delete room". */
 export interface SetRoomCommand extends CommandBase {
   readonly type: 'SET_ROOM'
-  readonly prevRoom: Room | null
-  readonly nextRoom: Room | null
+  readonly prevRoom: CompositeRoom | null
+  readonly nextRoom: CompositeRoom | null
+}
+
+/** Add a rectangular segment to the composite room. */
+export interface AddRoomSegmentCommand extends CommandBase {
+  readonly type: 'ADD_ROOM_SEGMENT'
+  readonly segment: RoomSegment
+  readonly prevRoom: CompositeRoom | null  // snapshot for undo
+}
+
+/** Update a segment's geometry (resize/reposition). */
+export interface UpdateRoomSegmentCommand extends CommandBase {
+  readonly type: 'UPDATE_ROOM_SEGMENT'
+  readonly segmentId: RoomSegmentId
+  readonly prev: Pick<RoomSegment, 'x' | 'y' | 'width' | 'height'>
+  readonly next: Pick<RoomSegment, 'x' | 'y' | 'width' | 'height'>
+}
+
+/** Delete a segment from the composite room. */
+export interface DeleteRoomSegmentCommand extends CommandBase {
+  readonly type: 'DELETE_ROOM_SEGMENT'
+  readonly segment: RoomSegment
+}
+
+/** Set a freehand polygon room. */
+export interface SetFreehandRoomCommand extends CommandBase {
+  readonly type: 'SET_FREEHAND_ROOM'
+  readonly prevRoom: CompositeRoom | null
+  readonly vertices: Point[]
 }
 
 /** Place a door on a wall. */
@@ -296,6 +327,10 @@ export type LayoutCommand =
   | ClearVendorAssignmentCommand
   | ApplyImportCommand
   | SetRoomCommand
+  | AddRoomSegmentCommand
+  | UpdateRoomSegmentCommand
+  | DeleteRoomSegmentCommand
+  | SetFreehandRoomCommand
   | PlaceDoorCommand
   | MoveDoorCommand
   | ResizeDoorCommand

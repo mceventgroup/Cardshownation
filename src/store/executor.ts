@@ -14,15 +14,22 @@
 // (pre-commit local drag state), not from the store after the fact.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Row, Section, Door, Room, VendorAssignment, LayoutSettings } from '@/domain/types'
+import type { TableObject, Row, Section, Door, RoomSegment, CompositeRoom, VendorAssignment, LayoutSettings } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
+
+function cloneRoom(room: CompositeRoom): CompositeRoom {
+  return {
+    segments: room.segments.map(s => ({ ...s })),
+    freehandVertices: room.freehandVertices ? room.freehandVertices.map(v => ({ ...v })) : null,
+  }
+}
 
 export type MutableCanvasState = {
   tables: Record<string, TableObject>
   rows: Record<string, Row>
   sections: Record<string, Section>
   vendorAssignments: Record<string, VendorAssignment>
-  room: Room | null
+  room: CompositeRoom | null
   doors: Record<string, Door>
   settings: LayoutSettings
 }
@@ -173,7 +180,47 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
     // ── Room & door commands ────────────────────────────────────────────
 
     case 'SET_ROOM': {
-      state.room = command.nextRoom ? { ...command.nextRoom } : null
+      state.room = command.nextRoom ? cloneRoom(command.nextRoom) : null
+      break
+    }
+
+    case 'ADD_ROOM_SEGMENT': {
+      if (!state.room) {
+        state.room = { segments: [], freehandVertices: null }
+      }
+      state.room.segments.push({ ...command.segment })
+      state.room.freehandVertices = null // adding segments clears freehand
+      break
+    }
+
+    case 'UPDATE_ROOM_SEGMENT': {
+      if (state.room) {
+        const seg = state.room.segments.find(s => s.id === command.segmentId)
+        if (seg) {
+          seg.x = command.next.x
+          seg.y = command.next.y
+          seg.width = command.next.width
+          seg.height = command.next.height
+        }
+      }
+      break
+    }
+
+    case 'DELETE_ROOM_SEGMENT': {
+      if (state.room) {
+        state.room.segments = state.room.segments.filter(s => s.id !== command.segment.id)
+        if (state.room.segments.length === 0 && !state.room.freehandVertices) {
+          state.room = null
+        }
+      }
+      break
+    }
+
+    case 'SET_FREEHAND_ROOM': {
+      state.room = {
+        segments: [],
+        freehandVertices: command.vertices.map(v => ({ ...v })),
+      }
       break
     }
 
@@ -361,7 +408,38 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
     // ── Room & door commands ────────────────────────────────────────────
 
     case 'SET_ROOM': {
-      state.room = command.prevRoom ? { ...command.prevRoom } : null
+      state.room = command.prevRoom ? cloneRoom(command.prevRoom) : null
+      break
+    }
+
+    case 'ADD_ROOM_SEGMENT': {
+      state.room = command.prevRoom ? cloneRoom(command.prevRoom) : null
+      break
+    }
+
+    case 'UPDATE_ROOM_SEGMENT': {
+      if (state.room) {
+        const seg = state.room.segments.find(s => s.id === command.segmentId)
+        if (seg) {
+          seg.x = command.prev.x
+          seg.y = command.prev.y
+          seg.width = command.prev.width
+          seg.height = command.prev.height
+        }
+      }
+      break
+    }
+
+    case 'DELETE_ROOM_SEGMENT': {
+      if (!state.room) {
+        state.room = { segments: [], freehandVertices: null }
+      }
+      state.room.segments.push({ ...command.segment })
+      break
+    }
+
+    case 'SET_FREEHAND_ROOM': {
+      state.room = command.prevRoom ? cloneRoom(command.prevRoom) : null
       break
     }
 

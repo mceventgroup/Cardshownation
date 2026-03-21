@@ -15,6 +15,7 @@ const TOOLS: { tool: ActiveTool; label: string; shortcut: string }[] = [
   { tool: 'place-table', label: 'Place Table',  shortcut: 'T' },
   { tool: 'place-row',   label: 'Place Row',    shortcut: 'R' },
   { tool: 'draw-room',   label: 'Draw Room',    shortcut: 'B' },
+  { tool: 'draw-room-freehand', label: 'Freehand Room', shortcut: 'F' },
 ]
 
 function ToolSelector() {

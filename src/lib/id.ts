@@ -6,6 +6,7 @@ import type {
   VendorAssignmentId,
   ObstacleId,
   DoorId,
+  RoomSegmentId,
   LayoutId,
   EventId,
   ImportSessionId,
@@ -25,6 +26,7 @@ export const createVendorId        = (): VendorId            => uuid() as Vendor
 export const createAssignmentId    = (): VendorAssignmentId => uuid() as VendorAssignmentId
 export const createObstacleId      = (): ObstacleId        => uuid() as ObstacleId
 export const createDoorId          = (): DoorId            => uuid() as DoorId
+export const createRoomSegmentId   = (): RoomSegmentId     => uuid() as RoomSegmentId
 export const createLayoutId        = (): LayoutId          => uuid() as LayoutId
 export const createEventId         = (): EventId           => uuid() as EventId
 export const createImportSessionId = (): ImportSessionId   => uuid() as ImportSessionId

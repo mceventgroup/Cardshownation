@@ -18,7 +18,8 @@ const SECTIONS = [
       { keys: 'S', desc: 'Select tool' },
       { keys: 'T', desc: 'Place single table' },
       { keys: 'R', desc: 'Place row of tables' },
-      { keys: 'B', desc: 'Draw room boundary' },
+      { keys: 'B', desc: 'Draw room rectangle' },
+      { keys: 'F', desc: 'Freehand room polygon' },
       { keys: 'Esc', desc: 'Back to select tool' },
     ],
   },
@@ -26,7 +27,7 @@ const SECTIONS = [
     title: 'Selection',
     shortcuts: [
       { keys: 'Click', desc: 'Select table' },
-      { keys: 'Shift+Click', desc: 'Add/remove from selection' },
+      { keys: 'Shift+Click', desc: 'Range select in row / toggle' },
       { keys: 'Ctrl+A', desc: 'Select all tables' },
       { keys: 'Click empty', desc: 'Clear selection' },
       { keys: 'Drag empty', desc: 'Box select' },
@@ -36,6 +37,8 @@ const SECTIONS = [
     title: 'Edit',
     shortcuts: [
       { keys: 'Delete', desc: 'Delete selected tables' },
+      { keys: 'Ctrl+C', desc: 'Copy selected tables' },
+      { keys: 'Ctrl+V', desc: 'Paste tables' },
       { keys: 'Ctrl+Z', desc: 'Undo' },
       { keys: 'Ctrl+Y', desc: 'Redo' },
       { keys: 'Dbl-click', desc: 'Rename table label' },

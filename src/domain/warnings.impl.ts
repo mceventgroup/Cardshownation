@@ -5,7 +5,7 @@
 // Pure functions — same input always produces the same output.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Door, Room, LayoutSettings, VendorAssignment } from './types'
+import type { TableObject, Door, CompositeRoom, LayoutSettings, VendorAssignment } from './types'
 import type {
   WarningsModule,
   WarningResult,
@@ -16,9 +16,11 @@ import type {
   DuplicateLabelWarning,
   UnassignedTableWarning,
   OutOfBoundsWarning,
+  WallSetbackWarning,
 } from './warnings'
 import { geometry } from './geometry.impl'
 import { spacingModule } from './spacing.impl'
+import { isRectInRoom, computeRoomBounds } from './room-contour'
 import { formatDimension } from '@/lib/units'
 
 function computeWarnings(
@@ -27,7 +29,7 @@ function computeWarnings(
   vendorAssignments: ReadonlyArray<VendorAssignment>,
   settings: LayoutSettings,
   checkUnassigned: boolean,
-  room?: Room | null,
+  room?: CompositeRoom | null,
 ): WarningResult {
   const warnings: LayoutWarning[] = []
 
@@ -103,15 +105,10 @@ function computeWarnings(
   }
 
   // 6. Out-of-bounds (only when a room is defined)
-  if (room) {
+  if (room && (room.segments.length > 0 || room.freehandVertices)) {
     for (const t of tables) {
-      const bounds = geometry.getBounds(t).bounds
-      const inside =
-        bounds.x >= room.x &&
-        bounds.y >= room.y &&
-        bounds.x + bounds.width <= room.x + room.width &&
-        bounds.y + bounds.height <= room.y + room.height
-      if (!inside) {
+      const b = geometry.getBounds(t).bounds
+      if (!isRectInRoom(room, b)) {
         warnings.push({
           type: 'out-of-bounds',
           severity: 'warning',
@@ -119,6 +116,31 @@ function computeWarnings(
           tableLabel: t.label,
           message: `Table ${t.label} is outside the room boundary`,
         } satisfies OutOfBoundsWarning)
+      }
+    }
+  }
+
+  // 7. Wall setback violations
+  if (room && settings.wallSetback > 0 && (room.segments.length > 0 || room.freehandVertices)) {
+    const roomBounds = computeRoomBounds(room)
+    if (roomBounds) {
+      const sb = settings.wallSetback
+      for (const t of tables) {
+        const b = geometry.getBounds(t).bounds
+        const tooClose =
+          b.x < roomBounds.x + sb ||
+          b.y < roomBounds.y + sb ||
+          b.x + b.width > roomBounds.x + roomBounds.width - sb ||
+          b.y + b.height > roomBounds.y + roomBounds.height - sb
+        if (tooClose) {
+          warnings.push({
+            type: 'wall-setback',
+            severity: 'warning',
+            tableId: t.id,
+            tableLabel: t.label,
+            message: `Table ${t.label} is within the ${formatDimension(sb)} wall setback zone`,
+          } satisfies WallSetbackWarning)
+        }
       }
     }
   }
@@ -150,6 +172,7 @@ function computeWarnings(
         break
       case 'unassigned-table':
       case 'out-of-bounds':
+      case 'wall-setback':
         affectedTableIds.add(w.tableId)
         break
     }
@@ -174,6 +197,7 @@ function warningsForTable(result: WarningResult, tableId: string): LayoutWarning
         return w.tableIds.includes(tableId)
       case 'unassigned-table':
       case 'out-of-bounds':
+      case 'wall-setback':
         return w.tableId === tableId
     }
   })

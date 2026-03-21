@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   useEditorStore,
   selectSelectedIds,
@@ -11,7 +11,34 @@ import {
 } from '@/store/index'
 import { numberingModule } from '@/domain/numbering.impl'
 import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
+import { createTableId } from '@/lib/id'
 import type { TableId, TableObject } from '@/domain/types'
+
+/** Clipboard entry — stores the table template for pasting. */
+interface ClipboardEntry {
+  width: number
+  height: number
+  rotation: number
+  shape: TableObject['shape']
+  rowId: TableObject['rowId']
+  sectionId: TableObject['sectionId']
+  /** Offset from the top-left-most copied table, so multi-table paste preserves layout */
+  dx: number
+  dy: number
+}
+
+/** Find the highest numeric label among all tables and return next number. */
+function getNextLabelNumber(tables: Record<string, TableObject>): number {
+  let max = 0
+  for (const t of Object.values(tables)) {
+    const n = parseInt(t.label.replace(/[^0-9]/g, ''))
+    if (!isNaN(n) && n > max) max = n
+  }
+  return max + 1
+}
+
+/** Paste offset so successive pastes don't stack exactly on top of each other. */
+const PASTE_OFFSET = 24 // 2 ft
 
 export function useKeyboardShortcuts() {
   const undo         = useEditorStore(s => s.undo)
@@ -24,6 +51,9 @@ export function useKeyboardShortcuts() {
   const vendorAssignments = useEditorStore(selectVendorAssignments)
   const canUndo      = useEditorStore(selectCanUndo)
   const canRedo      = useEditorStore(selectCanRedo)
+
+  const clipboardRef = useRef<ClipboardEntry[]>([])
+  const pasteCountRef = useRef(0)
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -46,6 +76,75 @@ export function useKeyboardShortcuts() {
       if ((ctrl && e.key === 'y') || (ctrl && e.shiftKey && e.key === 'z')) {
         e.preventDefault()
         if (canRedo) redo()
+        return
+      }
+
+      // Copy
+      if (ctrl && e.key === 'c') {
+        if (selectedIds.size === 0) return
+        e.preventDefault()
+        const selected = [...selectedIds].map(id => tables[id]).filter(Boolean)
+        if (selected.length === 0) return
+
+        // Find top-left origin of selection
+        const minX = Math.min(...selected.map(t => t.x))
+        const minY = Math.min(...selected.map(t => t.y))
+
+        clipboardRef.current = selected.map(t => ({
+          width: t.width,
+          height: t.height,
+          rotation: t.rotation,
+          shape: t.shape,
+          rowId: t.rowId,
+          sectionId: t.sectionId,
+          dx: t.x - minX,
+          dy: t.y - minY,
+        }))
+        pasteCountRef.current = 0
+        return
+      }
+
+      // Paste
+      if (ctrl && e.key === 'v') {
+        if (clipboardRef.current.length === 0) return
+        e.preventDefault()
+        pasteCountRef.current++
+
+        const currentTables = useEditorStore.getState().tables
+        let nextLabel = getNextLabelNumber(currentTables)
+        const offset = PASTE_OFFSET * pasteCountRef.current
+
+        // Find the origin of the original copy to place relative to it
+        // Use the first selected table's position as base, or fall back to offset from 0,0
+        const firstSelected = [...selectedIds].map(id => currentTables[id]).find(Boolean)
+        const baseX = firstSelected ? firstSelected.x + offset : offset
+        const baseY = firstSelected ? firstSelected.y + offset : offset
+
+        const newIds: string[] = []
+        for (const entry of clipboardRef.current) {
+          const id = createTableId()
+          newIds.push(id)
+          dispatch({
+            type: 'PLACE_TABLE',
+            table: {
+              id,
+              x: baseX + entry.dx,
+              y: baseY + entry.dy,
+              width: entry.width,
+              height: entry.height,
+              rotation: entry.rotation,
+              shape: entry.shape,
+              label: String(nextLabel),
+              labelOverridden: false,
+              rowId: null,     // pasted tables are not part of original row
+              sectionId: entry.sectionId,
+              order: 0,
+            },
+            timestamp: Date.now(),
+          })
+          nextLabel++
+        }
+        useEditorStore.getState().setSelected(newIds)
         return
       }
 
@@ -121,7 +220,12 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      if (e.key === 'v') {
+      if (e.key === 'f') {
+        setActiveTool('draw-room-freehand')
+        return
+      }
+
+      if (e.key === 'v' && !ctrl) {
         useEditorStore.getState().togglePanelCollapsed('vendors')
         return
       }
