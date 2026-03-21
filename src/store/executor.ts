@@ -24,6 +24,17 @@ function cloneRoom(room: CompositeRoom): CompositeRoom {
   }
 }
 
+/** Object.assign that strips prototype-polluting keys (__proto__, constructor, prototype). */
+function safeAssign<T extends object>(target: T, source: Partial<T>): T {
+  const blocked = new Set(['__proto__', 'constructor', 'prototype'])
+  for (const key of Object.keys(source)) {
+    if (!blocked.has(key)) {
+      (target as any)[key] = (source as any)[key]
+    }
+  }
+  return target
+}
+
 export type MutableCanvasState = {
   tables: Record<string, TableObject>
   rows: Record<string, Row>
@@ -121,7 +132,7 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
     case 'UPDATE_SECTION': {
       const sec = state.sections[command.sectionId]
       if (sec) {
-        Object.assign(sec, command.next)
+        safeAssign(sec, command.next)
       }
       break
     }
@@ -168,7 +179,7 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
 
     case 'UPDATE_VENDOR_ASSIGNMENT': {
       const a = state.vendorAssignments[command.assignmentId]
-      if (a) Object.assign(a, command.next)
+      if (a) safeAssign(a, command.next)
       break
     }
 
@@ -253,7 +264,7 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
     // ── Settings command ──────────────────────────────────────────────────
 
     case 'UPDATE_SETTINGS': {
-      Object.assign(state.settings, command.next)
+      safeAssign(state.settings, command.next)
       break
     }
 
@@ -349,7 +360,7 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
     case 'UPDATE_SECTION': {
       const sec = state.sections[command.sectionId]
       if (sec) {
-        Object.assign(sec, command.prev)
+        safeAssign(sec, command.prev)
       }
       break
     }
@@ -396,7 +407,7 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
 
     case 'UPDATE_VENDOR_ASSIGNMENT': {
       const a = state.vendorAssignments[command.assignmentId]
-      if (a) Object.assign(a, command.prev)
+      if (a) safeAssign(a, command.prev)
       break
     }
 
@@ -472,7 +483,7 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
     // ── Settings command ──────────────────────────────────────────────────
 
     case 'UPDATE_SETTINGS': {
-      Object.assign(state.settings, command.prev)
+      safeAssign(state.settings, command.prev)
       break
     }
 

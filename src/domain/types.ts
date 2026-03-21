@@ -114,7 +114,8 @@ export interface VendorAssignment {
   id: VendorAssignmentId
   tableId: TableId
   layoutId: LayoutId
-  vendorName: string
+  vendorId: VendorId              // primary key link to Vendor roster
+  vendorName: string              // denormalized for display convenience
   vendorCategory: string | null
   colorOverride: string | null    // overrides section color if set
   notes: string | null            // organizer-only, not shown in public view

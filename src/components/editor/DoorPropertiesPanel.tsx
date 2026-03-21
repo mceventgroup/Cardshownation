@@ -44,7 +44,7 @@ export default function DoorPropertiesPanel() {
     } else {
       setPositionFt(Math.round((door.y - bounds.y) / 12 * 10) / 10)
     }
-  }, [door?.id, door?.x, door?.y, door?.width, door?.side, bounds?.x, bounds?.y])
+  }, [door?.id, door?.x, door?.y, door?.width, door?.side, bounds?.x, bounds?.y, bounds?.width, bounds?.height])
 
   if (!door || !bounds) return null
 

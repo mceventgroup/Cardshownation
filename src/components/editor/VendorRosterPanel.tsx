@@ -55,17 +55,18 @@ export default function VendorRosterPanel() {
     if (addMode) setTimeout(() => nameRef.current?.focus(), 50)
   }, [addMode])
 
-  // Count assigned tables per vendor and collect their table labels
+  // Count assigned tables per vendor (by ID) and collect their table labels
   const vendorTableInfo = useMemo(() => {
     const counts = new Map<string, number>()
     const tableLabels = new Map<string, string[]>()
     for (const a of Object.values(assignments)) {
-      counts.set(a.vendorName, (counts.get(a.vendorName) ?? 0) + 1)
+      const key = a.vendorId
+      counts.set(key, (counts.get(key) ?? 0) + 1)
       const t = tables[a.tableId]
       const label = t?.label ?? a.tableId
-      const existing = tableLabels.get(a.vendorName)
+      const existing = tableLabels.get(key)
       if (existing) existing.push(label)
-      else tableLabels.set(a.vendorName, [label])
+      else tableLabels.set(key, [label])
     }
     return { counts, tableLabels }
   }, [assignments, tables])
@@ -153,6 +154,7 @@ export default function VendorRosterPanel() {
           id: createAssignmentId(),
           tableId: a.tableId,
           layoutId: DRAFT_LAYOUT_ID,
+          vendorId: a.vendorId,
           vendorName: a.vendorName,
           vendorCategory: a.vendorCategory,
           colorOverride: null,
@@ -225,7 +227,7 @@ export default function VendorRosterPanel() {
           <p className="text-xs text-gray-400 text-center py-4">No matching vendors</p>
         )}
         {filtered.map(v => {
-          const assigned = vendorTableInfo.counts.get(v.name) ?? 0
+          const assigned = vendorTableInfo.counts.get(v.id) ?? 0
           const isActive = activeVendorId === v.id
           const isFull = assigned >= v.tablesNeeded
           const badge = PAYMENT_BADGE[v.paymentStatus]
@@ -260,7 +262,7 @@ export default function VendorRosterPanel() {
                 </div>
                 {assigned > 0 && (
                   <div className="text-xs text-gray-400 mt-0.5 truncate">
-                    Tables: {(vendorTableInfo.tableLabels.get(v.name) ?? []).sort((a, b) => {
+                    Tables: {(vendorTableInfo.tableLabels.get(v.id) ?? []).sort((a, b) => {
                       const na = parseInt(a), nb = parseInt(b)
                       if (!isNaN(na) && !isNaN(nb)) return na - nb
                       return a.localeCompare(b)

@@ -12,6 +12,7 @@ import {
 import { numberingModule } from '@/domain/numbering.impl'
 import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
 import { createTableId } from '@/lib/id'
+import { getNextLabelNumber } from '@/lib/labels'
 import type { TableId, TableObject } from '@/domain/types'
 
 /** Clipboard entry — stores the table template for pasting. */
@@ -25,16 +26,6 @@ interface ClipboardEntry {
   /** Offset from the top-left-most copied table, so multi-table paste preserves layout */
   dx: number
   dy: number
-}
-
-/** Find the highest numeric label among all tables and return next number. */
-function getNextLabelNumber(tables: Record<string, TableObject>): number {
-  let max = 0
-  for (const t of Object.values(tables)) {
-    const n = parseInt(t.label.replace(/[^0-9]/g, ''))
-    if (!isNaN(n) && n > max) max = n
-  }
-  return max + 1
 }
 
 /** Paste offset so successive pastes don't stack exactly on top of each other. */

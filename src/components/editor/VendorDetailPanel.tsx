@@ -8,10 +8,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useEditorStore, selectTables, selectAssignmentMap } from '@/store/index'
-import { createAssignmentId } from '@/lib/id'
+import { useEditorStore, selectTables, selectAssignmentMap, selectVendors } from '@/store/index'
+import { createAssignmentId, createVendorId } from '@/lib/id'
 import { DRAFT_LAYOUT_ID } from '@/lib/defaults'
-import type { TableId, VendorAssignment, PaymentStatus, VendorAssignmentId } from '@/domain/types'
+import type { TableId, VendorAssignment, VendorId, PaymentStatus, VendorAssignmentId } from '@/domain/types'
 
 const PAYMENT_OPTIONS: { value: PaymentStatus; label: string; color: string }[] = [
   { value: 'unknown', label: 'Unknown', color: '#9ca3af' },
@@ -28,7 +28,9 @@ interface VendorDetailPanelProps {
 export default function VendorDetailPanel({ tableId }: VendorDetailPanelProps) {
   const tables        = useEditorStore(selectTables)
   const assignmentMap = useEditorStore(selectAssignmentMap)
+  const vendors       = useEditorStore(selectVendors)
   const dispatch      = useEditorStore(s => s.dispatch)
+  const addVendor     = useEditorStore(s => s.addVendor)
 
   const table = tables[tableId]
   const assignment = assignmentMap.get(tableId)
@@ -65,10 +67,21 @@ export default function VendorDetailPanel({ tableId }: VendorDetailPanelProps) {
     const name = quickName.trim()
     if (!name) return
 
+    // Find existing vendor by name, or create one
+    let vid: VendorId | undefined
+    for (const v of Object.values(vendors)) {
+      if (v.name === name) { vid = v.id; break }
+    }
+    if (!vid) {
+      vid = createVendorId()
+      addVendor({ id: vid, name, tablesNeeded: 1, category: null, paymentStatus: 'unknown', notes: null })
+    }
+
     const newAssignment: VendorAssignment = {
       id: createAssignmentId(),
       tableId: tableId as TableId,
       layoutId: DRAFT_LAYOUT_ID,
+      vendorId: vid,
       vendorName: name,
       vendorCategory: null,
       colorOverride: null,

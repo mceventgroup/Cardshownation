@@ -334,14 +334,7 @@ export function pushOutOfDoorZones(
     const overlapY = y < zone.y + zone.height && y + th > zone.y
     if (!overlapX || !overlapY) continue
 
-    // Push the table out along the shortest escape axis
-    const pushLeft  = (zone.x + zone.width) - x          // push table left edge to zone right
-    const pushRight = (x + tw) - zone.x                  // push table right edge to zone left
-    const pushUp    = (zone.y + zone.height) - y          // push table top to zone bottom
-    const pushDown  = (y + th) - zone.y                   // push table bottom to zone top
-
-    // For horizontal doors (top/bottom), push vertically away from wall
-    // For vertical doors (left/right), push horizontally away from wall
+    // Push table away from the wall into the room interior
     if (door.side === 'top' || door.side === 'bottom') {
       // Prefer pushing away from the wall (into room interior)
       if (door.side === 'top') {

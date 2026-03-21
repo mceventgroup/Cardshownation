@@ -256,20 +256,24 @@ export const useEditorStore = create<EditorState>()(
     updateVendor(id, updates) {
       set(state => {
         const v = state.vendors[id]
-        if (v) Object.assign(v, updates)
+        if (v) {
+          const blocked = new Set(['__proto__', 'constructor', 'prototype'])
+          for (const key of Object.keys(updates)) {
+            if (!blocked.has(key)) {
+              (v as any)[key] = (updates as any)[key]
+            }
+          }
+        }
       })
     },
 
     removeVendor(id) {
       set(state => {
-        const vendorName = state.vendors[id]?.name
         delete state.vendors[id]
-        // Also clear any assignments for this vendor
-        if (vendorName) {
-          for (const [aid, a] of Object.entries(state.vendorAssignments)) {
-            if (a.vendorName === vendorName) {
-              delete state.vendorAssignments[aid]
-            }
+        // Also clear any assignments for this vendor (by vendorId, not name)
+        for (const [aid, a] of Object.entries(state.vendorAssignments)) {
+          if (a.vendorId === id) {
+            delete state.vendorAssignments[aid]
           }
         }
         if (state.activeVendorId === id) state.activeVendorId = null
@@ -309,6 +313,10 @@ export const selectVendorAssignments = (s: EditorState) => s.vendorAssignments
 export const selectRoom      = (s: EditorState) => s.room
 export const selectDoors     = (s: EditorState) => s.doors
 export const selectSelectedDoorId = (s: EditorState) => s.selectedDoorId
+// CAUTION: this selector creates a new array on every call.
+// Only use it with useShallow() or inside event/effect handlers — never as a
+// bare useEditorStore(selectDoorList) subscription, or you will get an
+// infinite render loop via useSyncExternalStore snapshot tearing.
 export const selectDoorList  = (s: EditorState) => Object.values(s.doors)
 export const selectCanUndo = (s: EditorState) => s.history.past.length > 0
 export const selectCanRedo = (s: EditorState) => s.history.future.length > 0

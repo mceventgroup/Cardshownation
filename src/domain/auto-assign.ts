@@ -19,8 +19,7 @@ import type {
   TableId,
   Vendor,
   VendorAssignment,
-  VendorAssignmentId,
-  LayoutId,
+  VendorId,
 } from './types'
 
 export type TableOrientation = 'horizontal' | 'vertical' | 'square'
@@ -41,6 +40,7 @@ export function getTableOrientation(table: TableObject): TableOrientation {
 
 export interface AutoAssignResult {
   assignments: {
+    vendorId: VendorId
     vendorName: string
     vendorCategory: string | null
     paymentStatus: Vendor['paymentStatus']
@@ -68,7 +68,7 @@ export function autoAssignVendors(
   const vendorAssignedCount = new Map<string, number>()
   for (const a of Object.values(existingAssignments)) {
     assignedTableIds.add(a.tableId)
-    vendorAssignedCount.set(a.vendorName, (vendorAssignedCount.get(a.vendorName) ?? 0) + 1)
+    vendorAssignedCount.set(a.vendorId, (vendorAssignedCount.get(a.vendorId) ?? 0) + 1)
   }
 
   // Get unassigned tables, sorted spatially
@@ -95,7 +95,7 @@ export function autoAssignVendors(
   const vendorsNeedingTables = Object.values(vendors)
     .map(v => ({
       ...v,
-      remaining: v.tablesNeeded - (vendorAssignedCount.get(v.name) ?? 0),
+      remaining: v.tablesNeeded - (vendorAssignedCount.get(v.id) ?? 0),
     }))
     .filter(v => v.remaining > 0)
     .sort((a, b) => b.remaining - a.remaining)
@@ -119,6 +119,7 @@ export function autoAssignVendors(
     if (assigned.length > 0) {
       for (const tableId of assigned) {
         result.assignments.push({
+          vendorId: vendor.id,
           vendorName: vendor.name,
           vendorCategory: vendor.category,
           paymentStatus: vendor.paymentStatus,

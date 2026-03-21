@@ -17,7 +17,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Stage, Layer, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import type { Point, TableObject, TableId, RowId } from '@/domain/types'
+import type { Point, TableId, DoorId } from '@/domain/types'
 import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendors, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
@@ -60,15 +60,7 @@ interface SelectionState {
   currentY: number
 }
 
-/** Find the highest numeric label among all tables and return next number. */
-function getNextLabelNumber(tables: Record<string, TableObject>): number {
-  let max = 0
-  for (const t of Object.values(tables)) {
-    const n = parseInt(t.label.replace(/[^0-9]/g, ''))
-    if (!isNaN(n) && n > max) max = n
-  }
-  return max + 1
-}
+import { getNextLabelNumber } from '@/lib/labels'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
@@ -407,10 +399,10 @@ export default function KonvaCanvas() {
 
     if (activeTool === 'draw-room-freehand') {
       const snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
-      const pts = freehandPointsRef.current ?? []
-      pts.push(snapped)
+      const prev = freehandPointsRef.current ?? []
+      const pts = [...prev, snapped]
       freehandPointsRef.current = pts
-      setFreehandPoints([...pts])
+      setFreehandPoints(pts)
       return
     }
 
@@ -421,7 +413,7 @@ export default function KonvaCanvas() {
       if (vendor) {
         const allAssignments = useEditorStore.getState().vendorAssignments
         const existing = Object.values(allAssignments).find(a => a.tableId === tableId)
-        if (existing && existing.vendorName === vendor.name) {
+        if (existing && existing.vendorId === vid) {
           // Already assigned to this vendor — unassign (toggle)
           dispatch({
             type: 'CLEAR_VENDOR_ASSIGNMENT',
@@ -434,6 +426,7 @@ export default function KonvaCanvas() {
             id: createAssignmentId(),
             tableId: tableId as TableId,
             layoutId: DRAFT_LAYOUT_ID,
+            vendorId: vid,
             vendorName: vendor.name,
             vendorCategory: vendor.category,
             colorOverride: null,
@@ -529,7 +522,7 @@ export default function KonvaCanvas() {
         currentY: canvasPos.y,
       })
     }
-  }, [activeTool, selectedIds, tables, toCanvas, setSelected, toggleSelected, clearSelected, stagePos, placeTableAt, placeRowAt])
+  }, [activeTool, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, stagePos, placeTableAt, placeRowAt])
 
   // ── Mouse move ─────────────────────────────────────────────────────────────
 
@@ -822,26 +815,7 @@ export default function KonvaCanvas() {
 
   const roomBounds = useMemo(() => {
     if (!room) return null
-    // Compute bounding box from segments or freehand vertices
-    if (room.freehandVertices && room.freehandVertices.length >= 3) {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-      for (const p of room.freehandVertices) {
-        if (p.x < minX) minX = p.x
-        if (p.y < minY) minY = p.y
-        if (p.x > maxX) maxX = p.x
-        if (p.y > maxY) maxY = p.y
-      }
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
-    }
-    if (room.segments.length === 0) return null
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const seg of room.segments) {
-      if (seg.x < minX) minX = seg.x
-      if (seg.y < minY) minY = seg.y
-      if (seg.x + seg.width > maxX) maxX = seg.x + seg.width
-      if (seg.y + seg.height > maxY) maxY = seg.y + seg.height
-    }
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    return computeRoomBounds(room)
   }, [room])
 
   // ── Door drag handler ───────────────────────────────────────────────────
@@ -851,7 +825,7 @@ export default function KonvaCanvas() {
     if (!door) return
     dispatch({
       type: 'MOVE_DOOR',
-      doorId: doorId as any,
+      doorId: doorId as DoorId,
       prev: { x: door.x, y: door.y, side: door.side },
       next: { x: newX, y: newY, side: door.side },
       timestamp: Date.now(),
