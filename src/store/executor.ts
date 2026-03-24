@@ -188,6 +188,16 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
       break
     }
 
+    case 'APPLY_IMPORT': {
+      for (const a of command.replacedAssignments) {
+        delete state.vendorAssignments[a.id]
+      }
+      for (const a of command.createdAssignments) {
+        state.vendorAssignments[a.id] = { ...a }
+      }
+      break
+    }
+
     // ── Room & door commands ────────────────────────────────────────────
 
     case 'SET_ROOM': {
@@ -413,6 +423,16 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
 
     case 'CLEAR_VENDOR_ASSIGNMENT': {
       state.vendorAssignments[command.assignment.id] = { ...command.assignment }
+      break
+    }
+
+    case 'APPLY_IMPORT': {
+      for (const a of command.createdAssignments) {
+        delete state.vendorAssignments[a.id]
+      }
+      for (const a of command.replacedAssignments) {
+        state.vendorAssignments[a.id] = { ...a }
+      }
       break
     }
 

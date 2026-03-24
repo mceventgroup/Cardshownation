@@ -15,11 +15,13 @@ import { immer } from 'zustand/middleware/immer'
 import { enableMapSet } from 'immer'
 
 enableMapSet()
-import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, CompositeRoom, LayoutSettings, Point, SectionId, VendorId, RoomSegmentId, RowId } from '@/domain/types'
+import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, CompositeRoom, LayoutSettings, Point, SectionId, VendorId, RoomSegmentId, RowId, LayoutId, UserId, ImportSessionId, VendorAssignmentId, TableId } from '@/domain/types'
 import type { LayoutCommand, CommandHistory } from '@/domain/commands'
 import { EMPTY_HISTORY } from '@/domain/commands'
+import type { ImportSession, FieldMapping, ConflictResolution } from '@/domain/document'
 import { DEFAULT_SETTINGS } from '@/lib/defaults'
 import { loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage } from '@/lib/persistence'
+import { csvImportModule } from '@/domain/csv-import.impl'
 import { applyCommand, reverseCommand } from './executor'
 
 // Load persisted document state (synchronous — no hydration flash)
@@ -93,6 +95,14 @@ export interface EditorState {
   setActiveVendor: (id: VendorId | null) => void
   setSelectedDoor: (id: string | null) => void
   clearLayout: () => void
+
+  // ── CSV Import actions ─────────────────────────────────────────────────
+  importSession: ImportSession | null
+  startImportSession: (csvText: string) => void
+  updateImportMapping: (mapping: FieldMapping) => void
+  resolveImportConflict: (rowIndex: number, resolution: ConflictResolution) => void
+  applyImport: () => void
+  cancelImport: () => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,6 +131,7 @@ export const useEditorStore = create<EditorState>()(
     stagePosition: { x: 0, y: 0 },
     tableBuilderConfig: null,
     rowBuilderConfig: null,
+    importSession: null,
 
     // ── Canvas actions ─────────────────────────────────────────────────────
 
@@ -291,6 +302,122 @@ export const useEditorStore = create<EditorState>()(
 
     setSelectedDoor(id) {
       set(state => { state.selectedDoorId = id })
+    },
+
+    // ── CSV Import actions ────────────────────────────────────────────────
+
+    startImportSession(csvText) {
+      const state = get()
+      const parsed = csvImportModule.parseCSV(csvText)
+      const detected = csvImportModule.detectColumns(parsed.headers)
+      const existingTables = Object.values(state.tables)
+      const existingAssignments = Object.values(state.vendorAssignments)
+      const sessionId = `import-${Date.now()}` as ImportSessionId
+      const session = csvImportModule.buildSession(
+        parsed,
+        detected.fieldMapping,
+        existingTables,
+        existingAssignments,
+        'local' as LayoutId,
+        'user' as UserId,
+        sessionId,
+      )
+      set(s => { s.importSession = session as any })
+    },
+
+    updateImportMapping(mapping) {
+      const state = get()
+      if (!state.importSession) return
+      const parsed = csvImportModule.parseCSV(
+        // Re-build from raw rows since we don't store the original text
+        // Instead, rebuild session from existing rawData
+        '',
+      )
+      // Rebuild session from existing raw rows with new mapping
+      const existingTables = Object.values(state.tables)
+      const existingAssignments = Object.values(state.vendorAssignments)
+      const fakeparsed = {
+        headers: mapping.tableNumber ? [mapping.tableNumber] : [],
+        rows: state.importSession.rows.map(r => r.rawData),
+        rowCount: state.importSession.rows.length,
+        parseErrors: [],
+      }
+      const newSession = csvImportModule.buildSession(
+        fakeparsed,
+        mapping,
+        existingTables,
+        existingAssignments,
+        state.importSession.layoutId,
+        state.importSession.createdBy,
+        state.importSession.id,
+      )
+      set(s => { s.importSession = newSession as any })
+    },
+
+    resolveImportConflict(rowIndex, resolution) {
+      set(s => {
+        if (!s.importSession) return
+        const row = s.importSession.rows.find(r => r.rowIndex === rowIndex)
+        if (row?.conflict) {
+          row.conflict.resolution = resolution
+          row.status = resolution === 'skip' ? 'skipped' : 'conflict'
+        }
+        s.importSession.conflictSummary = csvImportModule.recomputeSummary(s.importSession.rows)
+      })
+    },
+
+    applyImport() {
+      const state = get()
+      if (!state.importSession) return
+      if (!csvImportModule.isReadyToApply(state.importSession)) return
+
+      const tablesByLabel = new Map(
+        Object.values(state.tables).map(t => [t.label.toLowerCase().trim(), t]),
+      )
+
+      const createdAssignments: VendorAssignment[] = []
+      const replacedAssignments: VendorAssignment[] = []
+
+      for (const row of state.importSession.rows) {
+        const willApply =
+          row.status === 'valid' ||
+          (row.status === 'conflict' && row.conflict?.resolution === 'overwrite')
+        if (!willApply) continue
+
+        const table = tablesByLabel.get(row.mapped.tableNumber.toLowerCase().trim())
+        if (!table) continue
+
+        const existing = Object.values(state.vendorAssignments).find(a => a.tableId === table.id)
+        if (existing) replacedAssignments.push(existing)
+
+        const newAssignment: VendorAssignment = {
+          id: `va-${Date.now()}-${row.rowIndex}` as VendorAssignmentId,
+          tableId: table.id as TableId,
+          layoutId: 'local' as LayoutId,
+          vendorId: `v-${Date.now()}-${row.rowIndex}` as any,
+          vendorName: row.mapped.vendorName,
+          vendorCategory: row.mapped.vendorCategory,
+          colorOverride: row.mapped.color,
+          notes: row.mapped.notes,
+          paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as any,
+          importSessionId: state.importSession.id,
+        }
+        createdAssignments.push(newAssignment)
+      }
+
+      get().dispatch({
+        type: 'APPLY_IMPORT',
+        timestamp: Date.now(),
+        importSessionId: state.importSession.id,
+        replacedAssignments,
+        createdAssignments,
+      })
+
+      set(s => { s.importSession = null })
+    },
+
+    cancelImport() {
+      set(s => { s.importSession = null })
     },
 
     clearLayout() {
