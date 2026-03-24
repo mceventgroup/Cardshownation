@@ -25,6 +25,7 @@ import { rowModule } from '@/domain/rows.impl'
 import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
 import { createTableId, createRowId, createAssignmentId, createRoomSegmentId } from '@/lib/id'
 import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID } from '@/lib/defaults'
+import { registerStage } from '@/lib/stage'
 import GridLayer from './GridLayer'
 import RoomLayer from './RoomLayer'
 import DoorNode from './DoorNode'
@@ -192,6 +193,13 @@ export default function KonvaCanvas() {
     })
     observer.observe(container)
     return () => observer.disconnect()
+  }, [])
+
+  // ── Stage registry (for PNG export) ───────────────────────────────────────
+
+  useEffect(() => {
+    registerStage(stageRef.current)
+    return () => registerStage(null)
   }, [])
 
   // ── Space key pan tracking ─────────────────────────────────────────────────

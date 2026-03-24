@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useEditorStore, selectCanUndo, selectCanRedo } from '@/store/index'
 import ImportModal from './ImportModal'
+import ExportModal from './ExportModal'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MENU DEFINITIONS
@@ -15,7 +16,7 @@ interface MenuItem {
   disabled?: boolean
 }
 
-function useMenuItems(openImport: () => void) {
+function useMenuItems(openImport: () => void, openExport: () => void) {
   const setTool  = useEditorStore(s => s.setActiveTool)
   const undo     = useEditorStore(s => s.undo)
   const redo     = useEditorStore(s => s.redo)
@@ -36,6 +37,7 @@ function useMenuItems(openImport: () => void) {
         }
       }},
       { label: 'Import Vendors from CSV…', action: openImport },
+      { label: 'Export…', action: openExport },
     ],
     Tools: [
       { label: 'Select',       shortcut: 'S',   action: () => setTool('select') },
@@ -79,7 +81,11 @@ export default function Toolbar() {
   const redo       = useEditorStore(s => s.redo)
 
   const [showImport, setShowImport] = useState(false)
-  const menus = useMenuItems(() => { setShowImport(true); setOpenMenu(null) })
+  const [showExport, setShowExport] = useState(false)
+  const menus = useMenuItems(
+    () => { setShowImport(true); setOpenMenu(null) },
+    () => { setShowExport(true); setOpenMenu(null) },
+  )
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
   function toggleMenu(name: string) {
@@ -170,6 +176,7 @@ export default function Toolbar() {
       )}
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showExport && <ExportModal onClose={() => setShowExport(false)} />}
     </div>
   )
 }
