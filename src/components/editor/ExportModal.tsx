@@ -24,7 +24,6 @@ export default function ExportModal({ onClose }: Props) {
   const sections    = useEditorStore(s => s.sections)
   const assignments = useEditorStore(s => s.vendorAssignments)
   const room        = useEditorStore(s => s.room)
-  const settings    = useEditorStore(s => s.settings)
 
   const [view, setView]              = useState<'organizer' | 'public'>('organizer')
   const [showPayment, setShowPayment] = useState(true)
@@ -36,7 +35,7 @@ export default function ExportModal({ onClose }: Props) {
   }
 
   function handlePrint() {
-    printLayout(tables, sections, assignments, room, settings, {
+    printLayout(tables, sections, assignments, room, {
       showVendorNames:   view === 'organizer',
       showPaymentStatus: view === 'organizer' && showPayment,
       title,

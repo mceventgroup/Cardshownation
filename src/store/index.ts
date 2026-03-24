@@ -15,13 +15,14 @@ import { immer } from 'zustand/middleware/immer'
 import { enableMapSet } from 'immer'
 
 enableMapSet()
-import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, CompositeRoom, LayoutSettings, Point, SectionId, VendorId, RoomSegmentId, RowId, LayoutId, UserId, ImportSessionId, VendorAssignmentId, TableId } from '@/domain/types'
+import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, CompositeRoom, LayoutSettings, Point, SectionId, VendorId, RoomSegmentId, RowId, LayoutId, UserId } from '@/domain/types'
 import type { LayoutCommand, CommandHistory } from '@/domain/commands'
 import { EMPTY_HISTORY } from '@/domain/commands'
 import type { ImportSession, FieldMapping, ConflictResolution } from '@/domain/document'
-import { DEFAULT_SETTINGS } from '@/lib/defaults'
+import { DEFAULT_SETTINGS, DRAFT_LAYOUT_ID } from '@/lib/defaults'
 import { loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage } from '@/lib/persistence'
 import { csvImportModule } from '@/domain/csv-import.impl'
+import { createImportSessionId, createAssignmentId, createVendorId } from '@/lib/id'
 import { applyCommand, reverseCommand } from './executor'
 
 // Load persisted document state (synchronous — no hydration flash)
@@ -312,15 +313,14 @@ export const useEditorStore = create<EditorState>()(
       const detected = csvImportModule.detectColumns(parsed.headers)
       const existingTables = Object.values(state.tables)
       const existingAssignments = Object.values(state.vendorAssignments)
-      const sessionId = `import-${Date.now()}` as ImportSessionId
       const session = csvImportModule.buildSession(
         parsed,
         detected.fieldMapping,
         existingTables,
         existingAssignments,
-        'local' as LayoutId,
+        DRAFT_LAYOUT_ID,
         'user' as UserId,
-        sessionId,
+        createImportSessionId(),
       )
       set(s => { s.importSession = session as any })
     },
@@ -328,22 +328,13 @@ export const useEditorStore = create<EditorState>()(
     updateImportMapping(mapping) {
       const state = get()
       if (!state.importSession) return
-      const parsed = csvImportModule.parseCSV(
-        // Re-build from raw rows since we don't store the original text
-        // Instead, rebuild session from existing rawData
-        '',
-      )
-      // Rebuild session from existing raw rows with new mapping
       const existingTables = Object.values(state.tables)
       const existingAssignments = Object.values(state.vendorAssignments)
-      const fakeparsed = {
-        headers: mapping.tableNumber ? [mapping.tableNumber] : [],
-        rows: state.importSession.rows.map(r => r.rawData),
-        rowCount: state.importSession.rows.length,
-        parseErrors: [],
-      }
+      // Rebuild session from the already-stored raw rows with the new mapping
+      const rawRows = state.importSession.rows.map(r => r.rawData)
+      const headers = rawRows.length > 0 ? Object.keys(rawRows[0]) : []
       const newSession = csvImportModule.buildSession(
-        fakeparsed,
+        { headers, rows: rawRows, rowCount: rawRows.length, parseErrors: [] },
         mapping,
         existingTables,
         existingAssignments,
@@ -374,6 +365,10 @@ export const useEditorStore = create<EditorState>()(
       const tablesByLabel = new Map(
         Object.values(state.tables).map(t => [t.label.toLowerCase().trim(), t]),
       )
+      // Build once — avoids O(n²) .find() per row
+      const assignmentByTableId = new Map(
+        Object.values(state.vendorAssignments).map(a => [a.tableId, a]),
+      )
 
       const createdAssignments: VendorAssignment[] = []
       const replacedAssignments: VendorAssignment[] = []
@@ -387,19 +382,19 @@ export const useEditorStore = create<EditorState>()(
         const table = tablesByLabel.get(row.mapped.tableNumber.toLowerCase().trim())
         if (!table) continue
 
-        const existing = Object.values(state.vendorAssignments).find(a => a.tableId === table.id)
+        const existing = assignmentByTableId.get(table.id)
         if (existing) replacedAssignments.push(existing)
 
         const newAssignment: VendorAssignment = {
-          id: `va-${Date.now()}-${row.rowIndex}` as VendorAssignmentId,
-          tableId: table.id as TableId,
-          layoutId: 'local' as LayoutId,
-          vendorId: `v-${Date.now()}-${row.rowIndex}` as any,
+          id: createAssignmentId(),
+          tableId: table.id,
+          layoutId: DRAFT_LAYOUT_ID,
+          vendorId: createVendorId(),
           vendorName: row.mapped.vendorName,
           vendorCategory: row.mapped.vendorCategory,
           colorOverride: row.mapped.color,
           notes: row.mapped.notes,
-          paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as any,
+          paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as VendorAssignment['paymentStatus'],
           importSessionId: state.importSession.id,
         }
         createdAssignments.push(newAssignment)

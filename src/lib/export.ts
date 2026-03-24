@@ -5,7 +5,7 @@
 // Print/PDF — SVG floor-plan rendered to a new browser window + print dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Section, VendorAssignment, CompositeRoom, LayoutSettings } from '@/domain/types'
+import type { TableObject, Section, VendorAssignment, CompositeRoom } from '@/domain/types'
 import { getStage } from './stage'
 import { computeRoomContour } from '@/domain/room-contour'
 
@@ -41,7 +41,6 @@ export function printLayout(
   sections: Record<string, Section>,
   assignments: Record<string, VendorAssignment>,
   room: CompositeRoom | null,
-  settings: LayoutSettings,
   options: PrintOptions,
 ): void {
   const tableList = Object.values(tables)
@@ -50,7 +49,7 @@ export function printLayout(
     return
   }
 
-  const svg = buildSVG(tableList, sections, assignments, room, settings, options)
+  const svg = buildSVG(tableList, sections, assignments, room, options)
   const html = buildPrintHTML(svg, options.title)
 
   const win = window.open('', '_blank', 'width=900,height=700')
@@ -70,12 +69,28 @@ const PAD = 60        // px padding around content
 const PAGE_W = 1056   // 11 inches @ 96 dpi (landscape Letter)
 const PAGE_H = 816    // 8.5 inches @ 96 dpi
 
+/** Axis-aligned bounding box for a possibly-rotated table. */
+function tableBounds(t: TableObject): { minX: number; minY: number; maxX: number; maxY: number } {
+  if (t.rotation === 0) {
+    return { minX: t.x, minY: t.y, maxX: t.x + t.width, maxY: t.y + t.height }
+  }
+  const cx = t.x + t.width / 2
+  const cy = t.y + t.height / 2
+  const hw = t.width / 2
+  const hh = t.height / 2
+  const r = (t.rotation * Math.PI) / 180
+  const cos = Math.cos(r)
+  const sin = Math.sin(r)
+  const xs = [hw * cos - hh * sin, -hw * cos - hh * sin, -hw * cos + hh * sin, hw * cos + hh * sin].map(dx => cx + dx)
+  const ys = [hw * sin + hh * cos, -hw * sin + hh * cos, -hw * sin - hh * cos, hw * sin - hh * cos].map(dy => cy + dy)
+  return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }
+}
+
 function buildSVG(
   tables: TableObject[],
   sections: Record<string, Section>,
   assignments: Record<string, VendorAssignment>,
   room: CompositeRoom | null,
-  _settings: LayoutSettings,
   options: PrintOptions,
 ): string {
   // Assignment lookup: tableId → VendorAssignment
@@ -85,14 +100,15 @@ function buildSVG(
   // Section lookup
   const sectionMap = new Map(Object.entries(sections))
 
-  // Compute content bounding box
+  // Compute content bounding box accounting for rotation
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
 
   for (const t of tables) {
-    minX = Math.min(minX, t.x)
-    minY = Math.min(minY, t.y)
-    maxX = Math.max(maxX, t.x + t.width)
-    maxY = Math.max(maxY, t.y + t.height)
+    const b = tableBounds(t)
+    minX = Math.min(minX, b.minX)
+    minY = Math.min(minY, b.minY)
+    maxX = Math.max(maxX, b.maxX)
+    maxY = Math.max(maxY, b.maxY)
   }
 
   if (room) {
