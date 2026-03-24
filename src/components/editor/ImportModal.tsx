@@ -8,7 +8,7 @@
 //   Step 3 — Review rows, resolve conflicts, apply
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useEditorStore } from '@/store'
 import type { FieldMapping, ConflictResolution } from '@/domain/document'
 
@@ -39,11 +39,28 @@ export default function ImportModal({ onClose }: Props) {
   const [parseError, setParseError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  // handleClose is stable (no deps) — no need to re-register
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ── Step 1: upload / paste ───────────────────────────────────────────────
+
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > MAX_FILE_SIZE) {
+      setParseError('File is too large (max 10 MB).')
+      e.target.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = ev => setCsvText((ev.target?.result as string) ?? '')
     reader.readAsText(file)
@@ -141,7 +158,7 @@ export default function ImportModal({ onClose }: Props) {
                 className="w-full h-48 bg-gray-800 border border-gray-600 rounded text-gray-200 text-xs font-mono p-3 resize-none focus:outline-none focus:border-blue-500"
               />
 
-              {parseError && <p className="text-red-400 text-sm">{parseError}</p>}
+              {parseError && step === 1 && <p className="text-red-400 text-sm">{parseError}</p>}
             </div>
           )}
 
@@ -175,6 +192,7 @@ export default function ImportModal({ onClose }: Props) {
                   <> &mdash; columns: {headers.join(', ')}</>
                 )}
               </div>
+              {parseError && <p className="text-red-400 text-sm">{parseError}</p>}
             </div>
           )}
 
@@ -266,8 +284,17 @@ export default function ImportModal({ onClose }: Props) {
             {step < 3 && (
               <button
                 onClick={() => {
-                  if (step === 1) handleParse()
-                  else setStep(3)
+                  if (step === 1) {
+                    handleParse()
+                  } else {
+                    // Step 2: require tableNumber and vendorName before proceeding
+                    if (!importSession?.fieldMapping.tableNumber || !importSession?.fieldMapping.vendorName) {
+                      setParseError('Map at least "Table Number" and "Vendor Name" before continuing.')
+                      return
+                    }
+                    setParseError('')
+                    setStep(3)
+                  }
                 }}
                 disabled={step === 1 && !csvText.trim()}
                 className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm rounded"

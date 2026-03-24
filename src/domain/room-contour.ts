@@ -117,15 +117,17 @@ export function isRectInRoom(room: CompositeRoom, rect: Rect): boolean {
 function computeSegmentContour(segments: RoomSegment[]): Point[][] {
   if (segments.length === 0) return []
 
-  // 1. Coordinate compression
+  // 1. Coordinate compression (skip degenerate segments)
   const xSet = new Set<number>()
   const ySet = new Set<number>()
   for (const seg of segments) {
+    if (seg.width <= 0 || seg.height <= 0) continue
     xSet.add(seg.x)
     xSet.add(seg.x + seg.width)
     ySet.add(seg.y)
     ySet.add(seg.y + seg.height)
   }
+  if (xSet.size === 0) return []
   const xs = [...xSet].sort((a, b) => a - b)
   const ys = [...ySet].sort((a, b) => a - b)
 
@@ -141,6 +143,7 @@ function computeSegmentContour(segments: RoomSegment[]): Point[][] {
   // 2. Fill grid
   const grid: boolean[][] = Array.from({ length: rows }, () => Array(cols).fill(false))
   for (const seg of segments) {
+    if (seg.width <= 0 || seg.height <= 0) continue
     const c1 = xIdx.get(seg.x)!
     const c2 = xIdx.get(seg.x + seg.width)!
     const r1 = yIdx.get(seg.y)!

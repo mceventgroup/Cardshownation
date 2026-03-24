@@ -104,6 +104,11 @@ export interface EditorState {
   resolveImportConflict: (rowIndex: number, resolution: ConflictResolution) => void
   applyImport: () => void
   cancelImport: () => void
+
+  // ── Persistence status (autosave feedback) ─────────────────────────────
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error'
+  saveError: 'quota-exceeded' | 'unknown' | null
+  setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', error?: 'quota-exceeded' | 'unknown') => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,6 +138,8 @@ export const useEditorStore = create<EditorState>()(
     tableBuilderConfig: null,
     rowBuilderConfig: null,
     importSession: null,
+    saveStatus: 'idle' as const,
+    saveError: null,
 
     // ── Canvas actions ─────────────────────────────────────────────────────
 
@@ -415,6 +422,13 @@ export const useEditorStore = create<EditorState>()(
       set(s => { s.importSession = null })
     },
 
+    setSaveStatus(status, error) {
+      set(s => {
+        s.saveStatus = status
+        s.saveError = error ?? null
+      })
+    },
+
     clearLayout() {
       set(state => {
         state.tables = {}
@@ -442,11 +456,22 @@ export const useEditorStore = create<EditorState>()(
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _saveTimer: ReturnType<typeof setTimeout> | null = null
+let _savedClearTimer: ReturnType<typeof setTimeout> | null = null
 
 useEditorStore.subscribe((state) => {
   if (_saveTimer) clearTimeout(_saveTimer)
+  useEditorStore.getState().setSaveStatus('saving')
   _saveTimer = setTimeout(() => {
-    saveToLocalStorage(extractDocumentSlice(state))
+    const err = saveToLocalStorage(extractDocumentSlice(useEditorStore.getState()))
+    if (err) {
+      useEditorStore.getState().setSaveStatus('error', err)
+    } else {
+      useEditorStore.getState().setSaveStatus('saved')
+      if (_savedClearTimer) clearTimeout(_savedClearTimer)
+      _savedClearTimer = setTimeout(() => {
+        useEditorStore.getState().setSaveStatus('idle')
+      }, 2000)
+    }
   }, 500)
 })
 

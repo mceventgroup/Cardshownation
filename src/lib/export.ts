@@ -52,7 +52,7 @@ export function printLayout(
   const svg = buildSVG(tableList, sections, assignments, room, options)
   const html = buildPrintHTML(svg, options.title)
 
-  const win = window.open('', '_blank', 'width=900,height=700')
+  const win = window.open('', '_blank', 'width=900,height=700,noopener,noreferrer')
   if (!win) { alert('Popup blocked — please allow popups for this site.'); return }
   win.document.write(html)
   win.document.close()
@@ -166,7 +166,8 @@ function buildSVG(
   for (const t of tables) {
     const assignment = byTable.get(t.id)
     const section = t.sectionId ? sectionMap.get(t.sectionId) : null
-    const fill = assignment?.colorOverride ?? section?.color ?? '#e2e8f0'
+    const rawFill = assignment?.colorOverride ?? section?.color ?? '#e2e8f0'
+    const fill = isSafeColor(rawFill) ? rawFill : '#e2e8f0'
     const cx = tx(t.x + t.width / 2)
     const cy = ty(t.y + t.height / 2)
     const w = ts(t.width)
@@ -214,6 +215,11 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+/** Allow only hex colors and basic CSS color names — rejects url(), expression(), etc. */
+function isSafeColor(c: string): boolean {
+  return /^#[0-9a-fA-F]{3,8}$/.test(c) || /^[a-zA-Z]{2,30}$/.test(c)
+}
+
 function paymentBadge(status: string): string {
   const map: Record<string, string> = {
     paid: '✓ Paid', partial: '~ Partial', unpaid: '✗ Unpaid',
@@ -239,6 +245,7 @@ function buildPrintHTML(svgContent: string, title: string): string {
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
   <title>${esc(title || 'Floor Plan')}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }

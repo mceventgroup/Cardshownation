@@ -75,7 +75,9 @@ export function extractDocumentSlice(state: {
 // SAVE
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function saveToLocalStorage(slice: DocumentSlice): void {
+export type SaveError = 'quota-exceeded' | 'unknown'
+
+export function saveToLocalStorage(slice: DocumentSlice): SaveError | null {
   try {
     const payload: PersistedPayload = {
       version: CURRENT_VERSION,
@@ -83,8 +85,10 @@ export function saveToLocalStorage(slice: DocumentSlice): void {
       savedAt: new Date().toISOString(),
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-  } catch {
-    // QuotaExceededError or private browsing — silently ignore
+    return null
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') return 'quota-exceeded'
+    return 'unknown'
   }
 }
 
@@ -127,6 +131,10 @@ export function clearLocalStorage(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function migrate(payload: PersistedPayload): PersistedPayload {
+  if (payload.version > CURRENT_VERSION) {
+    // Data was saved by a newer version of the app — do not corrupt it
+    throw new Error(`Unsupported layout version: ${payload.version}`)
+  }
   // Future migrations go here:
   // if (payload.version < 2) { /* v1 -> v2 transforms */ }
   // if (payload.version < 3) { /* v2 -> v3 transforms */ }

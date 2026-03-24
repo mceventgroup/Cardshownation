@@ -11,7 +11,7 @@
 //   Public — table labels and section colors only
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useEditorStore } from '@/store'
 import { exportPNG, printLayout } from '@/lib/export'
 
@@ -28,6 +28,16 @@ export default function ExportModal({ onClose }: Props) {
   const [view, setView]              = useState<'organizer' | 'public'>('organizer')
   const [showPayment, setShowPayment] = useState(true)
   const [title, setTitle]            = useState('Floor Plan')
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  // onClose is stable
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function handlePNG() {
     exportPNG(`${title || 'floorplan'}.png`)

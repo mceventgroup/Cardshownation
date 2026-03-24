@@ -101,11 +101,15 @@ export const csvImportModule: CSVImportModule = {
       return { headers: [], rows: [], rowCount: 0, parseErrors: [] }
     }
 
-    const headers = parseCSVLine(lines[0]).map(h => h.trim())
+    const MAX_COLUMNS = 50
+    const MAX_HEADER_LEN = 100
+    const rawHeaders = parseCSVLine(lines[0]).map(h => h.trim().slice(0, MAX_HEADER_LEN))
+    const headers = rawHeaders.slice(0, MAX_COLUMNS)
     const parseErrors: string[] = []
     const rows: Array<Record<string, string>> = []
 
-    for (let i = 1; i < lines.length; i++) {
+    const MAX_ROWS = 5000
+    for (let i = 1; i < lines.length && rows.length < MAX_ROWS; i++) {
       if (!lines[i].trim()) continue
       const cells = parseCSVLine(lines[i])
       if (cells.length !== headers.length) {
