@@ -935,6 +935,8 @@ export default function KonvaCanvas() {
                 door={door}
                 bounds={roomBounds}
                 isSelected={selectedDoorId === door.id}
+                gridSize={settings.gridSize}
+                unitLabel={settings.unitLabel}
                 onDragEnd={handleDoorDragEnd}
                 onClick={setSelectedDoor}
               />

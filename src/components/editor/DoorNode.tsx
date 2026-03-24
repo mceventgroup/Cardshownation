@@ -5,9 +5,10 @@
 //   - Solid colored bar in the wall gap (the door panel)
 //   - Subtle dotted arc showing swing direction
 //   - Draggable along its wall axis
+//   - Distance labels from each wall end while dragging
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { memo, useCallback } from 'react'
+import React, { memo, useCallback, useState } from 'react'
 import { Group, Line, Rect, Shape } from 'react-konva'
 import type { Door, Rect as RectType } from '@/domain/types'
 
@@ -15,13 +16,30 @@ interface DoorNodeProps {
   door: Door
   bounds: RectType
   isSelected: boolean
+  gridSize: number    // canvas units per grid cell (e.g. 12 = 1 foot)
+  unitLabel: string   // 'in' | 'ft' | 'px'
   onDragEnd: (doorId: string, newX: number, newY: number) => void
   onClick: (doorId: string) => void
 }
 
 const DOOR_COLOR = '#2563eb'
 
-const DoorNode = memo(function DoorNode({ door, bounds, isSelected, onDragEnd, onClick }: DoorNodeProps) {
+/** Format a distance in canvas units (inches) as a readable string. */
+function fmtDist(units: number, gridSize: number, unitLabel: string): string {
+  if (unitLabel === 'px') return `${Math.round(units)}px`
+  if (unitLabel === 'ft' || unitLabel === 'in') {
+    // gridSize canvas units = 1 foot
+    const totalInches = Math.round((units / gridSize) * 12)
+    const feet  = Math.floor(totalInches / 12)
+    const inches = totalInches % 12
+    if (feet === 0) return `${inches}"`
+    if (inches === 0) return `${feet}'`
+    return `${feet}'${inches}"`
+  }
+  return `${Math.round(units)}`
+}
+
+const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, unitLabel, onDragEnd, onClick }: DoorNodeProps) {
   const { side, width: doorWidth } = door
 
   let groupX: number
@@ -85,18 +103,34 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, onDragEnd, o
       break
   }
 
+  // Track dragging state so we can show distance labels
+  const [isDragging, setIsDragging] = useState(false)
+  const [liveX, setLiveX] = useState(groupX)
+  const [liveY, setLiveY] = useState(groupY)
+
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true)
+    setLiveX(groupX)
+    setLiveY(groupY)
+  }, [groupX, groupY])
+
   const handleDragMove = useCallback((e: any) => {
     const node = e.target
     if (dragAxis === 'x') {
       node.y(groupY)
-      node.x(Math.max(bounds.x, Math.min(bounds.x + bounds.width - doorWidth, node.x())))
+      const clampedX = Math.max(bounds.x, Math.min(bounds.x + bounds.width - doorWidth, node.x()))
+      node.x(clampedX)
+      setLiveX(clampedX)
     } else {
       node.x(groupX)
-      node.y(Math.max(bounds.y, Math.min(bounds.y + bounds.height - doorWidth, node.y())))
+      const clampedY = Math.max(bounds.y, Math.min(bounds.y + bounds.height - doorWidth, node.y()))
+      node.y(clampedY)
+      setLiveY(clampedY)
     }
   }, [dragAxis, groupX, groupY, bounds, doorWidth])
 
   const handleDragEnd = useCallback((e: any) => {
+    setIsDragging(false)
     const node = e.target
     if (dragAxis === 'x') {
       onDragEnd(door.id, node.x(), door.y)
@@ -105,11 +139,28 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, onDragEnd, o
     }
   }, [door.id, door.x, door.y, dragAxis, onDragEnd])
 
+  // Distance from each wall end to the door edges (in canvas units = inches)
+  const distA = dragAxis === 'x'
+    ? liveX - bounds.x                                    // left gap (horizontal doors)
+    : liveY - bounds.y                                    // top gap (vertical doors)
+  const distB = dragAxis === 'x'
+    ? (bounds.x + bounds.width) - (liveX + doorWidth)    // right gap
+    : (bounds.y + bounds.height) - (liveY + doorWidth)   // bottom gap
+
+  const labelA = fmtDist(distA, gridSize, unitLabel)
+  const labelB = fmtDist(distB, gridSize, unitLabel)
+
+  // Pill background padding
+  const PILL_PAD_X = 5
+  const PILL_PAD_Y = 3
+  const FONT_SIZE  = 11
+
   return (
     <Group
       x={groupX}
       y={groupY}
       draggable
+      onDragStart={handleDragStart}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onClick={() => onClick(door.id)}
@@ -176,6 +227,69 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, onDragEnd, o
         }}
         listening={false}
       />
+
+      {/* Distance labels — shown while dragging */}
+      {isDragging && (
+        <Shape
+          listening={false}
+          sceneFunc={(ctx) => {
+            ctx.font = `bold ${FONT_SIZE}px sans-serif`
+            ctx.textBaseline = 'middle'
+
+            function drawPill(text: string, cx: number, cy: number) {
+              const tw = ctx.measureText(text).width
+              const pw = tw + PILL_PAD_X * 2
+              const ph = FONT_SIZE + PILL_PAD_Y * 2
+              const rx = pw / 2
+
+              // Pill background
+              ctx.fillStyle = 'rgba(15,23,42,0.82)'
+              ctx.beginPath()
+              ctx.roundRect(cx - pw / 2, cy - ph / 2, pw, ph, rx)
+              ctx.fill()
+
+              // Text
+              ctx.fillStyle = '#f8fafc'
+              ctx.textAlign = 'center'
+              ctx.fillText(text, cx, cy)
+            }
+
+            // In group-local coords, door occupies 0..doorWidth (horizontal)
+            // or 0..doorWidth (vertical). The wall ends are at:
+            const wallStart = dragAxis === 'x' ? bounds.x - liveX : bounds.y - liveY
+            const wallEnd   = dragAxis === 'x'
+              ? bounds.x + bounds.width - liveX
+              : bounds.y + bounds.height - liveY
+
+            const OFFSET = side === 'top' ? -22 : side === 'bottom' ? 22 : 0
+            const OFFSET_V = side === 'left' ? -22 : side === 'right' ? 22 : 0
+
+            if (dragAxis === 'x') {
+              // Left gap: wallStart → 0
+              if (distA > 0) {
+                const midX = (wallStart + 0) / 2
+                drawPill(labelA, midX, OFFSET)
+              }
+              // Right gap: doorWidth → wallEnd
+              if (distB > 0) {
+                const midX = (doorWidth + wallEnd) / 2
+                drawPill(labelB, midX, OFFSET)
+              }
+            } else {
+              // Top gap: wallStart → 0
+              if (distA > 0) {
+                const midY = (wallStart + 0) / 2
+                drawPill(labelA, OFFSET_V, midY)
+              }
+              // Bottom gap: doorWidth → wallEnd
+              if (distB > 0) {
+                const midY = (doorWidth + wallEnd) / 2
+                drawPill(labelB, OFFSET_V, midY)
+              }
+            }
+          }}
+        />
+      )}
     </Group>
   )
 })
