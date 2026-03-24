@@ -19,7 +19,11 @@ import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, Composi
 import type { LayoutCommand, CommandHistory } from '@/domain/commands'
 import { EMPTY_HISTORY } from '@/domain/commands'
 import { DEFAULT_SETTINGS } from '@/lib/defaults'
+import { loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage } from '@/lib/persistence'
 import { applyCommand, reverseCommand } from './executor'
+
+// Load persisted document state (synchronous — no hydration flash)
+const _persisted = loadFromLocalStorage()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -88,6 +92,7 @@ export interface EditorState {
   removeVendor: (id: VendorId) => void
   setActiveVendor: (id: VendorId | null) => void
   setSelectedDoor: (id: string | null) => void
+  clearLayout: () => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,16 +101,16 @@ export interface EditorState {
 
 export const useEditorStore = create<EditorState>()(
   immer((set, get) => ({
-    // ── Initial state ──────────────────────────────────────────────────────
-    tables:        {},
-    rows:          {},
-    sections:      {},
-    vendors:       {},
-    vendorAssignments: {},
-    room:          null,
+    // ── Initial state (hydrated from localStorage if available) ────────────
+    tables:        _persisted?.tables ?? {},
+    rows:          _persisted?.rows ?? {},
+    sections:      _persisted?.sections ?? {},
+    vendors:       _persisted?.vendors ?? {},
+    vendorAssignments: _persisted?.vendorAssignments ?? {},
+    room:          _persisted?.room ?? null,
     selectedSegmentId: null,
-    doors:         {},
-    settings:      DEFAULT_SETTINGS,
+    doors:         _persisted?.doors ?? {},
+    settings:      _persisted?.settings ?? DEFAULT_SETTINGS,
     history:       EMPTY_HISTORY,
     selectedIds:   new Set<string>(),
     activeTool:    'select',
@@ -287,8 +292,41 @@ export const useEditorStore = create<EditorState>()(
     setSelectedDoor(id) {
       set(state => { state.selectedDoorId = id })
     },
+
+    clearLayout() {
+      set(state => {
+        state.tables = {}
+        state.rows = {}
+        state.sections = {}
+        state.vendors = {}
+        state.vendorAssignments = {}
+        state.room = null
+        state.doors = {}
+        state.settings = DEFAULT_SETTINGS
+        state.selectedIds = new Set()
+        state.activeTool = 'select'
+        state.activeVendorId = null
+        state.selectedDoorId = null
+        state.selectedSegmentId = null
+        state.history = { ...EMPTY_HISTORY, past: [], future: [] }
+      })
+      clearLocalStorage()
+    },
   })),
 )
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO-SAVE — debounced write to localStorage on every state change
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _saveTimer: ReturnType<typeof setTimeout> | null = null
+
+useEditorStore.subscribe((state) => {
+  if (_saveTimer) clearTimeout(_saveTimer)
+  _saveTimer = setTimeout(() => {
+    saveToLocalStorage(extractDocumentSlice(state))
+  }, 500)
+})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SELECTORS

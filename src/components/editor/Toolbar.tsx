@@ -25,7 +25,16 @@ function useMenuItems() {
     window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
   }, [])
 
+  const clearLayout = useEditorStore(s => s.clearLayout)
+
   const menus: Record<string, MenuItem[]> = {
+    File: [
+      { label: 'New Layout', action: () => {
+        if (window.confirm('Start a new layout? Current work will be cleared.')) {
+          clearLayout()
+        }
+      }},
+    ],
     Tools: [
       { label: 'Select',       shortcut: 'S',   action: () => setTool('select') },
       { label: 'Place Table',  shortcut: 'T',   action: () => setTool('place-table') },
