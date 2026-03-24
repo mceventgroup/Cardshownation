@@ -108,7 +108,6 @@ export interface EditorState {
   // ── Persistence status (autosave feedback) ─────────────────────────────
   saveStatus: 'idle' | 'saving' | 'saved' | 'error'
   saveError: 'quota-exceeded' | 'unknown' | null
-  setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', error?: 'quota-exceeded' | 'unknown') => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -422,13 +421,6 @@ export const useEditorStore = create<EditorState>()(
       set(s => { s.importSession = null })
     },
 
-    setSaveStatus(status, error) {
-      set(s => {
-        s.saveStatus = status
-        s.saveError = error ?? null
-      })
-    },
-
     clearLayout() {
       set(state => {
         state.tables = {}
@@ -458,18 +450,31 @@ export const useEditorStore = create<EditorState>()(
 let _saveTimer: ReturnType<typeof setTimeout> | null = null
 let _savedClearTimer: ReturnType<typeof setTimeout> | null = null
 
-useEditorStore.subscribe((state) => {
+useEditorStore.subscribe((state, prev) => {
+  // Only react when document data changes — not when saveStatus/saveError update.
+  // With immer, unchanged sub-trees keep their reference, so identity checks work.
+  const docChanged =
+    state.tables          !== prev.tables          ||
+    state.rows            !== prev.rows            ||
+    state.sections        !== prev.sections        ||
+    state.vendors         !== prev.vendors         ||
+    state.vendorAssignments !== prev.vendorAssignments ||
+    state.room            !== prev.room            ||
+    state.doors           !== prev.doors           ||
+    state.settings        !== prev.settings
+  if (!docChanged) return
+
   if (_saveTimer) clearTimeout(_saveTimer)
-  useEditorStore.getState().setSaveStatus('saving')
+  useEditorStore.setState({ saveStatus: 'saving', saveError: null })
   _saveTimer = setTimeout(() => {
-    const err = saveToLocalStorage(extractDocumentSlice(useEditorStore.getState()))
+    const err = saveToLocalStorage(extractDocumentSlice(state))
     if (err) {
-      useEditorStore.getState().setSaveStatus('error', err)
+      useEditorStore.setState({ saveStatus: 'error', saveError: err })
     } else {
-      useEditorStore.getState().setSaveStatus('saved')
+      useEditorStore.setState({ saveStatus: 'saved', saveError: null })
       if (_savedClearTimer) clearTimeout(_savedClearTimer)
       _savedClearTimer = setTimeout(() => {
-        useEditorStore.getState().setSaveStatus('idle')
+        useEditorStore.setState({ saveStatus: 'idle' })
       }, 2000)
     }
   }, 500)
