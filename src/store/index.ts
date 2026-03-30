@@ -15,7 +15,7 @@ import { immer } from 'zustand/middleware/immer'
 import { enableMapSet } from 'immer'
 
 enableMapSet()
-import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, CompositeRoom, LayoutSettings, Point, SectionId, VendorId, RoomSegmentId, RowId, LayoutId, UserId } from '@/domain/types'
+import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, CompositeRoom, LayoutSettings, Point, SectionId, VendorId, RoomSegmentId, RowId, LayoutId, UserId, BackgroundImage, BackgroundImageId } from '@/domain/types'
 import type { LayoutCommand, CommandHistory } from '@/domain/commands'
 import { EMPTY_HISTORY } from '@/domain/commands'
 import type { ImportSession, FieldMapping, ConflictResolution } from '@/domain/document'
@@ -44,6 +44,7 @@ export interface EditorState {
   room: CompositeRoom | null
   selectedSegmentId: RoomSegmentId | null
   doors: Record<string, Door>
+  backgroundImages: Record<string, BackgroundImage>
   settings: LayoutSettings
 
   // ── History ─────────────────────────────────────────────────────────────
@@ -105,6 +106,11 @@ export interface EditorState {
   applyImport: () => void
   cancelImport: () => void
 
+  // ── Background image actions ────────────────────────────────────────────
+  addBackgroundImage: (image: BackgroundImage) => void
+  updateBackgroundImage: (id: BackgroundImageId, updates: Partial<Omit<BackgroundImage, 'id'>>) => void
+  removeBackgroundImage: (id: BackgroundImageId) => void
+
   // ── Persistence status (autosave feedback) ─────────────────────────────
   saveStatus: 'idle' | 'saving' | 'saved' | 'error'
   saveError: 'quota-exceeded' | 'unknown' | null
@@ -125,6 +131,7 @@ export const useEditorStore = create<EditorState>()(
     room:          _persisted?.room ?? null,
     selectedSegmentId: null,
     doors:         _persisted?.doors ?? {},
+    backgroundImages: _persisted?.backgroundImages ?? {},
     settings:      _persisted?.settings ?? DEFAULT_SETTINGS,
     history:       EMPTY_HISTORY,
     selectedIds:   new Set<string>(),
@@ -311,6 +318,30 @@ export const useEditorStore = create<EditorState>()(
       set(state => { state.selectedDoorId = id })
     },
 
+    // ── Background image actions ─────────────────────────────────────────
+
+    addBackgroundImage(image) {
+      set(state => { state.backgroundImages[image.id] = image })
+    },
+
+    updateBackgroundImage(id, updates) {
+      set(state => {
+        const img = state.backgroundImages[id]
+        if (img) {
+          const blocked = new Set(['__proto__', 'constructor', 'prototype'])
+          for (const key of Object.keys(updates)) {
+            if (!blocked.has(key)) {
+              (img as any)[key] = (updates as any)[key]
+            }
+          }
+        }
+      })
+    },
+
+    removeBackgroundImage(id) {
+      set(state => { delete state.backgroundImages[id] })
+    },
+
     // ── CSV Import actions ────────────────────────────────────────────────
 
     startImportSession(csvText) {
@@ -430,6 +461,7 @@ export const useEditorStore = create<EditorState>()(
         state.vendorAssignments = {}
         state.room = null
         state.doors = {}
+        state.backgroundImages = {}
         state.settings = DEFAULT_SETTINGS
         state.selectedIds = new Set()
         state.activeTool = 'select'
@@ -461,6 +493,7 @@ useEditorStore.subscribe((state, prev) => {
     state.vendorAssignments !== prev.vendorAssignments ||
     state.room            !== prev.room            ||
     state.doors           !== prev.doors           ||
+    state.backgroundImages !== prev.backgroundImages ||
     state.settings        !== prev.settings
   if (!docChanged) return
 
@@ -508,6 +541,7 @@ export const selectSelectedDoorId = (s: EditorState) => s.selectedDoorId
 // bare useEditorStore(selectDoorList) subscription, or you will get an
 // infinite render loop via useSyncExternalStore snapshot tearing.
 export const selectDoorList  = (s: EditorState) => Object.values(s.doors)
+export const selectBackgroundImages = (s: EditorState) => s.backgroundImages
 export const selectCanUndo = (s: EditorState) => s.history.past.length > 0
 export const selectCanRedo = (s: EditorState) => s.history.future.length > 0
 export const selectCollapsedPanels = (s: EditorState) => s.collapsedPanels

@@ -5,7 +5,7 @@
 // Print/PDF — SVG floor-plan rendered to a new browser window + print dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Section, VendorAssignment, CompositeRoom } from '@/domain/types'
+import type { TableObject, Section, VendorAssignment, CompositeRoom, BackgroundImage } from '@/domain/types'
 import { getStage } from './stage'
 import { computeRoomContour } from '@/domain/room-contour'
 
@@ -42,6 +42,7 @@ export function printLayout(
   assignments: Record<string, VendorAssignment>,
   room: CompositeRoom | null,
   options: PrintOptions,
+  backgroundImages?: Record<string, BackgroundImage>,
 ): void {
   const tableList = Object.values(tables)
   if (tableList.length === 0 && !room) {
@@ -49,7 +50,7 @@ export function printLayout(
     return
   }
 
-  const svg = buildSVG(tableList, sections, assignments, room, options)
+  const svg = buildSVG(tableList, sections, assignments, room, options, backgroundImages)
   const html = buildPrintHTML(svg, options.title)
 
   const win = window.open('', '_blank', 'width=900,height=700,noopener,noreferrer')
@@ -92,6 +93,7 @@ function buildSVG(
   assignments: Record<string, VendorAssignment>,
   room: CompositeRoom | null,
   options: PrintOptions,
+  backgroundImages?: Record<string, BackgroundImage>,
 ): string {
   // Assignment lookup: tableId → VendorAssignment
   const byTable = new Map<string, VendorAssignment>()
@@ -159,6 +161,18 @@ function buildSVG(
         const pts = contour.map(v => `${tx(v.x)},${ty(v.y)}`).join(' ')
         parts.push(`<polygon points="${pts}" fill="#f8fafc" stroke="#475569" stroke-width="2" />`)
       }
+    }
+  }
+
+  // ── Background images ─────────────────────────────────────────────────────
+  if (backgroundImages) {
+    const sortedBgs = Object.values(backgroundImages)
+      .filter(bg => bg.visible)
+      .sort((a, b) => a.order - b.order)
+    for (const bg of sortedBgs) {
+      parts.push(
+        `<image href="${bg.dataUrl}" x="${tx(bg.x)}" y="${ty(bg.y)}" width="${ts(bg.width)}" height="${ts(bg.height)}" opacity="${bg.opacity}" />`
+      )
     }
   }
 

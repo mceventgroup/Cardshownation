@@ -18,7 +18,7 @@ import { Stage, Layer, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Point, TableId, DoorId } from '@/domain/types'
-import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendors, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId } from '@/store/index'
+import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendors, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectBackgroundImages } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
 import { rowModule } from '@/domain/rows.impl'
@@ -34,6 +34,7 @@ import SelectionRect from './SelectionRect'
 import TransformerControl from './TransformerControl'
 import InlineLabelEditor from './InlineLabelEditor'
 import ShortcutsLegend from './ShortcutsLegend'
+import BackgroundImageLayer from './BackgroundImageLayer'
 import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds } from '@/domain/room-contour'
 import { useWarnings } from '@/hooks/useWarnings'
 import { warningsModule } from '@/domain/warnings.impl'
@@ -89,6 +90,8 @@ export default function KonvaCanvas() {
   const doorsRecord       = useEditorStore(selectDoors)
   const selectedDoorId    = useEditorStore(selectSelectedDoorId)
   const setSelectedDoor   = useEditorStore(s => s.setSelectedDoor)
+  const bgImagesRecord    = useEditorStore(selectBackgroundImages)
+  const updateBgImage     = useEditorStore(s => s.updateBackgroundImage)
 
   // Store actions
   const dispatch      = useEditorStore(s => s.dispatch)
@@ -840,6 +843,14 @@ export default function KonvaCanvas() {
     })
   }, [doorsRecord, dispatch])
 
+  // ── Background image list ──────────────────────────────────────────────────
+
+  const bgImageList = useMemo(() => Object.values(bgImagesRecord), [bgImagesRecord])
+
+  const handleBgImageDragEnd = useCallback((id: import('@/domain/types').BackgroundImageId, x: number, y: number) => {
+    updateBgImage(id, { x, y })
+  }, [updateBgImage])
+
   // ── Table list for rendering ───────────────────────────────────────────────
 
   const tableList = Object.values(tables)
@@ -872,6 +883,11 @@ export default function KonvaCanvas() {
           height={settings.canvasHeight}
           gridSize={settings.gridSize}
         />
+
+        {/* Background images — behind everything */}
+        {bgImageList.length > 0 && (
+          <BackgroundImageLayer images={bgImageList} onDragEnd={handleBgImageDragEnd} />
+        )}
 
         {/* Room boundary, doors, and clearance zones */}
         <Layer listening={false}>

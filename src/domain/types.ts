@@ -37,6 +37,7 @@ export type EventId           = string & { readonly __brand: 'EventId' }
 export type UserId            = string & { readonly __brand: 'UserId' }
 export type ImportSessionId   = string & { readonly __brand: 'ImportSessionId' }
 export type TemplateId        = string & { readonly __brand: 'TemplateId' }
+export type BackgroundImageId = string & { readonly __brand: 'BackgroundImageId' }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TABLE OBJECT
@@ -226,4 +227,24 @@ export interface LayoutSettings {
 export interface ResolvedTableColor {
   color: string
   source: 'assignment' | 'section' | 'default'
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BACKGROUND IMAGE
+// A floor plan image placed on the canvas as a reference layer behind tables.
+// dataUrl stores the image as a base64 data URL so it persists with the layout.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BackgroundImage {
+  id: BackgroundImageId
+  name: string              // original file name
+  dataUrl: string           // base64 data URL
+  x: number                 // position on canvas
+  y: number
+  width: number             // display size on canvas
+  height: number
+  opacity: number           // 0–1
+  locked: boolean           // when true, image can't be moved
+  visible: boolean
+  order: number             // z-order for multiple images (lower = behind)
 }

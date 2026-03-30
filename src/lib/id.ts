@@ -11,6 +11,7 @@ import type {
   EventId,
   ImportSessionId,
   TemplateId,
+  BackgroundImageId,
 } from '@/domain/types'
 
 // All IDs use crypto.randomUUID(), which is available in all modern browsers
@@ -31,3 +32,4 @@ export const createLayoutId        = (): LayoutId          => uuid() as LayoutId
 export const createEventId         = (): EventId           => uuid() as EventId
 export const createImportSessionId = (): ImportSessionId   => uuid() as ImportSessionId
 export const createTemplateId      = (): TemplateId        => uuid() as TemplateId
+export const createBackgroundImageId = (): BackgroundImageId => uuid() as BackgroundImageId
