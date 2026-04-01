@@ -11,6 +11,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useEditorStore } from '@/store'
 import type { FieldMapping, ConflictResolution } from '@/domain/document'
+import { csvImportModule } from '@/domain/csv-import.impl'
 
 interface Props {
   onClose: () => void
@@ -37,6 +38,7 @@ export default function ImportModal({ onClose }: Props) {
   const [step, setStep]       = useState<1 | 2 | 3>(1)
   const [csvText, setCsvText] = useState('')
   const [parseError, setParseError] = useState('')
+  const [parseWarnings, setParseWarnings] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -69,6 +71,9 @@ export default function ImportModal({ onClose }: Props) {
   function handleParse() {
     if (!csvText.trim()) { setParseError('Paste CSV content or choose a file.'); return }
     setParseError('')
+    // Pre-parse to surface any row-level warnings before entering mapping step
+    const preParsed = csvImportModule.parseCSV(csvText)
+    setParseWarnings(preParsed.parseErrors)
     startImport(csvText)
     setStep(2)
   }
@@ -192,6 +197,14 @@ export default function ImportModal({ onClose }: Props) {
                   <> &mdash; columns: {headers.join(', ')}</>
                 )}
               </div>
+              {parseWarnings.length > 0 && (
+                <div className="bg-yellow-900/30 border border-yellow-700/50 rounded p-3 text-sm">
+                  <p className="text-yellow-400 font-medium text-xs mb-1">Parse warnings ({parseWarnings.length})</p>
+                  <ul className="text-yellow-300/80 text-xs space-y-0.5 max-h-24 overflow-y-auto">
+                    {parseWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
               {parseError && <p className="text-red-400 text-sm">{parseError}</p>}
             </div>
           )}

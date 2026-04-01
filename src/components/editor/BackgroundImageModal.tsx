@@ -71,8 +71,10 @@ export default function BackgroundImageModal({ onClose }: Props) {
         return
       }
 
-      const dataUrl = await readFileAsDataUrl(file)
-      const { width, height } = await loadImageDimensions(dataUrl)
+      const rawDataUrl = await readFileAsDataUrl(file)
+      const { width, height } = await loadImageDimensions(rawDataUrl)
+      // Compress to JPEG and cap at 2048px to avoid blowing localStorage quota
+      const dataUrl = await compressImage(rawDataUrl, width, height)
       results.push({ name: file.name, dataUrl, naturalWidth: width, naturalHeight: height })
     }
 
@@ -320,6 +322,35 @@ function loadImageDimensions(dataUrl: string): Promise<{ width: number; height: 
     const img = new Image()
     img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
     img.onerror = () => reject(new Error('Failed to load image'))
+    img.src = dataUrl
+  })
+}
+
+const MAX_DIM = 2048
+const JPEG_QUALITY = 0.7
+
+/** Resize image to fit within MAX_DIM and re-encode as JPEG to save localStorage space. */
+function compressImage(dataUrl: string, natW: number, natH: number): Promise<string> {
+  return new Promise((resolve) => {
+    // Skip compression if already small
+    if (natW <= MAX_DIM && natH <= MAX_DIM && dataUrl.length < 200_000) {
+      resolve(dataUrl)
+      return
+    }
+
+    const img = new window.Image()
+    img.onload = () => {
+      const scale = Math.min(1, MAX_DIM / natW, MAX_DIM / natH)
+      const w = Math.round(natW * scale)
+      const h = Math.round(natH * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY))
+    }
+    img.onerror = () => resolve(dataUrl) // fallback to original
     img.src = dataUrl
   })
 }
