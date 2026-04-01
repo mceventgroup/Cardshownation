@@ -17,6 +17,7 @@ import type {
   CompositeRoom,
   Door,
   LayoutSettings,
+  BackgroundImage,
 } from '@/domain/types'
 
 const STORAGE_KEY = 'floorplanner:layout'
@@ -36,6 +37,7 @@ export interface DocumentSlice {
   room: CompositeRoom | null
   doors: Record<string, Door>
   settings: LayoutSettings
+  backgroundImages: Record<string, BackgroundImage>
 }
 
 interface PersistedPayload {
@@ -58,6 +60,7 @@ export function extractDocumentSlice(state: {
   room: CompositeRoom | null
   doors: Record<string, Door>
   settings: LayoutSettings
+  backgroundImages: Record<string, BackgroundImage>
 }): DocumentSlice {
   return {
     tables: state.tables,
@@ -68,6 +71,7 @@ export function extractDocumentSlice(state: {
     room: state.room,
     doors: state.doors,
     settings: state.settings,
+    backgroundImages: state.backgroundImages,
   }
 }
 
@@ -135,9 +139,10 @@ function migrate(payload: PersistedPayload): PersistedPayload {
     // Data was saved by a newer version of the app — do not corrupt it
     throw new Error(`Unsupported layout version: ${payload.version}`)
   }
-  // Future migrations go here:
-  // if (payload.version < 2) { /* v1 -> v2 transforms */ }
-  // if (payload.version < 3) { /* v2 -> v3 transforms */ }
+  // Backfill backgroundImages for older persisted data
+  if (!payload.data.backgroundImages) {
+    payload.data.backgroundImages = {}
+  }
 
   payload.version = CURRENT_VERSION
   return payload

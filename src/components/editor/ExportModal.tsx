@@ -24,6 +24,7 @@ export default function ExportModal({ onClose }: Props) {
   const sections    = useEditorStore(s => s.sections)
   const assignments = useEditorStore(s => s.vendorAssignments)
   const room        = useEditorStore(s => s.room)
+  const bgImages    = useEditorStore(s => s.backgroundImages)
 
   const [view, setView]              = useState<'organizer' | 'public'>('organizer')
   const [showPayment, setShowPayment] = useState(true)
@@ -49,7 +50,7 @@ export default function ExportModal({ onClose }: Props) {
       showVendorNames:   view === 'organizer',
       showPaymentStatus: view === 'organizer' && showPayment,
       title,
-    })
+    }, bgImages)
     onClose()
   }
 
