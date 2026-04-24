@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useEditorStore, selectCanUndo, selectCanRedo } from '@/store/index'
 import ImportModal from './ImportModal'
 import ExportModal from './ExportModal'
@@ -17,7 +17,12 @@ interface MenuItem {
   disabled?: boolean
 }
 
-function useMenuItems(openImport: () => void, openExport: () => void, openLayouts: () => void) {
+function useMenuItems(
+  openImport: () => void,
+  openExport: () => void,
+  openLayouts: () => void,
+  openFilePicker: () => void,
+) {
   const setTool  = useEditorStore(s => s.setActiveTool)
   const undo     = useEditorStore(s => s.undo)
   const redo     = useEditorStore(s => s.redo)
@@ -28,8 +33,9 @@ function useMenuItems(openImport: () => void, openExport: () => void, openLayout
     window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
   }, [])
 
-  const clearLayout = useEditorStore(s => s.clearLayout)
-  const clearVendors = useEditorStore(s => s.clearVendors)
+  const clearLayout    = useEditorStore(s => s.clearLayout)
+  const clearVendors   = useEditorStore(s => s.clearVendors)
+  const saveToFile     = useEditorStore(s => s.saveLayoutToFile)
 
   const menus: Record<string, MenuItem[]> = {
     File: [
@@ -39,6 +45,8 @@ function useMenuItems(openImport: () => void, openExport: () => void, openLayout
         }
       }},
       { label: 'Saved Layouts…', action: openLayouts },
+      { label: 'Save to File…',  shortcut: 'Ctrl+S', action: () => { saveToFile(); } },
+      { label: 'Open File…', action: openFilePicker },
       { label: 'Import Vendors…', action: openImport },
       { label: 'Clear All Vendors', action: () => {
         if (window.confirm('Remove all vendor assignments? Tables will remain.')) {
@@ -87,16 +95,30 @@ export default function Toolbar() {
   const canRedo    = useEditorStore(selectCanRedo)
   const undo       = useEditorStore(s => s.undo)
   const redo       = useEditorStore(s => s.redo)
+  const loadFromFile = useEditorStore(s => s.loadLayoutFromFile)
 
   const [showImport, setShowImport] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showLayouts, setShowLayouts] = useState(false)
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const err = await loadFromFile(file)
+    if (err) setFileError(err)
+  }, [loadFromFile])
+
   const menus = useMenuItems(
     () => { setShowImport(true); setOpenMenu(null) },
     () => { setShowExport(true); setOpenMenu(null) },
     () => { setShowLayouts(true); setOpenMenu(null) },
+    () => { setOpenMenu(null); fileInputRef.current?.click() },
   )
-  const [openMenu, setOpenMenu] = useState<string | null>(null)
+
 
   function toggleMenu(name: string) {
     setOpenMenu(prev => prev === name ? null : name)
@@ -190,6 +212,23 @@ export default function Toolbar() {
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
       {showLayouts && <LayoutManagerModal onClose={() => setShowLayouts(false)} />}
+
+      {/* Hidden file input for Open File */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* File load error toast */}
+      {fileError && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-600 text-white text-sm px-4 py-2 rounded shadow-lg z-50 flex items-center gap-3">
+          <span>{fileError}</span>
+          <button onClick={() => setFileError(null)} className="ml-2 font-bold hover:opacity-75">✕</button>
+        </div>
+      )}
     </div>
   )
 }

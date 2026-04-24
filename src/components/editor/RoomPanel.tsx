@@ -5,6 +5,7 @@ import {
   useEditorStore,
   selectRoom,
   selectSettings,
+  selectSelectedSegmentId,
 } from '@/store/index'
 import type { CompositeRoom, RoomSegment, RoomSegmentId } from '@/domain/types'
 import { createRoomSegmentId } from '@/lib/id'
@@ -12,9 +13,10 @@ import { formatDimension } from '@/lib/units'
 import { computeRoomBounds } from '@/domain/room-contour'
 
 export default function RoomPanel() {
-  const room     = useEditorStore(selectRoom)
-  const settings = useEditorStore(selectSettings)
-  const dispatch = useEditorStore(s => s.dispatch)
+  const room              = useEditorStore(selectRoom)
+  const settings          = useEditorStore(selectSettings)
+  const dispatch          = useEditorStore(s => s.dispatch)
+  const selectedSegmentId = useEditorStore(selectSelectedSegmentId)
 
   // Room dimension inputs (in feet for display, stored as inches)
   const [roomWidthFt, setRoomWidthFt]   = useState(80)
@@ -122,21 +124,28 @@ export default function RoomPanel() {
     })
   }
 
+  const [editX, setEditX] = useState(0)
+  const [editY, setEditY] = useState(0)
+
   function startEditSegment(seg: RoomSegment) {
     setEditingSegId(seg.id)
     setEditW(Math.round(seg.width / 12))
     setEditH(Math.round(seg.height / 12))
+    setEditX(Math.round(seg.x / 12))
+    setEditY(Math.round(seg.y / 12))
   }
 
   function commitEditSegment(seg: RoomSegment) {
     const newW = editW * 12
     const newH = editH * 12
-    if (newW !== seg.width || newH !== seg.height) {
+    const newX = editX * 12
+    const newY = editY * 12
+    if (newW !== seg.width || newH !== seg.height || newX !== seg.x || newY !== seg.y) {
       dispatch({
         type: 'UPDATE_ROOM_SEGMENT',
         segmentId: seg.id as RoomSegmentId,
         prev: { x: seg.x, y: seg.y, width: seg.width, height: seg.height },
-        next: { x: seg.x, y: seg.y, width: newW, height: newH },
+        next: { x: newX, y: newY, width: newW, height: newH },
         timestamp: Date.now(),
       })
     }
@@ -189,7 +198,7 @@ export default function RoomPanel() {
           )}
         </div>
         <div className="text-xs text-gray-400 mt-1">
-          Draw on canvas: <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">B</kbd> rectangle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">F</kbd> freehand
+          Draw on canvas: <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">B</kbd> rectangle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">F</kbd> freehand · Click a segment to select and drag to reposition
         </div>
       </div>
 
@@ -201,41 +210,64 @@ export default function RoomPanel() {
           </div>
           <div className="space-y-1">
             {room.segments.map((seg, idx) => (
-              <div key={seg.id} className="bg-gray-50 rounded px-2 py-1">
+              <div key={seg.id} className={`rounded px-2 py-1 ${seg.id === selectedSegmentId ? 'bg-blue-50 ring-1 ring-blue-300' : 'bg-gray-50'}`}>
                 {editingSegId === seg.id ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number" min={5} max={500} value={editW}
-                      onChange={e => setEditW(Number(e.target.value))}
-                      className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
-                    />
-                    <span className="text-xs text-gray-400">x</span>
-                    <input
-                      type="number" min={5} max={500} value={editH}
-                      onChange={e => setEditH(Number(e.target.value))}
-                      className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
-                    />
-                    <span className="text-xs text-gray-400">ft</span>
-                    <button
-                      onClick={() => commitEditSegment(seg)}
-                      className="text-xs text-blue-600 hover:text-blue-800 ml-auto"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingSegId(null)}
-                      className="text-xs text-gray-400 hover:text-gray-600"
-                    >
-                      Cancel
-                    </button>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-400 w-3">W</span>
+                      <input
+                        type="number" min={5} max={500} value={editW}
+                        onChange={e => setEditW(Number(e.target.value))}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                      />
+                      <span className="text-xs text-gray-400 w-3">D</span>
+                      <input
+                        type="number" min={5} max={500} value={editH}
+                        onChange={e => setEditH(Number(e.target.value))}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                      />
+                      <span className="text-xs text-gray-400">ft</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-400 w-3">X</span>
+                      <input
+                        type="number" value={editX}
+                        onChange={e => setEditX(Number(e.target.value))}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                      />
+                      <span className="text-xs text-gray-400 w-3">Y</span>
+                      <input
+                        type="number" value={editY}
+                        onChange={e => setEditY(Number(e.target.value))}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                      />
+                      <span className="text-xs text-gray-400">ft</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => commitEditSegment(seg)}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingSegId(null)}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs font-medium">Rect {idx + 1}</span>
                       <span className="text-xs text-gray-400 ml-1.5">
-                        {formatDimension(seg.width)} x {formatDimension(seg.height)}
+                        {formatDimension(seg.width)} × {formatDimension(seg.height)}
                       </span>
+                      <div className="text-xs text-gray-400">
+                        at ({formatDimension(seg.x)}, {formatDimension(seg.y)})
+                      </div>
                     </div>
                     <div className="flex gap-1.5">
                       <button

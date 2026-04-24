@@ -191,7 +191,13 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      if (e.key === 's' || e.key === 'Escape') {
+      if (ctrl && e.key === 's') {
+        e.preventDefault()
+        useEditorStore.getState().saveLayoutToFile()
+        return
+      }
+
+      if ((e.key === 's' && !ctrl) || e.key === 'Escape') {
         setActiveTool('select')
         return
       }

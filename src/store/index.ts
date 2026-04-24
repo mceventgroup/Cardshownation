@@ -22,7 +22,7 @@ import type { ImportSession, FieldMapping, ConflictResolution } from '@/domain/d
 import { DEFAULT_SETTINGS, DRAFT_LAYOUT_ID } from '@/lib/defaults'
 import {
   loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage,
-  saveLayoutAs, loadLayout,
+  saveLayoutAs, loadLayout, saveToFile as saveToFileLib, parseFilePayload,
 } from '@/lib/persistence'
 import { csvImportModule } from '@/domain/csv-import.impl'
 import { createImportSessionId, createAssignmentId, createVendorId } from '@/lib/id'
@@ -110,10 +110,13 @@ export interface EditorState {
   removeVendor: (id: VendorId) => void
   setActiveVendor: (id: VendorId | null) => void
   setSelectedDoor: (id: string | null) => void
+  setSelectedSegmentId: (id: RoomSegmentId | null) => void
   clearVendors: () => void
   clearLayout: () => void
   saveCurrentLayoutAs: (name: string) => string
   switchToLayout: (layoutId: string) => boolean
+  saveLayoutToFile: () => void
+  loadLayoutFromFile: (file: File) => Promise<string | null>
 
   // ── CSV Import actions ─────────────────────────────────────────────────
   importSession: ImportSession | null
@@ -330,6 +333,10 @@ export const useEditorStore = create<EditorState>()(
       set(state => { state.selectedDoorId = id })
     },
 
+    setSelectedSegmentId(id) {
+      set(state => { state.selectedSegmentId = id })
+    },
+
     // ── Background image actions ─────────────────────────────────────────
 
     addBackgroundImage(image) {
@@ -494,6 +501,53 @@ export const useEditorStore = create<EditorState>()(
       return saveLayoutAs(name, slice)
     },
 
+    saveLayoutToFile() {
+      const state = get()
+      const slice = extractDocumentSlice(state)
+      const manifest = typeof window !== 'undefined'
+        ? ((): string => {
+            try {
+              const raw = localStorage.getItem('floorplanner:manifest')
+              if (raw) {
+                const m = JSON.parse(raw)
+                const active = m?.layouts?.find((l: { id: string; name: string }) => l.id === m.activeLayoutId)
+                if (active?.name) return active.name
+              }
+            } catch { /* ignore */ }
+            return 'floorplan'
+          })()
+        : 'floorplan'
+      saveToFileLib(slice, manifest)
+    },
+
+    async loadLayoutFromFile(file) {
+      const text = await file.text()
+      let slice: ReturnType<typeof parseFilePayload>
+      try {
+        slice = parseFilePayload(text)
+      } catch (err) {
+        return err instanceof Error ? err.message : 'Failed to load file.'
+      }
+      set(state => {
+        state.tables = slice.tables
+        state.rows = slice.rows
+        state.sections = slice.sections
+        state.vendors = slice.vendors
+        state.vendorAssignments = slice.vendorAssignments
+        state.room = slice.room
+        state.doors = slice.doors
+        state.backgroundImages = slice.backgroundImages
+        state.settings = slice.settings
+        state.selectedIds = new Set()
+        state.activeTool = 'select'
+        state.activeVendorId = null
+        state.selectedDoorId = null
+        state.selectedSegmentId = null
+        state.history = { ...EMPTY_HISTORY, past: [], future: [] }
+      })
+      return null
+    },
+
     switchToLayout(layoutId) {
       const slice = loadLayout(layoutId)
       if (!slice) return false
@@ -580,6 +634,7 @@ export const selectVendorAssignments = (s: EditorState) => s.vendorAssignments
 export const selectRoom      = (s: EditorState) => s.room
 export const selectDoors     = (s: EditorState) => s.doors
 export const selectSelectedDoorId = (s: EditorState) => s.selectedDoorId
+export const selectSelectedSegmentId = (s: EditorState) => s.selectedSegmentId
 // CAUTION: this selector creates a new array on every call.
 // Only use it with useShallow() or inside event/effect handlers — never as a
 // bare useEditorStore(selectDoorList) subscription, or you will get an

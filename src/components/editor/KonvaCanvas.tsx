@@ -18,7 +18,7 @@ import { Stage, Layer, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Point, TableId, DoorId } from '@/domain/types'
-import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectBackgroundImages } from '@/store/index'
+import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
 import { rowModule } from '@/domain/rows.impl'
@@ -90,6 +90,8 @@ export default function KonvaCanvas() {
   const doorsRecord       = useEditorStore(selectDoors)
   const selectedDoorId    = useEditorStore(selectSelectedDoorId)
   const setSelectedDoor   = useEditorStore(s => s.setSelectedDoor)
+  const selectedSegmentId = useEditorStore(selectSelectedSegmentId)
+  const setSelectedSegmentId = useEditorStore(s => s.setSelectedSegmentId)
   const bgImagesRecord    = useEditorStore(selectBackgroundImages)
   const updateBgImage     = useEditorStore(s => s.updateBackgroundImage)
 
@@ -98,6 +100,7 @@ export default function KonvaCanvas() {
   const setSelected   = useEditorStore(s => s.setSelected)
   const toggleSelected = useEditorStore(s => s.toggleSelected)
   const clearSelected = useEditorStore(s => s.clearSelected)
+  const setActiveTool = useEditorStore(s => s.setActiveTool)
   const setStageTransform = useEditorStore(s => s.setStageTransform)
 
   // Stage size — tracks container element dimensions
@@ -179,6 +182,11 @@ export default function KonvaCanvas() {
   const freehandPointsRef = useRef<Point[] | null>(null)
   const [freehandPoints, setFreehandPoints] = useState<Point[] | null>(null)
 
+  // Room segment drag state
+  const segmentDragRef = useRef<{ segmentId: string; startPointer: Point; startPos: Point } | null>(null)
+  const [segmentDraftPos, setSegmentDraftPos] = useState<{ id: string; x: number; y: number } | null>(null)
+  const segmentDraftPosRef = useRef<{ id: string; x: number; y: number } | null>(null)
+
   // Space-key pan tracking
   const isPanningRef  = useRef(false)
   const spaceHeldRef  = useRef(false)
@@ -233,6 +241,18 @@ export default function KonvaCanvas() {
     }
   }, [])
 
+  // ── Display room — applies live segment drag offset for preview ───────────
+
+  const displayRoom = useMemo(() => {
+    if (!room || !segmentDraftPos) return room
+    return {
+      ...room,
+      segments: room.segments.map(s =>
+        s.id === segmentDraftPos.id ? { ...s, x: segmentDraftPos.x, y: segmentDraftPos.y } : s
+      ),
+    }
+  }, [room, segmentDraftPos])
+
   // ── Coordinate helpers ─────────────────────────────────────────────────────
 
   /** Convert a screen-space pointer position to canvas coordinates. */
@@ -284,7 +304,8 @@ export default function KonvaCanvas() {
 
     dispatch({ type: 'PLACE_ROW', row, tables: rowTables, timestamp: Date.now() })
     setSelected(rowTables.map(t => t.id))
-  }, [settings, tables, dispatch, setSelected])
+    setActiveTool('select')
+  }, [settings, tables, dispatch, setSelected, setActiveTool])
 
   // ── Place table helper ─────────────────────────────────────────────────────
   // Defined before handleMouseDown so it can be listed in its dep array.
@@ -334,7 +355,8 @@ export default function KonvaCanvas() {
       timestamp: Date.now(),
     })
     setSelected([id])
-  }, [settings, tables, dispatch, setSelected])
+    setActiveTool('select')
+  }, [settings, tables, dispatch, setSelected, setActiveTool])
 
   // ── Wheel zoom ─────────────────────────────────────────────────────────────
 
@@ -478,7 +500,10 @@ export default function KonvaCanvas() {
       // Start potential drag on a table
       const isSelected = selectedIds.has(tableId)
 
-      if (!e.evt.shiftKey) {
+      if (e.evt.ctrlKey || e.evt.metaKey) {
+        // Ctrl/Cmd+click: toggle this table without affecting others
+        toggleSelected(tableId)
+      } else if (!e.evt.shiftKey) {
         if (!isSelected) {
           // Replace selection with just this table
           setSelected([tableId])
@@ -486,38 +511,25 @@ export default function KonvaCanvas() {
         // If already selected (possibly multi), keep selection so the whole
         // group can be dragged. A click without drag will not change selection.
       } else {
-        // Shift+click: range-select within a row, or toggle
-        const clickedTable = tables[tableId]
-        // Find an anchor table from current selection
+        // Shift+click: range-select spatially between anchor and clicked table
         const anchorId = [...selectedIds].find(id => tables[id])
-        const anchorTable = anchorId ? tables[anchorId] : null
-
-        if (
-          clickedTable && anchorTable &&
-          clickedTable.rowId && anchorTable.rowId &&
-          clickedTable.rowId === anchorTable.rowId
-        ) {
-          // Same row — select all tables between anchor and clicked (by order)
-          const rowId = clickedTable.rowId
-          const rowTables = Object.values(tables)
-            .filter(t => t.rowId === rowId)
-            .sort((a, b) => a.order - b.order)
-          const anchorOrder = anchorTable.order
-          const clickedOrder = clickedTable.order
-          const minOrder = Math.min(anchorOrder, clickedOrder)
-          const maxOrder = Math.max(anchorOrder, clickedOrder)
-          const rangeIds = rowTables
-            .filter(t => t.order >= minOrder && t.order <= maxOrder)
-            .map(t => t.id)
-          setSelected(rangeIds)
+        if (!anchorId) {
+          setSelected([tableId])
         } else {
-          toggleSelected(tableId)
+          const allTables = Object.values(tables)
+          // Sort spatially: top-to-bottom bands, then left-to-right
+          const sorted = spatialSort(allTables)
+          const anchorIdx = sorted.findIndex(t => t.id === anchorId)
+          const clickedIdx = sorted.findIndex(t => t.id === tableId)
+          const lo = Math.min(anchorIdx, clickedIdx)
+          const hi = Math.max(anchorIdx, clickedIdx)
+          setSelected(sorted.slice(lo, hi + 1).map(t => t.id))
         }
       }
 
-      // Drag tracks either the full current selection (no-shift) or just the
-      // clicked table (shift), because the shift selection isn't committed yet.
-      const dragIds = e.evt.shiftKey
+      // Drag tracks either the full current selection (no-shift/ctrl) or just the
+      // clicked table (shift/ctrl), because the toggle isn't committed yet.
+      const dragIds = (e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)
         ? [tableId]
         : isSelected
           ? [...selectedIds]
@@ -536,10 +548,22 @@ export default function KonvaCanvas() {
         isDragging:     false,
       }
     } else {
-      // Clicked on something that is not a table (empty canvas, transformer
-      // anchor, grid, etc.).  Only start a fresh drag-select when shift is NOT
-      // held; with shift held we leave the existing selection intact and just
-      // don't start a drag-select (future: shift-drag could extend selection).
+      // Check if click lands inside a room segment (drag to reposition)
+      const currentRoom = useEditorStore.getState().room
+      if (currentRoom && !e.evt.shiftKey && !e.evt.ctrlKey && !e.evt.metaKey) {
+        const hitSeg = currentRoom.segments
+          .filter(s => canvasPos.x >= s.x && canvasPos.x <= s.x + s.width && canvasPos.y >= s.y && canvasPos.y <= s.y + s.height)
+          .sort((a, b) => (a.width * a.height) - (b.width * b.height))[0] // pick smallest (most specific)
+        if (hitSeg) {
+          setSelectedSegmentId(hitSeg.id as import('@/domain/types').RoomSegmentId)
+          segmentDragRef.current = { segmentId: hitSeg.id, startPointer: canvasPos, startPos: { x: hitSeg.x, y: hitSeg.y } }
+          clearSelected()
+          return
+        }
+      }
+
+      // Clicked on empty canvas — clear segment selection and start drag-select
+      setSelectedSegmentId(null)
       if (!e.evt.shiftKey) {
         clearSelected()
       }
@@ -550,7 +574,7 @@ export default function KonvaCanvas() {
         currentY: canvasPos.y,
       })
     }
-  }, [activeTool, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, stagePos, placeTableAt, placeRowAt, dispatch])
+  }, [activeTool, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, dispatch])
 
   // ── Mouse move ─────────────────────────────────────────────────────────────
 
@@ -587,6 +611,21 @@ export default function KonvaCanvas() {
         width: Math.abs(snapped.x - startX),
         height: Math.abs(snapped.y - startY),
       })
+      return
+    }
+
+    // Room segment drag
+    if (segmentDragRef.current) {
+      const seg = segmentDragRef.current
+      const dx = canvasPos.x - seg.startPointer.x
+      const dy = canvasPos.y - seg.startPointer.y
+      const snapped = snapping.snapToGrid(
+        { x: seg.startPos.x + dx, y: seg.startPos.y + dy },
+        settings.gridSize,
+      )
+      const draft = { id: seg.segmentId, x: snapped.x, y: snapped.y }
+      segmentDraftPosRef.current = draft
+      setSegmentDraftPos(draft)
       return
     }
 
@@ -676,6 +715,29 @@ export default function KonvaCanvas() {
     if (isPanningRef.current) {
       isPanningRef.current = false
       panStartRef.current  = null
+      return
+    }
+
+    // Commit segment drag
+    if (segmentDragRef.current) {
+      const { segmentId, startPos } = segmentDragRef.current
+      const draft = segmentDraftPosRef.current
+      segmentDragRef.current = null
+      segmentDraftPosRef.current = null
+      setSegmentDraftPos(null)
+      if (draft && (draft.x !== startPos.x || draft.y !== startPos.y)) {
+        const currentRoom = useEditorStore.getState().room
+        const seg = currentRoom?.segments.find(s => s.id === segmentId)
+        if (seg) {
+          dispatch({
+            type: 'UPDATE_ROOM_SEGMENT',
+            segmentId: segmentId as import('@/domain/types').RoomSegmentId,
+            prev: { x: seg.x, y: seg.y, width: seg.width, height: seg.height },
+            next: { x: draft.x, y: draft.y, width: seg.width, height: seg.height },
+            timestamp: Date.now(),
+          })
+        }
+      }
       return
     }
 
@@ -910,11 +972,12 @@ export default function KonvaCanvas() {
         {/* Room boundary, doors, and clearance zones */}
         <Layer listening={false}>
           <RoomLayer
-            room={room}
+            room={displayRoom}
             doors={doorList}
             doorClearance={settings.doorClearance}
             wallSetback={settings.wallSetback}
             showWallSetback={settings.showWallSetback}
+            selectedSegmentId={selectedSegmentId}
           />
         </Layer>
 
@@ -1108,5 +1171,25 @@ export default function KonvaCanvas() {
       })()}
     </div>
   )
+}
+
+function spatialSort(tables: import('@/domain/types').TableObject[]): import('@/domain/types').TableObject[] {
+  if (tables.length === 0) return []
+  const sorted = [...tables].sort((a, b) => a.y - b.y || a.x - b.x)
+  const tolerance = sorted[0].height * 0.8
+  const bands: typeof sorted[] = []
+  let band: typeof sorted = [sorted[0]]
+  let bandY = sorted[0].y
+  for (let i = 1; i < sorted.length; i++) {
+    if (Math.abs(sorted[i].y - bandY) <= tolerance) {
+      band.push(sorted[i])
+    } else {
+      bands.push(band)
+      band = [sorted[i]]
+      bandY = sorted[i].y
+    }
+  }
+  bands.push(band)
+  return bands.flatMap(b => b.sort((a, c) => a.x - c.x))
 }
 

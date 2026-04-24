@@ -273,6 +273,44 @@ export function migrateToMultiLayout(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FILE SAVE / LOAD (download + upload JSON)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FILE_APP_TAG = 'floorplanner-1'
+
+/** Trigger a JSON file download of the current layout. */
+export function saveToFile(slice: DocumentSlice, layoutName: string): void {
+  const payload = {
+    appVersion: FILE_APP_TAG,
+    version: CURRENT_VERSION,
+    savedAt: new Date().toISOString(),
+    data: slice,
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${(layoutName || 'floorplan').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/** Parse a JSON file string back into a DocumentSlice. Throws on invalid input. */
+export function parseFilePayload(jsonText: string): DocumentSlice {
+  let payload: Record<string, unknown>
+  try {
+    payload = JSON.parse(jsonText)
+  } catch {
+    throw new Error('File is not valid JSON.')
+  }
+  if (!payload || typeof payload.version !== 'number' || !payload.data) {
+    throw new Error('File does not look like a Floorplanner layout.')
+  }
+  const migrated = migrate(payload as unknown as PersistedPayload)
+  return migrated.data
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MIGRATIONS
 // ─────────────────────────────────────────────────────────────────────────────
 

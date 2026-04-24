@@ -1,7 +1,16 @@
-import EditorShell from '@/components/editor/EditorShell'
+'use client'
 
-// Phase 1: editor loads directly at root with in-memory state.
-// Phase 6 will add routing, auth, and layout IDs.
+import dynamic from 'next/dynamic'
+
+const EditorShell = dynamic(() => import('@/components/editor/EditorShell'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-screen w-screen items-center justify-center bg-gray-100 text-gray-400 text-sm">
+      Loading…
+    </div>
+  ),
+})
+
 export default function Home() {
   return <EditorShell />
 }
