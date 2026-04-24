@@ -244,6 +244,16 @@ export function renameLayout(id: string, newName: string): void {
   }
 }
 
+/** Delete all saved layouts and reset manifest. */
+export function clearAllLayouts(): void {
+  const manifest = loadManifest()
+  for (const l of manifest.layouts) {
+    localStorage.removeItem(LAYOUT_PREFIX + l.id)
+  }
+  localStorage.removeItem(MANIFEST_KEY)
+  localStorage.removeItem(STORAGE_KEY)
+}
+
 /** Delete a saved layout. */
 export function deleteLayout(id: string): void {
   localStorage.removeItem(LAYOUT_PREFIX + id)

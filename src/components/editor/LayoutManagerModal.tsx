@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useEditorStore } from '@/store'
 import {
-  listLayouts, deleteLayout, renameLayout, getActiveLayoutId,
+  listLayouts, deleteLayout, renameLayout, getActiveLayoutId, clearAllLayouts,
   type LayoutEntry,
 } from '@/lib/persistence'
 
@@ -54,6 +54,12 @@ export default function LayoutManagerModal({ onClose }: Props) {
   function handleDelete(id: string, name: string) {
     if (!window.confirm(`Delete layout "${name}"? This cannot be undone.`)) return
     deleteLayout(id)
+    refresh()
+  }
+
+  function handleClearAll() {
+    if (!window.confirm('Delete all saved layouts? This cannot be undone.')) return
+    clearAllLayouts()
     refresh()
   }
 
@@ -150,7 +156,15 @@ export default function LayoutManagerModal({ onClose }: Props) {
         </div>
 
         {/* Save as new */}
-        <div className="px-5 py-3 border-t border-gray-700">
+        <div className="px-5 py-3 border-t border-gray-700 space-y-2">
+          {layouts.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="w-full px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded border border-red-900/40 hover:border-red-700/60 transition-colors"
+            >
+              Clear All Layouts
+            </button>
+          )}
           <div className="flex gap-2">
             <input
               value={newName}
@@ -171,6 +185,7 @@ export default function LayoutManagerModal({ onClose }: Props) {
             </button>
           </div>
         </div>
+
       </div>
     </div>
   )
