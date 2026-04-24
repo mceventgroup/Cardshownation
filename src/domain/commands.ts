@@ -215,6 +215,16 @@ export interface ClearVendorAssignmentCommand extends CommandBase {
 }
 
 /**
+ * Batch-assign multiple vendors to tables. One undo step for the entire batch.
+ * Used by bulk paste in the Vendor Roster panel.
+ */
+export interface BatchAssignVendorsCommand extends CommandBase {
+  readonly type: 'BATCH_ASSIGN_VENDORS'
+  readonly createdAssignments: ReadonlyArray<VendorAssignment>
+  readonly replacedAssignments: ReadonlyArray<VendorAssignment>
+}
+
+/**
  * Apply an import session. One undo step for the entire batch.
  * replacedAssignments: assignments that existed before and were overwritten.
  * createdAssignments: new assignments created by this import.
@@ -325,6 +335,7 @@ export type LayoutCommand =
   | AssignVendorCommand
   | UpdateVendorAssignmentCommand
   | ClearVendorAssignmentCommand
+  | BatchAssignVendorsCommand
   | ApplyImportCommand
   | SetRoomCommand
   | AddRoomSegmentCommand

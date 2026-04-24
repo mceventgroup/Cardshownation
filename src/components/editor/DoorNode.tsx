@@ -10,6 +10,7 @@
 
 import React, { memo, useCallback, useState } from 'react'
 import { Group, Line, Rect, Shape } from 'react-konva'
+import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Door, Rect as RectType } from '@/domain/types'
 
 interface DoorNodeProps {
@@ -114,7 +115,7 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, un
     setLiveY(groupY)
   }, [groupX, groupY])
 
-  const handleDragMove = useCallback((e: any) => {
+  const handleDragMove = useCallback((e: KonvaEventObject<DragEvent>) => {
     const node = e.target
     if (dragAxis === 'x') {
       node.y(groupY)
@@ -129,7 +130,7 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, un
     }
   }, [dragAxis, groupX, groupY, bounds, doorWidth])
 
-  const handleDragEnd = useCallback((e: any) => {
+  const handleDragEnd = useCallback((e: KonvaEventObject<DragEvent>) => {
     setIsDragging(false)
     const node = e.target
     if (dragAxis === 'x') {

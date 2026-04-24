@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useEditorStore, selectTables, selectSelectedIds } from '@/store/index'
 import { formatDimension } from '@/lib/units'
+import type { LayoutCommand } from '@/domain/commands'
 import type { TableId } from '@/domain/types'
 
 function clamp(raw: string, min: number, max: number, def: number): number {
@@ -44,7 +45,7 @@ interface FormProps {
   x: number
   y: number
   isVertical: boolean
-  dispatch: (cmd: any) => void
+  dispatch: (cmd: LayoutCommand) => void
 }
 
 function TablePropertiesForm({ tableId, width, height, x, y, isVertical, dispatch }: FormProps) {

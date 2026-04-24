@@ -15,18 +15,32 @@ import { immer } from 'zustand/middleware/immer'
 import { enableMapSet } from 'immer'
 
 enableMapSet()
-import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, CompositeRoom, LayoutSettings, Point, SectionId, VendorId, RoomSegmentId, RowId, LayoutId, UserId, BackgroundImage, BackgroundImageId } from '@/domain/types'
+import type { TableObject, Row, Section, Vendor, VendorAssignment, Door, CompositeRoom, LayoutSettings, Point, SectionId, VendorId, RoomSegmentId, RowId, UserId, BackgroundImage, BackgroundImageId } from '@/domain/types'
 import type { LayoutCommand, CommandHistory } from '@/domain/commands'
 import { EMPTY_HISTORY } from '@/domain/commands'
 import type { ImportSession, FieldMapping, ConflictResolution } from '@/domain/document'
 import { DEFAULT_SETTINGS, DRAFT_LAYOUT_ID } from '@/lib/defaults'
-import { loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage } from '@/lib/persistence'
+import {
+  loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage,
+  saveLayoutAs, loadLayout,
+} from '@/lib/persistence'
 import { csvImportModule } from '@/domain/csv-import.impl'
 import { createImportSessionId, createAssignmentId, createVendorId } from '@/lib/id'
 import { applyCommand, reverseCommand } from './executor'
 
-// Load persisted document state (synchronous — no hydration flash)
-const _persisted = loadFromLocalStorage()
+// Load persisted document state (client-only — avoids SSR/client hydration mismatch)
+const _persisted = typeof window !== 'undefined' ? loadFromLocalStorage() : null
+
+function safeAssignDefined<T extends object>(target: T, updates: Partial<T>): void {
+  const blocked = new Set(['__proto__', 'constructor', 'prototype'])
+  for (const key of Object.keys(updates) as Array<keyof T>) {
+    if (blocked.has(key as string)) continue
+    const value = updates[key]
+    if (value !== undefined) {
+      target[key] = value
+    }
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -96,7 +110,10 @@ export interface EditorState {
   removeVendor: (id: VendorId) => void
   setActiveVendor: (id: VendorId | null) => void
   setSelectedDoor: (id: string | null) => void
+  clearVendors: () => void
   clearLayout: () => void
+  saveCurrentLayoutAs: (name: string) => string
+  switchToLayout: (layoutId: string) => boolean
 
   // ── CSV Import actions ─────────────────────────────────────────────────
   importSession: ImportSession | null
@@ -287,12 +304,7 @@ export const useEditorStore = create<EditorState>()(
       set(state => {
         const v = state.vendors[id]
         if (v) {
-          const blocked = new Set(['__proto__', 'constructor', 'prototype'])
-          for (const key of Object.keys(updates)) {
-            if (!blocked.has(key)) {
-              (v as any)[key] = (updates as any)[key]
-            }
-          }
+          safeAssignDefined(v, updates)
         }
       })
     },
@@ -328,12 +340,7 @@ export const useEditorStore = create<EditorState>()(
       set(state => {
         const img = state.backgroundImages[id]
         if (img) {
-          const blocked = new Set(['__proto__', 'constructor', 'prototype'])
-          for (const key of Object.keys(updates)) {
-            if (!blocked.has(key)) {
-              (img as any)[key] = (updates as any)[key]
-            }
-          }
+          safeAssignDefined(img, updates)
         }
       })
     },
@@ -359,7 +366,7 @@ export const useEditorStore = create<EditorState>()(
         'user' as UserId,
         createImportSessionId(),
       )
-      set(s => { s.importSession = session as any })
+      set(s => { s.importSession = session })
     },
 
     updateImportMapping(mapping) {
@@ -379,7 +386,7 @@ export const useEditorStore = create<EditorState>()(
         state.importSession.createdBy,
         state.importSession.id,
       )
-      set(s => { s.importSession = newSession as any })
+      set(s => { s.importSession = newSession })
     },
 
     resolveImportConflict(rowIndex, resolution) {
@@ -452,6 +459,14 @@ export const useEditorStore = create<EditorState>()(
       set(s => { s.importSession = null })
     },
 
+    clearVendors() {
+      set(state => {
+        state.vendors = {}
+        state.vendorAssignments = {}
+        state.activeVendorId = null
+      })
+    },
+
     clearLayout() {
       set(state => {
         state.tables = {}
@@ -471,6 +486,35 @@ export const useEditorStore = create<EditorState>()(
         state.history = { ...EMPTY_HISTORY, past: [], future: [] }
       })
       clearLocalStorage()
+    },
+
+    saveCurrentLayoutAs(name) {
+      const state = get()
+      const slice = extractDocumentSlice(state)
+      return saveLayoutAs(name, slice)
+    },
+
+    switchToLayout(layoutId) {
+      const slice = loadLayout(layoutId)
+      if (!slice) return false
+      set(state => {
+        state.tables = slice.tables
+        state.rows = slice.rows
+        state.sections = slice.sections
+        state.vendors = slice.vendors
+        state.vendorAssignments = slice.vendorAssignments
+        state.room = slice.room
+        state.doors = slice.doors
+        state.backgroundImages = slice.backgroundImages
+        state.settings = slice.settings
+        state.selectedIds = new Set()
+        state.activeTool = 'select'
+        state.activeVendorId = null
+        state.selectedDoorId = null
+        state.selectedSegmentId = null
+        state.history = { ...EMPTY_HISTORY, past: [], future: [] }
+      })
+      return true
     },
   })),
 )
@@ -560,7 +604,7 @@ export const selectSelectedRowId = (s: EditorState): RowId | null => {
 }
 
 // Derived: reverse lookup from TableId → VendorAssignment
-let _prevAssignmentsRef: Record<string, any> | null = null
+let _prevAssignmentsRef: Record<string, VendorAssignment> | null = null
 let _cachedAssignmentMap: Map<string, VendorAssignment> = new Map()
 
 export const selectAssignmentMap = (s: EditorState): Map<string, VendorAssignment> => {
@@ -577,7 +621,7 @@ export const selectAssignmentMap = (s: EditorState): Map<string, VendorAssignmen
 // Derived: set of table IDs that share a label with another table.
 // Recomputed when tables record reference changes (every mutation).
 // O(n) and table count target is 300-500, so no memoization needed.
-let _prevTablesRef: Record<string, any> | null = null
+let _prevTablesRef: Record<string, TableObject> | null = null
 let _cachedDuplicateIds: Set<string> = new Set()
 
 export const selectDuplicateTableIds = (s: EditorState): Set<string> => {

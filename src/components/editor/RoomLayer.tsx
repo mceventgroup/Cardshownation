@@ -7,8 +7,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { memo, useMemo } from 'react'
-import { Group, Line, Rect, Shape } from 'react-konva'
-import type { CompositeRoom, Door, Point, RoomSegment, RoomSegmentId } from '@/domain/types'
+import { Group, Line, Rect } from 'react-konva'
+import type { CompositeRoom, Door, Point, RoomSegmentId } from '@/domain/types'
 import { computeRoomContour, computeRoomBounds } from '@/domain/room-contour'
 
 interface RoomLayerProps {
@@ -21,12 +21,10 @@ interface RoomLayerProps {
 }
 
 const RoomLayer = memo(function RoomLayer({ room, doors, doorClearance, wallSetback, showWallSetback, selectedSegmentId }: RoomLayerProps) {
-  if (!room) return null
+  const contours = useMemo(() => (room ? computeRoomContour(room) : []), [room])
+  const bounds = useMemo(() => (room ? computeRoomBounds(room) : null), [room])
 
-  const contours = useMemo(() => computeRoomContour(room), [room])
-  const bounds = useMemo(() => computeRoomBounds(room), [room])
-
-  if (contours.length === 0) return null
+  if (!room || contours.length === 0) return null
 
   return (
     <Group listening={false}>
@@ -48,7 +46,6 @@ const RoomLayer = memo(function RoomLayer({ room, doors, doorClearance, wallSetb
           key={`walls-${ci}`}
           polygon={polygon}
           doors={doors}
-          room={room}
           bounds={bounds}
         />
       ))}
@@ -58,7 +55,6 @@ const RoomLayer = memo(function RoomLayer({ room, doors, doorClearance, wallSetb
         <DoorElement
           key={door.id}
           door={door}
-          room={room}
           bounds={bounds}
           clearance={doorClearance}
         />
@@ -68,7 +64,6 @@ const RoomLayer = memo(function RoomLayer({ room, doors, doorClearance, wallSetb
       {showWallSetback && wallSetback > 0 && (
         <WallSetbackOverlay
           contours={contours}
-          room={room}
           wallSetback={wallSetback}
         />
       )}
@@ -103,11 +98,10 @@ export default RoomLayer
 interface WallEdgesProps {
   polygon: Point[]
   doors: Door[]
-  room: CompositeRoom
   bounds: { x: number; y: number; width: number; height: number } | null
 }
 
-function WallEdges({ polygon, doors, room, bounds }: WallEdgesProps) {
+function WallEdges({ polygon, doors, bounds }: WallEdgesProps) {
   const segments: React.ReactNode[] = []
 
   for (let i = 0; i < polygon.length; i++) {
@@ -264,11 +258,10 @@ function findDoorGapsOnEdge(
 
 interface WallSetbackOverlayProps {
   contours: Point[][]
-  room: CompositeRoom
   wallSetback: number
 }
 
-function WallSetbackOverlay({ contours, room, wallSetback }: WallSetbackOverlayProps) {
+function WallSetbackOverlay({ contours, wallSetback }: WallSetbackOverlayProps) {
   // For each contour polygon, draw a setback strip on each edge.
   // Each strip is a quad: the original edge + a parallel edge inset by wallSetback.
   return (
@@ -329,12 +322,11 @@ function WallSetbackOverlay({ contours, room, wallSetback }: WallSetbackOverlayP
 
 interface DoorElementProps {
   door: Door
-  room: CompositeRoom
   bounds: { x: number; y: number; width: number; height: number } | null
   clearance: number
 }
 
-function DoorElement({ door, room, bounds, clearance }: DoorElementProps) {
+function DoorElement({ door, bounds, clearance }: DoorElementProps) {
   if (!bounds) return null
 
   // Clearance zone only — interactive door line + swing are rendered by DoorNode

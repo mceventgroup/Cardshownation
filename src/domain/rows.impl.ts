@@ -2,8 +2,7 @@
 // ROW-BUILDING MODULE IMPLEMENTATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { Point, Rect, TableObject, Row, RowId } from './types'
-import type { NumberingScheme } from './numbering'
+import type { Rect, TableObject, Row, RowId } from './types'
 import type { RowModule, RowConfig, BuiltRow, RepositionedTable } from './rows'
 import { numberingModule } from './numbering.impl'
 import { createTableId } from '@/lib/id'

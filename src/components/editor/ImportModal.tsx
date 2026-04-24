@@ -8,7 +8,7 @@
 //   Step 3 — Review rows, resolve conflicts, apply
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useEditorStore } from '@/store'
 import type { FieldMapping, ConflictResolution } from '@/domain/document'
 import { csvImportModule } from '@/domain/csv-import.impl'
@@ -19,7 +19,8 @@ interface Props {
 
 const FIELD_LABELS: Record<keyof FieldMapping, string> = {
   tableNumber:    'Table Number *',
-  vendorName:     'Vendor Name *',
+  vendorName:     'Vendor Name (or First Name) *',
+  vendorLastName: 'Last Name (optional)',
   vendorCategory: 'Category',
   color:          'Color',
   notes:          'Notes',
@@ -41,15 +42,18 @@ export default function ImportModal({ onClose }: Props) {
   const [parseWarnings, setParseWarnings] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const handleClose = useCallback(() => {
+    cancelImport()
+    onClose()
+  }, [cancelImport, onClose])
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') handleClose()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  // handleClose is stable (no deps) — no need to re-register
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [handleClose])
 
   // ── Step 1: upload / paste ───────────────────────────────────────────────
 
@@ -97,11 +101,6 @@ export default function ImportModal({ onClose }: Props) {
     onClose()
   }
 
-  function handleClose() {
-    cancelImport()
-    onClose()
-  }
-
   const headers = importSession?.rows[0]
     ? Object.keys(importSession.rows[0].rawData)
     : []
@@ -119,7 +118,7 @@ export default function ImportModal({ onClose }: Props) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h2 className="text-white font-semibold text-base">Import Vendors from CSV</h2>
+          <h2 className="text-white font-semibold text-base">Import Vendors</h2>
           <button onClick={handleClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
 
@@ -142,7 +141,8 @@ export default function ImportModal({ onClose }: Props) {
           {step === 1 && (
             <div className="flex flex-col gap-4">
               <p className="text-gray-400 text-sm">
-                Upload a .csv file or paste your CSV content below. The first row must be column headers.
+                Paste from a spreadsheet, upload a .csv file, or type data below.
+                Headers are auto-detected. Table numbers can be ranges (e.g. 1-5) or comma-separated (e.g. 1,2,3).
               </p>
 
               <div className="flex items-center gap-3">
@@ -159,7 +159,7 @@ export default function ImportModal({ onClose }: Props) {
               <textarea
                 value={csvText}
                 onChange={e => setCsvText(e.target.value)}
-                placeholder={'Table #,Vendor Name,Category,Payment Status\n1,Acme Comics,Comics,paid\n2,Star Cards,Trading Cards,unpaid'}
+                placeholder={'Paste tab-separated data or CSV:\n\nAaron\tWilson\t33-34\nBen\tSmith\t87-88\nChad\tNewton\t126-130\n\nOr with headers:\nTable #,Vendor Name,Category\n1,Acme Comics,Comics\n2-4,Star Cards,Trading Cards'}
                 className="w-full h-48 bg-gray-800 border border-gray-600 rounded text-gray-200 text-xs font-mono p-3 resize-none focus:outline-none focus:border-blue-500"
               />
 
@@ -236,7 +236,6 @@ export default function ImportModal({ onClose }: Props) {
                   <tbody>
                     {importSession.rows.map(row => {
                       const isConflict = row.status === 'conflict' && row.conflict?.resolution == null
-                      const isResolved = row.status === 'conflict' && row.conflict?.resolution != null
                       return (
                         <tr key={row.rowIndex} className="border-b border-gray-800">
                           <td className="py-1 pr-3 text-gray-600">{row.rowIndex + 1}</td>

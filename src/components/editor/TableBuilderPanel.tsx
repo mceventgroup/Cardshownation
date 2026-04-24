@@ -35,9 +35,40 @@ export default function TableBuilderPanel() {
   const blurLength = useCallback(() => setLengthStr(String(length)), [length])
   const blurWidth  = useCallback(() => setWidthStr(String(tableWidth)), [tableWidth])
 
+  const presets = [
+    { label: '6ft Rect', w: 72, h: 30 },
+    { label: '8ft Rect', w: 96, h: 30 },
+    { label: '4ft Rect', w: 48, h: 30 },
+    { label: '60" Round', w: 60, h: 60 },
+    { label: '72" Round', w: 72, h: 72 },
+  ]
+
+  function applyPreset(w: number, h: number) {
+    setLengthStr(String(w))
+    setWidthStr(String(h))
+    setOrientation('horizontal')
+  }
+
   return (
     <div className="px-3 py-3 text-sm">
       <p className="text-xs text-gray-500 mb-3">Click canvas to place</p>
+
+      {/* Presets */}
+      <div className="flex flex-wrap gap-1 mb-3">
+        {presets.map(p => (
+          <button
+            key={p.label}
+            onClick={() => applyPreset(p.w, p.h)}
+            className={`px-2 py-1 text-xs rounded border transition-colors ${
+              length === p.w && tableWidth === p.h
+                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
       <div className="flex gap-2 mb-2">
         <label className="flex-1">

@@ -41,6 +41,34 @@ export const SECTION_COLORS = [
   '#F97316', // orange
 ] as const
 
+// Vendor color palette — soft pastel fills so table labels remain readable
+export const VENDOR_COLORS = [
+  '#dbeafe', // blue-100
+  '#d1fae5', // emerald-100
+  '#fef3c7', // amber-100
+  '#fce7f3', // pink-100
+  '#ede9fe', // violet-100
+  '#ccfbf1', // teal-100
+  '#fee2e2', // red-100
+  '#ffedd5', // orange-100
+  '#e0e7ff', // indigo-100
+  '#fae8ff', // fuchsia-100
+  '#cffafe', // cyan-100
+  '#fef9c3', // yellow-100
+  '#dcfce7', // green-100
+  '#f1f5f9', // slate-100
+  '#e2e8f0', // slate-200
+] as const
+
+/** Deterministic color for a vendor based on vendorId hash. */
+export function vendorColor(vendorId: string): string {
+  let hash = 0
+  for (let i = 0; i < vendorId.length; i++) {
+    hash = ((hash << 5) - hash + vendorId.charCodeAt(i)) | 0
+  }
+  return VENDOR_COLORS[Math.abs(hash) % VENDOR_COLORS.length]
+}
+
 // Default table fill / stroke colors
 export const DEFAULT_TABLE_FILL    = '#f8fafc'
 export const DEFAULT_TABLE_STROKE  = '#94a3b8'

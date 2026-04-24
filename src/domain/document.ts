@@ -176,6 +176,7 @@ export interface ImportSession {
 export interface FieldMapping {
   tableNumber: string | null
   vendorName: string | null
+  vendorLastName: string | null  // optional — concatenated with vendorName as "First Last"
   vendorCategory: string | null
   color: string | null
   notes: string | null

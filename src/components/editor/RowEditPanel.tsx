@@ -43,7 +43,7 @@ export default function RowEditPanel({ rowId }: RowEditPanelProps) {
   // Reset when a different row is selected
   useEffect(() => {
     if (row) setSpacingStr(String(row.spacing))
-  }, [rowId, row?.spacing])
+  }, [row])
 
   const handleApply = useCallback(() => {
     if (!row || rowTables.length === 0) return

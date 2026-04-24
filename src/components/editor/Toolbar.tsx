@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { useEditorStore, selectCanUndo, selectCanRedo } from '@/store/index'
 import ImportModal from './ImportModal'
 import ExportModal from './ExportModal'
-import BackgroundImageModal from './BackgroundImageModal'
+import LayoutManagerModal from './LayoutManagerModal'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MENU DEFINITIONS
@@ -17,7 +17,7 @@ interface MenuItem {
   disabled?: boolean
 }
 
-function useMenuItems(openImport: () => void, openExport: () => void, openBgImport: () => void) {
+function useMenuItems(openImport: () => void, openExport: () => void, openLayouts: () => void) {
   const setTool  = useEditorStore(s => s.setActiveTool)
   const undo     = useEditorStore(s => s.undo)
   const redo     = useEditorStore(s => s.redo)
@@ -29,6 +29,7 @@ function useMenuItems(openImport: () => void, openExport: () => void, openBgImpo
   }, [])
 
   const clearLayout = useEditorStore(s => s.clearLayout)
+  const clearVendors = useEditorStore(s => s.clearVendors)
 
   const menus: Record<string, MenuItem[]> = {
     File: [
@@ -37,8 +38,13 @@ function useMenuItems(openImport: () => void, openExport: () => void, openBgImpo
           clearLayout()
         }
       }},
-      { label: 'Import Floor Plan Images…', action: openBgImport },
-      { label: 'Import Vendors from CSV…', action: openImport },
+      { label: 'Saved Layouts…', action: openLayouts },
+      { label: 'Import Vendors…', action: openImport },
+      { label: 'Clear All Vendors', action: () => {
+        if (window.confirm('Remove all vendor assignments? Tables will remain.')) {
+          clearVendors()
+        }
+      }},
       { label: 'Export…', action: openExport },
     ],
     Tools: [
@@ -84,11 +90,11 @@ export default function Toolbar() {
 
   const [showImport, setShowImport] = useState(false)
   const [showExport, setShowExport] = useState(false)
-  const [showBgImport, setShowBgImport] = useState(false)
+  const [showLayouts, setShowLayouts] = useState(false)
   const menus = useMenuItems(
     () => { setShowImport(true); setOpenMenu(null) },
     () => { setShowExport(true); setOpenMenu(null) },
-    () => { setShowBgImport(true); setOpenMenu(null) },
+    () => { setShowLayouts(true); setOpenMenu(null) },
   )
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
@@ -183,8 +189,7 @@ export default function Toolbar() {
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
-      {showBgImport && <BackgroundImageModal onClose={() => setShowBgImport(false)} />}
+      {showLayouts && <LayoutManagerModal onClose={() => setShowLayouts(false)} />}
     </div>
   )
 }
-

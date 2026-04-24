@@ -2,7 +2,7 @@
 // CSV IMPORT MODULE — IMPLEMENTATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, LayoutId, UserId, ImportSessionId, VendorAssignmentId } from './types'
+import type { TableObject } from './types'
 import type {
   ImportSession,
   ImportRow,
@@ -72,6 +72,50 @@ function isValidColor(value: string): boolean {
   return VALID_HEX.test(value) || CSS_COLOR_NAMES.has(value.toLowerCase())
 }
 
+/**
+ * Expand a table number string that may contain ranges and/or comma-separated
+ * values into an array of individual table numbers.
+ * Examples:
+ *   "1,2,3,4"  → ["1","2","3","4"]
+ *   "1-5"      → ["1","2","3","4","5"]
+ *   "1,3-5,8"  → ["1","3","4","5","8"]
+ *   "42"       → ["42"]
+ */
+export function expandTableNumbers(value: string): string[] {
+  const trimmed = value.trim()
+  if (!trimmed) return []
+
+  // If the value has no commas and no dash-between-digits, it's a single table
+  if (!/[,]/.test(trimmed) && !/\d\s*-\s*\d/.test(trimmed)) return [trimmed]
+
+  const results: string[] = []
+  const parts = trimmed.split(',')
+
+  for (const part of parts) {
+    const p = part.trim()
+    if (!p) continue
+
+    // Check for range pattern like "1-5" or "1 - 5"
+    const rangeMatch = p.match(/^(\d+)\s*-\s*(\d+)$/)
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1], 10)
+      const end = parseInt(rangeMatch[2], 10)
+      if (!isNaN(start) && !isNaN(end) && end >= start && end - start < 1000) {
+        for (let n = start; n <= end; n++) {
+          results.push(String(n))
+        }
+      } else {
+        // Invalid range, keep as-is
+        results.push(p)
+      }
+    } else {
+      results.push(p)
+    }
+  }
+
+  return results
+}
+
 type PaymentStatusValue = 'unpaid' | 'partial' | 'paid' | 'comped' | 'unknown'
 
 const PAYMENT_STATUS_ALIASES: Record<string, PaymentStatusValue> = {
@@ -91,8 +135,22 @@ function normalizePaymentStatus(value: string): PaymentStatusValue | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const csvImportModule: CSVImportModule = {
-  parseCSV(csvText: string): ParsedCSV {
-    const normalized = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  parseCSV(csvText: string, options?: { noHeaders?: boolean }): ParsedCSV {
+    let normalized = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+
+    // Auto-detect tab-separated data (pasted from spreadsheets):
+    // If the first line has tabs but no commas outside quotes, treat as TSV
+    const firstLine = normalized.split('\n')[0] ?? ''
+    if (firstLine.includes('\t') && !firstLine.includes(',')) {
+      normalized = normalized.split('\n').map(line => {
+        // Convert tabs to commas, quoting any fields that contain commas
+        return line.split('\t').map(field => {
+          const trimmed = field.trim()
+          return trimmed.includes(',') ? `"${trimmed.replace(/"/g, '""')}"` : trimmed
+        }).join(',')
+      }).join('\n')
+    }
+
     const lines = normalized.split('\n')
     // strip trailing empty lines
     while (lines.length && lines[lines.length - 1].trim() === '') lines.pop()
@@ -103,18 +161,40 @@ export const csvImportModule: CSVImportModule = {
 
     const MAX_COLUMNS = 50
     const MAX_HEADER_LEN = 100
-    const rawHeaders = parseCSVLine(lines[0]).map(h => h.trim().slice(0, MAX_HEADER_LEN))
-    const headers = rawHeaders.slice(0, MAX_COLUMNS)
+
+    // Auto-detect headerless data: if first row's last field looks like a
+    // table number (digits, ranges, commas), it's probably data, not a header.
+    const firstCells = parseCSVLine(lines[0])
+    const lastCell = (firstCells[firstCells.length - 1] ?? '').trim()
+    const looksLikeTableNumber = /^\d[\d,\s-]*$/.test(lastCell)
+    const hasNoHeaders = options?.noHeaders ?? looksLikeTableNumber
+
+    let headers: string[]
+    let dataStartLine: number
+
+    if (hasNoHeaders) {
+      // Generate generic column headers: Column A, Column B, ...
+      const colCount = Math.min(firstCells.length, MAX_COLUMNS)
+      headers = Array.from({ length: colCount }, (_, i) =>
+        `Column ${String.fromCharCode(65 + i)}`,
+      )
+      dataStartLine = 0 // first line IS data
+    } else {
+      const rawHeaders = firstCells.map(h => h.trim().slice(0, MAX_HEADER_LEN))
+      headers = rawHeaders.slice(0, MAX_COLUMNS)
+      dataStartLine = 1
+    }
+
     const parseErrors: string[] = []
     const rows: Array<Record<string, string>> = []
 
     const MAX_ROWS = 5000
-    for (let i = 1; i < lines.length && rows.length < MAX_ROWS; i++) {
+    for (let i = dataStartLine; i < lines.length && rows.length < MAX_ROWS; i++) {
       if (!lines[i].trim()) continue
       const cells = parseCSVLine(lines[i])
       if (cells.length !== headers.length) {
         parseErrors.push(
-          `Row ${i}: expected ${headers.length} columns, got ${cells.length}`,
+          `Row ${i + 1}: expected ${headers.length} columns, got ${cells.length}`,
         )
       }
       const row: Record<string, string> = {}
@@ -135,6 +215,10 @@ export const csvImportModule: CSVImportModule = {
       vendorName: [
         /^vendor[\s_]?name$/i, /^vendor$/i, /^name$/i,
         /^exhibitor[\s_]?name$/i, /^exhibitor$/i, /^company$/i, /^business[\s_]?name$/i,
+        /^first[\s_]?name$/i, /^first$/i,
+      ],
+      vendorLastName: [
+        /^last[\s_]?name$/i, /^last$/i, /^surname$/i,
       ],
       vendorCategory: [
         /^vendor[\s_]?cat(egory)?$/i, /^category$/i, /^cat$/i, /^type$/i,
@@ -148,11 +232,11 @@ export const csvImportModule: CSVImportModule = {
     }
 
     const fieldMapping: FieldMapping = {
-      tableNumber: null, vendorName: null, vendorCategory: null,
+      tableNumber: null, vendorName: null, vendorLastName: null, vendorCategory: null,
       color: null, notes: null, paymentStatus: null, section: null,
     }
     const confidence: Record<Field, number> = {
-      tableNumber: 0, vendorName: 0, vendorCategory: 0,
+      tableNumber: 0, vendorName: 0, vendorLastName: 0, vendorCategory: 0,
       color: 0, notes: 0, paymentStatus: 0, section: 0,
     }
     const unmappedHeaders: string[] = []
@@ -232,16 +316,19 @@ export const csvImportModule: CSVImportModule = {
     const assignedTableIds = new Set(existingAssignments.map(a => a.tableId))
     const seenLabels = new Map<string, number>() // label → first rowIndex
 
-    const rows: ImportRow[] = parsed.rows.map((rawData, rowIndex) => {
-      const tableNumber = (mapping.tableNumber ? rawData[mapping.tableNumber] ?? '' : '').trim()
-      const vendorName  = (mapping.vendorName  ? rawData[mapping.vendorName]  ?? '' : '').trim()
+    const rows: ImportRow[] = []
+
+    for (let rowIndex = 0; rowIndex < parsed.rows.length; rowIndex++) {
+      const rawData = parsed.rows[rowIndex]
+      const rawTableNumber = (mapping.tableNumber ? rawData[mapping.tableNumber] ?? '' : '').trim()
+      const firstName   = (mapping.vendorName     ? rawData[mapping.vendorName]     ?? '' : '').trim()
+      const lastName    = (mapping.vendorLastName  ? rawData[mapping.vendorLastName] ?? '' : '').trim()
+      const vendorName  = lastName ? `${firstName} ${lastName}` : firstName
 
       const rawPayStatus = mapping.paymentStatus ? rawData[mapping.paymentStatus] ?? '' : ''
       const normStatus   = normalizePaymentStatus(rawPayStatus)
 
-      const mapped: MappedImportRow = {
-        tableNumber,
-        vendorName,
+      const sharedFields = {
         vendorCategory: mapping.vendorCategory ? (rawData[mapping.vendorCategory] ?? '').trim() || null : null,
         color:          mapping.color          ? (rawData[mapping.color]          ?? '').trim() || null : null,
         notes:          mapping.notes          ? (rawData[mapping.notes]          ?? '').trim() || null : null,
@@ -249,10 +336,11 @@ export const csvImportModule: CSVImportModule = {
         section:        mapping.section        ? (rawData[mapping.section]        ?? '').trim() || null : null,
       }
 
-      // invalid-field
+      // invalid-field check (on the original row)
       const valErrors = csvImportModule.validateRow(rawData, mapping)
       if (valErrors.length > 0) {
-        return {
+        const mapped: MappedImportRow = { tableNumber: rawTableNumber, vendorName, ...sharedFields }
+        rows.push({
           rowIndex, rawData, mapped,
           status: 'conflict' as ImportRowStatus,
           conflict: {
@@ -261,57 +349,70 @@ export const csvImportModule: CSVImportModule = {
             affectedTableId: null,
             resolution: null,
           },
-        }
+        })
+        continue
       }
 
-      // duplicate-in-import
-      const labelKey = tableNumber.toLowerCase()
-      if (seenLabels.has(labelKey)) {
-        const firstRow = seenLabels.get(labelKey)!
-        return {
-          rowIndex, rawData, mapped,
-          status: 'conflict' as ImportRowStatus,
-          conflict: {
-            type: 'duplicate-in-import',
-            message: `Table "${tableNumber}" appears more than once in this CSV (first at row ${firstRow + 1})`,
-            affectedTableId: null,
-            resolution: null,
-          },
-        }
-      }
-      seenLabels.set(labelKey, rowIndex)
+      // Expand table numbers: "1,2,3" or "1-5" → multiple entries
+      const expandedTables = expandTableNumbers(rawTableNumber)
+      // If expansion produced nothing, fall back to the raw value
+      const tableNumbers = expandedTables.length > 0 ? expandedTables : [rawTableNumber]
 
-      // table-not-found
-      const table = tablesByLabel.get(labelKey)
-      if (!table) {
-        return {
-          rowIndex, rawData, mapped,
-          status: 'conflict' as ImportRowStatus,
-          conflict: {
-            type: 'table-not-found',
-            message: `No table labeled "${tableNumber}" found on the floor plan`,
-            affectedTableId: null,
-            resolution: null,
-          },
-        }
-      }
+      for (const tableNumber of tableNumbers) {
+        const mapped: MappedImportRow = { tableNumber, vendorName, ...sharedFields }
 
-      // already-assigned
-      if (assignedTableIds.has(table.id)) {
-        return {
-          rowIndex, rawData, mapped,
-          status: 'conflict' as ImportRowStatus,
-          conflict: {
-            type: 'already-assigned',
-            message: `Table "${tableNumber}" already has a vendor assigned`,
-            affectedTableId: table.id,
-            resolution: null,
-          },
+        // duplicate-in-import
+        const labelKey = tableNumber.toLowerCase()
+        if (seenLabels.has(labelKey)) {
+          const firstRow = seenLabels.get(labelKey)!
+          rows.push({
+            rowIndex, rawData, mapped,
+            status: 'conflict' as ImportRowStatus,
+            conflict: {
+              type: 'duplicate-in-import',
+              message: `Table "${tableNumber}" appears more than once (first at row ${firstRow + 1})`,
+              affectedTableId: null,
+              resolution: null,
+            },
+          })
+          continue
         }
-      }
+        seenLabels.set(labelKey, rowIndex)
 
-      return { rowIndex, rawData, mapped, status: 'valid' as ImportRowStatus, conflict: null }
-    })
+        // table-not-found
+        const table = tablesByLabel.get(labelKey)
+        if (!table) {
+          rows.push({
+            rowIndex, rawData, mapped,
+            status: 'conflict' as ImportRowStatus,
+            conflict: {
+              type: 'table-not-found',
+              message: `No table labeled "${tableNumber}" found on the floor plan`,
+              affectedTableId: null,
+              resolution: null,
+            },
+          })
+          continue
+        }
+
+        // already-assigned
+        if (assignedTableIds.has(table.id)) {
+          rows.push({
+            rowIndex, rawData, mapped,
+            status: 'conflict' as ImportRowStatus,
+            conflict: {
+              type: 'already-assigned',
+              message: `Table "${tableNumber}" already has a vendor assigned`,
+              affectedTableId: table.id,
+              resolution: null,
+            },
+          })
+          continue
+        }
+
+        rows.push({ rowIndex, rawData, mapped, status: 'valid' as ImportRowStatus, conflict: null })
+      }
+    }
 
     return {
       id: sessionId,

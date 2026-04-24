@@ -18,13 +18,13 @@ import { Stage, Layer, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Point, TableId, DoorId } from '@/domain/types'
-import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendors, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectBackgroundImages } from '@/store/index'
+import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectBackgroundImages } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
 import { rowModule } from '@/domain/rows.impl'
 import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
 import { createTableId, createRowId, createAssignmentId, createRoomSegmentId } from '@/lib/id'
-import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID } from '@/lib/defaults'
+import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID, vendorColor } from '@/lib/defaults'
 import { registerStage } from '@/lib/stage'
 import GridLayer from './GridLayer'
 import RoomLayer from './RoomLayer'
@@ -35,6 +35,7 @@ import TransformerControl from './TransformerControl'
 import InlineLabelEditor from './InlineLabelEditor'
 import ShortcutsLegend from './ShortcutsLegend'
 import BackgroundImageLayer from './BackgroundImageLayer'
+import TableContextMenu, { type ContextMenuAction } from './TableContextMenu'
 import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds } from '@/domain/room-contour'
 import { useWarnings } from '@/hooks/useWarnings'
 import { warningsModule } from '@/domain/warnings.impl'
@@ -84,7 +85,6 @@ export default function KonvaCanvas() {
   const duplicateIds    = useEditorStore(selectDuplicateTableIds)
   const assignmentMap   = useEditorStore(selectAssignmentMap)
   const activeVendorId  = useEditorStore(selectActiveVendorId)
-  const vendors         = useEditorStore(selectVendors)
   const vendorAssignments = useEditorStore(selectVendorAssignments)
   const room              = useEditorStore(selectRoom)
   const doorsRecord       = useEditorStore(selectDoors)
@@ -96,7 +96,6 @@ export default function KonvaCanvas() {
   // Store actions
   const dispatch      = useEditorStore(s => s.dispatch)
   const setSelected   = useEditorStore(s => s.setSelected)
-  const addSelected   = useEditorStore(s => s.addSelected)
   const toggleSelected = useEditorStore(s => s.toggleSelected)
   const clearSelected = useEditorStore(s => s.clearSelected)
   const setStageTransform = useEditorStore(s => s.setStageTransform)
@@ -114,6 +113,9 @@ export default function KonvaCanvas() {
 
   // Shortcuts legend visibility (stays as overlay)
   const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tableId: string } | null>(null)
 
   // Computed warnings (derived, never stored)
   const warningResult = useWarnings()
@@ -379,6 +381,21 @@ export default function KonvaCanvas() {
       return
     }
 
+    // Right-click → context menu
+    if (e.evt.button === 2) {
+      e.evt.preventDefault()
+      const target = e.target
+      const isTable = target.hasName('table-rect')
+      if (isTable) {
+        const tableId = target.id() as string
+        if (!selectedIds.has(tableId)) {
+          setSelected([tableId])
+        }
+        setContextMenu({ x: e.evt.clientX, y: e.evt.clientY, tableId })
+      }
+      return
+    }
+
     // Only handle left clicks from here on
     if (e.evt.button !== 0) return
 
@@ -533,11 +550,11 @@ export default function KonvaCanvas() {
         currentY: canvasPos.y,
       })
     }
-  }, [activeTool, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, stagePos, placeTableAt, placeRowAt])
+  }, [activeTool, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, stagePos, placeTableAt, placeRowAt, dispatch])
 
   // ── Mouse move ─────────────────────────────────────────────────────────────
 
-  const handleMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
+  const handleMouseMove = useCallback(() => {
     const stage = stageRef.current
     if (!stage) return
 
@@ -804,7 +821,7 @@ export default function KonvaCanvas() {
 
   // ── Double-click to close freehand polygon ────────────────────────────────
 
-  const handleStageDblClick = useCallback((_e: KonvaEventObject<MouseEvent>) => {
+  const handleStageDblClick = useCallback(() => {
     if (activeTool === 'draw-room-freehand' && freehandPointsRef.current && freehandPointsRef.current.length >= 3) {
       // Close and commit the freehand polygon
       dispatch({
@@ -862,6 +879,7 @@ export default function KonvaCanvas() {
       ref={containerRef}
       className={`w-full h-full ${cursorClass}`}
       style={{ background: '#e2e8f0' }}
+      onContextMenu={e => e.preventDefault()}
     >
       <Stage
         ref={stageRef}
@@ -905,7 +923,7 @@ export default function KonvaCanvas() {
           {tableList.map(table => {
             const assignment = assignmentMap.get(table.id)
             const sectionColor = table.sectionId ? sections[table.sectionId]?.color : undefined
-            const assignedColor = assignment ? '#d1fae5' : undefined  // light green when vendor assigned
+            const assignedColor = assignment ? vendorColor(assignment.vendorId) : undefined
             const fillColor = assignment?.colorOverride ?? sectionColor ?? assignedColor
 
             // Compute highest warning severity for this table
@@ -928,7 +946,7 @@ export default function KonvaCanvas() {
                 warningSeverity={warningSeverity}
                 draftPos={draftPositions[table.id] ?? null}
                 fillColor={fillColor}
-                vendorName={undefined}
+                vendorName={assignmentMap.get(table.id)?.vendorName}
                 onRegister={registerNode}
                 onDoubleClick={handleTableDoubleClick}
               />
@@ -1015,6 +1033,79 @@ export default function KonvaCanvas() {
       {showShortcuts && (
         <ShortcutsLegend onClose={() => setShowShortcuts(false)} />
       )}
+
+      {/* Right-click context menu */}
+      {contextMenu && (() => {
+        const table = tables[contextMenu.tableId]
+        if (!table) return null
+        const assignment = assignmentMap.get(table.id)
+        const actions: ContextMenuAction[] = [
+          {
+            label: 'Rename Table',
+            action: () => {
+              const node = nodeRefs.current.get(table.id)
+              if (node) {
+                const stage = stageRef.current
+                if (stage) {
+                  const absPos = node.getAbsolutePosition()
+                  setEditingTableId(table.id)
+                  setEditingPos({
+                    x: absPos.x,
+                    y: absPos.y,
+                    width: table.width * stageScale,
+                    height: table.height * stageScale,
+                  })
+                }
+              }
+            },
+          },
+          {
+            label: assignment ? `Clear Vendor (${assignment.vendorName})` : 'Assign Vendor…',
+            action: () => {
+              if (assignment) {
+                dispatch({
+                  type: 'CLEAR_VENDOR_ASSIGNMENT',
+                  timestamp: Date.now(),
+                  assignment,
+                })
+              }
+            },
+            disabled: !assignment,
+          },
+          {
+            label: 'Resize → 6ft',
+            action: () => dispatch({ type: 'RESIZE_TABLE', timestamp: Date.now(), tableId: table.id as TableId, prev: { x: table.x, y: table.y, width: table.width, height: table.height }, next: { x: table.x, y: table.y, width: 72, height: 30 } }),
+          },
+          {
+            label: 'Resize → 8ft',
+            action: () => dispatch({ type: 'RESIZE_TABLE', timestamp: Date.now(), tableId: table.id as TableId, prev: { x: table.x, y: table.y, width: table.width, height: table.height }, next: { x: table.x, y: table.y, width: 96, height: 30 } }),
+          },
+          {
+            label: `Delete${selectedIds.size > 1 ? ` (${selectedIds.size} tables)` : ''}`,
+            danger: true,
+            action: () => {
+              const idsToDelete = selectedIds.size > 1 ? [...selectedIds] : [table.id]
+              const tablesToDelete = idsToDelete.map(id => tables[id]).filter(Boolean)
+              const affectedAssignments = Object.values(vendorAssignments).filter(a => idsToDelete.includes(a.tableId))
+              dispatch({
+                type: 'DELETE_TABLES',
+                timestamp: Date.now(),
+                tables: tablesToDelete,
+                affectedAssignments,
+              })
+              clearSelected()
+            },
+          },
+        ]
+        return (
+          <TableContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            actions={actions}
+            onClose={() => setContextMenu(null)}
+          />
+        )
+      })()}
     </div>
   )
 }

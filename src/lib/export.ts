@@ -5,9 +5,10 @@
 // Print/PDF — SVG floor-plan rendered to a new browser window + print dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Section, VendorAssignment, CompositeRoom, BackgroundImage } from '@/domain/types'
+import type { TableObject, Section, Vendor, VendorAssignment, CompositeRoom, BackgroundImage } from '@/domain/types'
 import { getStage } from './stage'
 import { computeRoomContour } from '@/domain/room-contour'
+import { vendorColor } from './defaults'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PNG EXPORT
@@ -59,6 +60,125 @@ export function printLayout(
   win.document.close()
   win.focus()
   // Slight delay lets the browser finish layout before opening print dialog
+  setTimeout(() => win.print(), 400)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VENDOR MANIFEST / CHECKLIST
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function printVendorManifest(
+  tables: Record<string, TableObject>,
+  vendors: Record<string, Vendor>,
+  assignments: Record<string, VendorAssignment>,
+  title: string,
+): void {
+  // Group assignments by vendor
+  const vendorTableMap = new Map<string, { name: string; tables: string[]; payment: string; category: string }>()
+
+  for (const a of Object.values(assignments)) {
+    const table = tables[a.tableId]
+    const label = table?.label ?? a.tableId
+    const entry = vendorTableMap.get(a.vendorId)
+    if (entry) {
+      entry.tables.push(label)
+    } else {
+      vendorTableMap.set(a.vendorId, {
+        name: a.vendorName,
+        tables: [label],
+        payment: a.paymentStatus,
+        category: a.vendorCategory ?? '',
+      })
+    }
+  }
+
+  // Add unassigned vendors from roster
+  for (const v of Object.values(vendors)) {
+    if (!vendorTableMap.has(v.id)) {
+      vendorTableMap.set(v.id, {
+        name: v.name,
+        tables: [],
+        payment: v.paymentStatus,
+        category: v.category ?? '',
+      })
+    }
+  }
+
+  // Sort by vendor name
+  const rows = [...vendorTableMap.values()].sort((a, b) => a.name.localeCompare(b.name))
+
+  const payBadge = (s: string) => {
+    const m: Record<string, string> = { paid: 'Paid', partial: 'Partial', unpaid: 'Unpaid', comped: 'Comped', unknown: '' }
+    return m[s] ?? ''
+  }
+  const payBg = (s: string) => {
+    const m: Record<string, string> = { paid: '#dcfce7', partial: '#fef3c7', unpaid: '#fee2e2', comped: '#ede9fe', unknown: '#f1f5f9' }
+    return m[s] ?? '#f1f5f9'
+  }
+
+  const tableRows = rows.map((r, i) => {
+    const sortedTables = r.tables.sort((a, b) => {
+      const na = parseInt(a), nb = parseInt(b)
+      if (!isNaN(na) && !isNaN(nb)) return na - nb
+      return a.localeCompare(b)
+    })
+    return `<tr style="border-bottom:1px solid #e2e8f0">
+      <td style="padding:8px 12px;font-size:13px;color:#374151">${i + 1}</td>
+      <td style="padding:8px 12px;font-size:13px;font-weight:600;color:#1e293b">${esc(r.name)}</td>
+      <td style="padding:8px 12px;font-size:13px;color:#374151">${esc(r.category)}</td>
+      <td style="padding:8px 12px;font-size:13px;color:#374151">${sortedTables.length > 0 ? esc(sortedTables.join(', ')) : '<span style="color:#9ca3af">—</span>'}</td>
+      <td style="padding:8px 12px;font-size:12px;text-align:center"><span style="background:${payBg(r.payment)};padding:2px 8px;border-radius:4px">${payBadge(r.payment)}</span></td>
+      <td style="padding:8px 24px;width:80px;border-left:1px solid #e2e8f0"></td>
+    </tr>`
+  }).join('')
+
+  const totalAssigned = rows.filter(r => r.tables.length > 0).length
+  const totalTables = new Set(rows.flatMap(r => r.tables)).size
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(title)} — Vendor Checklist</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #fff; }
+    @media print {
+      .no-print { display: none !important; }
+      @page { margin: 0.5in; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:2px solid #1e293b">
+    <div>
+      <div style="font-size:20px;font-weight:700;color:#1e293b">${esc(title || 'Floor Plan')} — Vendor Checklist</div>
+      <div style="font-size:12px;color:#94a3b8;margin-top:2px">${new Date().toLocaleDateString()} | ${rows.length} vendors, ${totalAssigned} assigned, ${totalTables} tables</div>
+    </div>
+    <button class="no-print" onclick="window.print()" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Print</button>
+  </div>
+  <table style="width:100%;border-collapse:collapse;margin-top:8px">
+    <thead>
+      <tr style="border-bottom:2px solid #cbd5e1;background:#f8fafc">
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">#</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Vendor</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Category</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Tables</th>
+        <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Payment</th>
+        <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;border-left:1px solid #e2e8f0">Check-in</th>
+      </tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+</body>
+</html>`
+
+  const win = window.open('', '_blank', 'width=900,height=700,noopener,noreferrer')
+  if (!win) { alert('Popup blocked — please allow popups.'); return }
+  win.document.write(html)
+  win.document.close()
+  win.focus()
   setTimeout(() => win.print(), 400)
 }
 
@@ -180,7 +300,7 @@ function buildSVG(
   for (const t of tables) {
     const assignment = byTable.get(t.id)
     const section = t.sectionId ? sectionMap.get(t.sectionId) : null
-    const rawFill = assignment?.colorOverride ?? section?.color ?? '#e2e8f0'
+    const rawFill = assignment?.colorOverride ?? section?.color ?? (assignment ? vendorColor(assignment.vendorId) : '#e2e8f0')
     const fill = isSafeColor(rawFill) ? rawFill : '#e2e8f0'
     const cx = tx(t.x + t.width / 2)
     const cy = ty(t.y + t.height / 2)

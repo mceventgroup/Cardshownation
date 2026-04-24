@@ -10,7 +10,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useEditorStore, selectTables, selectSelectedIds, selectRows, selectSections } from '@/store/index'
 import { numberingModule } from '@/domain/numbering.impl'
-import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
 import type { NumberingScheme, NumberingStyle } from '@/domain/numbering'
 import type { TableId, TableObject, RowId, SectionId } from '@/domain/types'
 
@@ -97,9 +96,9 @@ export default function NumberingPanel() {
     }
   }, [scope, selectedTables, sharedRowId, sharedSectionId, tables])
 
-  const scheme: NumberingScheme = {
+  const scheme = useMemo<NumberingScheme>(() => ({
     style, prefix, separator, startNumber, padToDigits, direction,
-  }
+  }), [style, prefix, separator, startNumber, padToDigits, direction])
 
   // Preview: first 5 labels
   const preview = useMemo(() => {

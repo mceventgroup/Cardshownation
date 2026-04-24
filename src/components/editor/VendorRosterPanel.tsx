@@ -17,6 +17,8 @@ import {
   selectTables,
 } from '@/store/index'
 import { createVendorId, createAssignmentId } from '@/lib/id'
+import { expandTableNumbers } from '@/domain/csv-import.impl'
+import { vendorColor } from '@/lib/defaults'
 import type { Vendor, VendorId, PaymentStatus, TableId } from '@/domain/types'
 import { autoAssignVendors } from '@/domain/auto-assign'
 import { DRAFT_LAYOUT_ID } from '@/lib/defaults'
@@ -48,6 +50,7 @@ export default function VendorRosterPanel() {
   const [search, setSearch]   = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editCount, setEditCount] = useState('')
+  const setSelected = useEditorStore(s => s.setSelected)
 
   const nameRef = useRef<HTMLInputElement>(null)
 
@@ -104,22 +107,111 @@ export default function VendorRosterPanel() {
 
   function handleBulkAdd() {
     const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean)
+    // Detect if data is tab-separated (e.g. pasted from spreadsheet)
+    const isTabSeparated = lines.some(l => l.includes('\t'))
+
+    // Build table lookup by label for direct assignment
+    const tablesByLabel = new Map<string, TableId>()
+    for (const t of Object.values(tables)) {
+      tablesByLabel.set(t.label.toLowerCase().trim(), t.id)
+    }
+    const existingAssignments = Object.values(
+      useEditorStore.getState().vendorAssignments,
+    )
+    const assignedTableIds = new Set(existingAssignments.map(a => a.tableId))
+
+    // Collect all assignments for a single batch undo step
+    const batchCreated: import('@/domain/types').VendorAssignment[] = []
+    const batchReplaced: import('@/domain/types').VendorAssignment[] = []
+
     for (const line of lines) {
-      // Parse "Name, count" or just "Name"
-      const parts = line.split(',').map(p => p.trim())
-      const name = parts[0]
-      const count = parts[1] ? parseInt(parts[1]) || 1 : 1
-      if (name) {
+      if (isTabSeparated) {
+        // Tab-separated: FirstName\tLastName\tTableNumbers
+        // or: Name\tTableNumbers
+        const cols = line.split('\t').map(c => c.trim())
+        let name: string
+        let tableStr: string
+
+        if (cols.length >= 3) {
+          // FirstName, LastName, Tables
+          name = `${cols[0]} ${cols[1]}`
+          tableStr = cols[2]
+        } else if (cols.length === 2) {
+          // Name, Tables (or Name, Count)
+          name = cols[0]
+          tableStr = cols[1]
+        } else {
+          name = cols[0]
+          tableStr = ''
+        }
+
+        if (!name) continue
+
+        // Expand table numbers (e.g. "33-34" → ["33","34"])
+        const expanded = expandTableNumbers(tableStr)
+        const count = expanded.length > 0 ? expanded.length : (parseInt(tableStr) || 1)
+
+        const vendorId = createVendorId()
         addVendor({
-          id: createVendorId(),
+          id: vendorId,
           name,
           tablesNeeded: count,
           category: null,
           paymentStatus: 'unknown',
           notes: null,
         })
+
+        // Collect assignments to matching tables on the floor plan
+        if (expanded.length > 0) {
+          for (const tableLabel of expanded) {
+            const tableId = tablesByLabel.get(tableLabel.toLowerCase().trim())
+            if (tableId && !assignedTableIds.has(tableId)) {
+              const prev = existingAssignments.find(a => a.tableId === tableId)
+              if (prev) batchReplaced.push(prev)
+              batchCreated.push({
+                id: createAssignmentId(),
+                tableId,
+                layoutId: DRAFT_LAYOUT_ID,
+                vendorId,
+                vendorName: name,
+                vendorCategory: null,
+                colorOverride: null,
+                notes: null,
+                paymentStatus: 'unknown',
+                importSessionId: null,
+              })
+              assignedTableIds.add(tableId)
+            }
+          }
+        }
+      } else {
+        // Comma-separated: "Name, count" or just "Name"
+        const parts = line.split(',').map(p => p.trim())
+        const name = parts[0]
+        const count = parts[1] ? parseInt(parts[1]) || 1 : 1
+        if (name) {
+          addVendor({
+            id: createVendorId(),
+            name,
+            tablesNeeded: count,
+            category: null,
+            paymentStatus: 'unknown',
+            notes: null,
+          })
+        }
       }
     }
+
+    // Dispatch all assignments as a single undoable action
+    if (batchCreated.length > 0) {
+      dispatch({
+        type: 'BATCH_ASSIGN_VENDORS',
+        timestamp: Date.now(),
+        createdAssignments: batchCreated,
+        replacedAssignments: batchReplaced,
+      })
+    }
+
     setBulkText('')
     setAddMode(false)
   }
@@ -177,15 +269,21 @@ export default function VendorRosterPanel() {
 
   return (
     <div className="text-sm flex flex-col">
-      {/* Summary + Auto Assign */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 shrink-0">
-        <span className="text-xs text-gray-400">{totalAssigned}/{totalTables} tables assigned</span>
+      {/* Summary stats */}
+      <div className="px-3 py-2 border-b border-gray-100 shrink-0 space-y-1.5">
+        <div className="flex gap-3 text-xs">
+          <span><span className="font-semibold text-gray-800">{vendorList.length}</span> <span className="text-gray-400">vendors</span></span>
+          <span><span className="font-semibold text-gray-800">{totalAssigned}</span><span className="text-gray-400">/{totalTables} tables</span></span>
+          <span className={`font-medium ${totalAssigned === totalTables && totalTables > 0 ? 'text-green-600' : 'text-amber-600'}`}>
+            {totalTables > 0 ? Math.round((totalAssigned / totalTables) * 100) : 0}%
+          </span>
+        </div>
         {vendorList.length > 0 && totalTables > totalAssigned && (
           <button
             onClick={handleAutoAssign}
-            className="px-2 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700"
+            className="w-full px-2 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700"
           >
-            Auto Assign
+            Auto Assign Remaining
           </button>
         )}
       </div>
@@ -206,7 +304,7 @@ export default function VendorRosterPanel() {
       )}
 
       {/* Search */}
-      {vendorList.length > 5 && (
+      {vendorList.length > 0 && (
         <div className="px-3 py-2 border-b border-gray-100 shrink-0">
           <input
             value={search}
@@ -240,6 +338,12 @@ export default function VendorRosterPanel() {
               }`}
               onClick={() => handleActivate(v.id)}
             >
+              {/* Color swatch */}
+              <div
+                className="w-3 h-3 rounded-sm shrink-0 border border-gray-200"
+                style={{ backgroundColor: vendorColor(v.id) }}
+              />
+
               {/* Name + count */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -270,6 +374,24 @@ export default function VendorRosterPanel() {
                   </div>
                 )}
               </div>
+
+              {/* Select tables on canvas */}
+              {assigned > 0 && (
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    // Find all table IDs assigned to this vendor
+                    const tableIds = Object.values(assignments)
+                      .filter(a => a.vendorId === v.id)
+                      .map(a => a.tableId)
+                    setSelected(tableIds)
+                  }}
+                  title="Select tables on canvas"
+                  className="text-xs text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  find
+                </button>
+              )}
 
               {/* Edit table count */}
               {editingId === v.id ? (
@@ -387,7 +509,7 @@ export default function VendorRosterPanel() {
                 onChange={e => setBulkText(e.target.value)}
                 onKeyDown={e => e.stopPropagation()}
                 rows={3}
-                placeholder={"Paste vendor list:\nVendor Name, Table Count\nJohn Smith, 2\nJane Doe, 1"}
+                placeholder={"Paste vendor list:\nJohn Smith, 2\nJane Doe, 1\n\nOr paste from spreadsheet:\nFirst\tLast\tTables\nAaron\tWilson\t33-34"}
                 className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs resize-none focus:outline-none focus:ring-1 focus:ring-blue-400 font-mono"
               />
               <div className="flex gap-1.5 mt-1">

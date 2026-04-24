@@ -13,9 +13,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import NextImage from 'next/image'
 import { useEditorStore } from '@/store'
 import { createBackgroundImageId } from '@/lib/id'
-import type { BackgroundImage, BackgroundImageId } from '@/domain/types'
+import type { BackgroundImage } from '@/domain/types'
+// pdfjs-dist is loaded dynamically to avoid SSR issues
+let pdfjsReady: Promise<typeof import('pdfjs-dist')> | null = null
+function getPdfJs() {
+  if (!pdfjsReady) {
+    pdfjsReady = import('pdfjs-dist').then(lib => {
+      lib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.mjs',
+        import.meta.url,
+      ).toString()
+      return lib
+    })
+  }
+  return pdfjsReady
+}
 
 interface Props {
   onClose: () => void
@@ -30,8 +45,8 @@ interface PendingImage {
   naturalHeight: number
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB per image
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB per file (PDFs can be larger)
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf']
 
 export default function BackgroundImageModal({ onClose }: Props) {
   const addBackgroundImage = useEditorStore(s => s.addBackgroundImage)
@@ -39,7 +54,7 @@ export default function BackgroundImageModal({ onClose }: Props) {
 
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [arrangement, setArrangement] = useState<Arrangement>('side-by-side')
-  const [opacity, setOpacity] = useState(0.3)
+  const [opacity, setOpacity] = useState(0.7)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -60,22 +75,28 @@ export default function BackgroundImageModal({ onClose }: Props) {
     const results: PendingImage[] = []
 
     for (const file of Array.from(files)) {
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        setError(`Unsupported file type: ${file.name}. Use PNG, JPEG, or WebP.`)
+      // Allow PDF or common image types; also accept empty type for drag-drop PDFs
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      if (!isPdf && !ALLOWED_TYPES.includes(file.type)) {
+        setError(`Unsupported file type: ${file.name}. Use PNG, JPEG, WebP, or PDF.`)
         setLoading(false)
         return
       }
       if (file.size > MAX_FILE_SIZE) {
-        setError(`File too large: ${file.name}. Max 10 MB per image.`)
+        setError(`File too large: ${file.name}. Max 20 MB per file.`)
         setLoading(false)
         return
       }
 
-      const rawDataUrl = await readFileAsDataUrl(file)
-      const { width, height } = await loadImageDimensions(rawDataUrl)
-      // Compress to JPEG and cap at 2048px to avoid blowing localStorage quota
-      const dataUrl = await compressImage(rawDataUrl, width, height)
-      results.push({ name: file.name, dataUrl, naturalWidth: width, naturalHeight: height })
+      if (isPdf) {
+        const pdfImages = await renderPdfToImages(file)
+        results.push(...pdfImages)
+      } else {
+        const rawDataUrl = await readFileAsDataUrl(file)
+        const { width, height } = await loadImageDimensions(rawDataUrl)
+        const dataUrl = await compressImage(rawDataUrl, width, height)
+        results.push({ name: file.name, dataUrl, naturalWidth: width, naturalHeight: height })
+      }
     }
 
     setPendingImages(prev => [...prev, ...results])
@@ -185,7 +206,7 @@ export default function BackgroundImageModal({ onClose }: Props) {
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"
               multiple
               className="hidden"
               onChange={e => {
@@ -194,8 +215,8 @@ export default function BackgroundImageModal({ onClose }: Props) {
               }}
             />
             <div className="text-gray-500 text-sm">
-              <p className="font-medium">Drop floor plan images here</p>
-              <p className="text-xs text-gray-400 mt-1">or click to browse. PNG, JPEG, WebP up to 10 MB each.</p>
+              <p className="font-medium">Drop floor plan images or PDFs here</p>
+              <p className="text-xs text-gray-400 mt-1">or click to browse. PNG, JPEG, WebP, or PDF up to 20 MB each.</p>
             </div>
           </div>
 
@@ -210,9 +231,12 @@ export default function BackgroundImageModal({ onClose }: Props) {
               </p>
               {pendingImages.map((img, i) => (
                 <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                  <img
+                  <NextImage
                     src={img.dataUrl}
                     alt={img.name}
+                    width={64}
+                    height={48}
+                    unoptimized
                     className="w-16 h-12 object-cover rounded border border-gray-200"
                   />
                   <div className="flex-1 min-w-0">
@@ -326,8 +350,43 @@ function loadImageDimensions(dataUrl: string): Promise<{ width: number; height: 
   })
 }
 
+const PDF_RENDER_SCALE = 2 // Render PDF pages at 2x for clarity
 const MAX_DIM = 2048
 const JPEG_QUALITY = 0.7
+
+/** Render all pages of a PDF file to images. */
+async function renderPdfToImages(file: File): Promise<PendingImage[]> {
+  const pdfjsLib = await getPdfJs()
+  const arrayBuffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  const results: PendingImage[] = []
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum)
+    const viewport = page.getViewport({ scale: PDF_RENDER_SCALE })
+
+    const canvas = document.createElement('canvas')
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+    const ctx = canvas.getContext('2d')!
+
+    await page.render({ canvasContext: ctx, viewport }).promise
+
+    const natW = viewport.width
+    const natH = viewport.height
+    // Compress the rendered page
+    const rawDataUrl = canvas.toDataURL('image/png')
+    const dataUrl = await compressImage(rawDataUrl, natW, natH)
+
+    const pageName = pdf.numPages > 1
+      ? `${file.name} (page ${pageNum})`
+      : file.name
+
+    results.push({ name: pageName, dataUrl, naturalWidth: natW, naturalHeight: natH })
+  }
+
+  return results
+}
 
 /** Resize image to fit within MAX_DIM and re-encode as JPEG to save localStorage space. */
 function compressImage(dataUrl: string, natW: number, natH: number): Promise<string> {

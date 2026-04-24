@@ -14,7 +14,7 @@
 // (pre-commit local drag state), not from the store after the fact.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Row, Section, Door, RoomSegment, CompositeRoom, VendorAssignment, LayoutSettings } from '@/domain/types'
+import type { TableObject, Row, Section, Door, CompositeRoom, VendorAssignment, LayoutSettings } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
 
 function cloneRoom(room: CompositeRoom): CompositeRoom {
@@ -27,9 +27,12 @@ function cloneRoom(room: CompositeRoom): CompositeRoom {
 /** Object.assign that strips prototype-polluting keys (__proto__, constructor, prototype). */
 function safeAssign<T extends object>(target: T, source: Partial<T>): T {
   const blocked = new Set(['__proto__', 'constructor', 'prototype'])
-  for (const key of Object.keys(source)) {
-    if (!blocked.has(key)) {
-      (target as any)[key] = (source as any)[key]
+  for (const key of Object.keys(source) as Array<keyof T>) {
+    if (!blocked.has(key as string)) {
+      const value = source[key]
+      if (value !== undefined) {
+        target[key] = value
+      }
     }
   }
   return target
@@ -188,6 +191,7 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
       break
     }
 
+    case 'BATCH_ASSIGN_VENDORS':
     case 'APPLY_IMPORT': {
       for (const a of command.replacedAssignments) {
         delete state.vendorAssignments[a.id]
@@ -426,6 +430,7 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
       break
     }
 
+    case 'BATCH_ASSIGN_VENDORS':
     case 'APPLY_IMPORT': {
       for (const a of command.createdAssignments) {
         delete state.vendorAssignments[a.id]

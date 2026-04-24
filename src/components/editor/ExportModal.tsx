@@ -13,7 +13,7 @@
 
 import { useState, useEffect } from 'react'
 import { useEditorStore } from '@/store'
-import { exportPNG, printLayout } from '@/lib/export'
+import { exportPNG, printLayout, printVendorManifest } from '@/lib/export'
 
 interface Props {
   onClose: () => void
@@ -22,6 +22,7 @@ interface Props {
 export default function ExportModal({ onClose }: Props) {
   const tables      = useEditorStore(s => s.tables)
   const sections    = useEditorStore(s => s.sections)
+  const vendors     = useEditorStore(s => s.vendors)
   const assignments = useEditorStore(s => s.vendorAssignments)
   const room        = useEditorStore(s => s.room)
   const bgImages    = useEditorStore(s => s.backgroundImages)
@@ -140,9 +141,20 @@ export default function ExportModal({ onClose }: Props) {
             </button>
           </div>
 
+          <button
+              onClick={() => { printVendorManifest(tables, vendors, assignments, title); onClose() }}
+              className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z" clipRule="evenodd" />
+              </svg>
+              Print Vendor Checklist
+            </button>
+
           <p className="text-gray-600 text-xs">
             Print/PDF exports a clean SVG floor plan scaled to fit the page.
             PNG exports exactly what is currently visible on the canvas.
+            Vendor Checklist prints a sortable list with check-in column.
           </p>
         </div>
       </div>

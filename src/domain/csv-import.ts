@@ -62,7 +62,7 @@ export interface CSVImportModule {
    * Returns parse errors for display but does not throw — partial results
    * are returned so the user can see what was parsed.
    */
-  parseCSV(csvText: string): ParsedCSV
+  parseCSV(csvText: string, options?: { noHeaders?: boolean }): ParsedCSV
 
   /**
    * Attempt to auto-detect field mappings from column headers.

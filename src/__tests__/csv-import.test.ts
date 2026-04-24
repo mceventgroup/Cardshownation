@@ -105,7 +105,7 @@ describe('csvImportModule.validateRow', () => {
   it('passes valid rows', () => {
     const errors = csvImportModule.validateRow(
       { 'Table': '1', 'Vendor': 'Acme' },
-      { tableNumber: 'Table', vendorName: 'Vendor', vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null },
+      { tableNumber: 'Table', vendorName: 'Vendor', vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null },
     )
     expect(errors).toHaveLength(0)
   })
@@ -113,7 +113,7 @@ describe('csvImportModule.validateRow', () => {
   it('rejects missing table number', () => {
     const errors = csvImportModule.validateRow(
       { 'Table': '', 'Vendor': 'Acme' },
-      { tableNumber: 'Table', vendorName: 'Vendor', vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null },
+      { tableNumber: 'Table', vendorName: 'Vendor', vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null },
     )
     expect(errors).toHaveLength(1)
     expect(errors[0].field).toBe('tableNumber')
@@ -122,7 +122,7 @@ describe('csvImportModule.validateRow', () => {
   it('rejects invalid color', () => {
     const errors = csvImportModule.validateRow(
       { 'Color': 'notacolor123' },
-      { tableNumber: null, vendorName: null, vendorCategory: null, color: 'Color', notes: null, paymentStatus: null, section: null },
+      { tableNumber: null, vendorName: null, vendorLastName: null, vendorCategory: null, color: 'Color', notes: null, paymentStatus: null, section: null },
     )
     expect(errors).toHaveLength(1)
     expect(errors[0].field).toBe('color')
@@ -131,7 +131,7 @@ describe('csvImportModule.validateRow', () => {
   it('accepts valid hex color', () => {
     const errors = csvImportModule.validateRow(
       { 'Color': '#ff0000' },
-      { tableNumber: null, vendorName: null, vendorCategory: null, color: 'Color', notes: null, paymentStatus: null, section: null },
+      { tableNumber: null, vendorName: null, vendorLastName: null, vendorCategory: null, color: 'Color', notes: null, paymentStatus: null, section: null },
     )
     expect(errors).toHaveLength(0)
   })
@@ -139,7 +139,7 @@ describe('csvImportModule.validateRow', () => {
   it('rejects invalid payment status', () => {
     const errors = csvImportModule.validateRow(
       { 'Pay': 'banana' },
-      { tableNumber: null, vendorName: null, vendorCategory: null, color: null, notes: null, paymentStatus: 'Pay', section: null },
+      { tableNumber: null, vendorName: null, vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: 'Pay', section: null },
     )
     expect(errors).toHaveLength(1)
     expect(errors[0].field).toBe('paymentStatus')
@@ -152,7 +152,7 @@ describe('csvImportModule.buildSession', () => {
   const tables = [makeTable('1'), makeTable('2'), makeTable('3')]
   const mapping = {
     tableNumber: 'Table', vendorName: 'Vendor',
-    vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null,
+    vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null,
   }
 
   it('marks valid rows as valid', () => {
@@ -206,7 +206,7 @@ describe('csvImportModule.isReadyToApply', () => {
   const tables = [makeTable('1')]
   const mapping = {
     tableNumber: 'Table', vendorName: 'Vendor',
-    vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null,
+    vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null,
   }
 
   it('returns true when all rows are valid', () => {

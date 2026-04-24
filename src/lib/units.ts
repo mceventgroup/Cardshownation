@@ -17,8 +17,3 @@ export function formatDimension(inches: number): string {
 export function formatTableSize(length: number, width: number): string {
   return `${formatDimension(length)} × ${formatDimension(width)}`
 }
-
-/** Format spacing/gap. Example: "1ft" or "6in" */
-export function formatSpacing(inches: number): string {
-  return formatDimension(inches)
-}
