@@ -4,11 +4,8 @@ import { useState, useCallback, useRef } from 'react'
 import { useEditorStore, selectCanUndo, selectCanRedo } from '@/store/index'
 import ImportModal from './ImportModal'
 import ExportModal from './ExportModal'
+import BackgroundImageModal from './BackgroundImageModal'
 import LayoutManagerModal from './LayoutManagerModal'
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MENU DEFINITIONS
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface MenuItem {
   label: string
@@ -20,85 +17,92 @@ interface MenuItem {
 function useMenuItems(
   openImport: () => void,
   openExport: () => void,
+  openBgImport: () => void,
   openLayouts: () => void,
   openFilePicker: () => void,
 ) {
-  const setTool  = useEditorStore(s => s.setActiveTool)
-  const undo     = useEditorStore(s => s.undo)
-  const redo     = useEditorStore(s => s.redo)
-  const canUndo  = useEditorStore(selectCanUndo)
-  const canRedo  = useEditorStore(selectCanRedo)
+  const setTool = useEditorStore(s => s.setActiveTool)
+  const undo = useEditorStore(s => s.undo)
+  const redo = useEditorStore(s => s.redo)
+  const canUndo = useEditorStore(selectCanUndo)
+  const canRedo = useEditorStore(selectCanRedo)
 
   const emit = useCallback((key: string) => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
   }, [])
 
-  const clearLayout    = useEditorStore(s => s.clearLayout)
-  const clearVendors   = useEditorStore(s => s.clearVendors)
-  const saveToFile     = useEditorStore(s => s.saveLayoutToFile)
+  const clearLayout = useEditorStore(s => s.clearLayout)
+  const clearVendors = useEditorStore(s => s.clearVendors)
+  const saveToFile = useEditorStore(s => s.saveLayoutToFile)
 
-  const menus: Record<string, MenuItem[]> = {
+  return {
     File: [
-      { label: 'New Layout', action: () => {
-        if (window.confirm('Start a new layout? Current work will be cleared.')) {
-          clearLayout()
-        }
-      }},
-      { label: 'Saved Layouts…', action: openLayouts },
-      { label: 'Save to File…',  shortcut: 'Ctrl+S', action: () => { saveToFile(); } },
-      { label: 'Open File…', action: openFilePicker },
-      { label: 'Import Vendors…', action: openImport },
-      { label: 'Clear All Vendors', action: () => {
-        if (window.confirm('Remove all vendor assignments? Tables will remain.')) {
-          clearVendors()
-        }
-      }},
-      { label: 'Export…', action: openExport },
+      {
+        label: 'New Layout',
+        action: () => {
+          if (window.confirm('Start a new layout? Current work will be cleared.')) {
+            clearLayout()
+          }
+        },
+      },
+      { label: 'Import Floor Plan Images...', action: openBgImport },
+      { label: 'Saved Layouts...', action: openLayouts },
+      { label: 'Save to File...', shortcut: 'Ctrl+S', action: () => saveToFile() },
+      { label: 'Open File...', action: openFilePicker },
+      { label: 'Import Vendors...', action: openImport },
+      {
+        label: 'Clear All Vendors',
+        action: () => {
+          if (window.confirm('Remove all vendor assignments? Tables will remain.')) {
+            clearVendors()
+          }
+        },
+      },
+      { label: 'Export...', action: openExport },
     ],
     Tools: [
-      { label: 'Select',       shortcut: 'S',   action: () => setTool('select') },
-      { label: 'Place Table',  shortcut: 'T',   action: () => setTool('place-table') },
-      { label: 'Place Row',    shortcut: 'R',   action: () => setTool('place-row') },
+      { label: 'Select', shortcut: 'S', action: () => setTool('select') },
+      { label: 'Place Table', shortcut: 'T', action: () => setTool('place-table') },
+      { label: 'Place Row', shortcut: 'R', action: () => setTool('place-row') },
     ],
     Edit: [
-      { label: 'Undo',            shortcut: 'Ctrl+Z', action: undo, disabled: !canUndo },
-      { label: 'Redo',            shortcut: 'Ctrl+Y', action: redo, disabled: !canRedo },
-      { label: 'Delete Selected', shortcut: 'Del',    action: () => emit('Delete') },
-      { label: 'Select All',      shortcut: 'Ctrl+A', action: () => {
-        const allIds = Object.keys(useEditorStore.getState().tables)
-        useEditorStore.getState().setSelected(allIds)
-      }},
-      { label: 'Rename Table',    shortcut: 'Dbl-click' },
-      { label: 'Renumber Tables', shortcut: 'N',   action: () => emit('n') },
+      { label: 'Undo', shortcut: 'Ctrl+Z', action: undo, disabled: !canUndo },
+      { label: 'Redo', shortcut: 'Ctrl+Y', action: redo, disabled: !canRedo },
+      { label: 'Delete Selected', shortcut: 'Del', action: () => emit('Delete') },
+      {
+        label: 'Select All',
+        shortcut: 'Ctrl+A',
+        action: () => {
+          const allIds = Object.keys(useEditorStore.getState().tables)
+          useEditorStore.getState().setSelected(allIds)
+        },
+      },
+      { label: 'Rename Table', shortcut: 'Dbl-click' },
+      { label: 'Renumber Tables', shortcut: 'N', action: () => emit('n') },
     ],
     View: [
-      { label: 'Vendor Roster',  shortcut: 'V', action: () => emit('v') },
-      { label: 'Warnings',       shortcut: 'W', action: () => emit('w') },
-      { label: 'Zoom In',        shortcut: '+', action: () => emit('+') },
-      { label: 'Zoom Out',       shortcut: '-', action: () => emit('-') },
-      { label: 'Reset Zoom',     shortcut: '0', action: () => emit('0') },
+      { label: 'Vendor Roster', shortcut: 'V', action: () => emit('v') },
+      { label: 'Warnings', shortcut: 'W', action: () => emit('w') },
+      { label: 'Zoom In', shortcut: '+', action: () => emit('+') },
+      { label: 'Zoom Out', shortcut: '-', action: () => emit('-') },
+      { label: 'Reset Zoom', shortcut: '0', action: () => emit('0') },
     ],
     Help: [
       { label: 'Keyboard Shortcuts', shortcut: '?', action: () => emit('?') },
     ],
-  }
-
-  return menus
+  } satisfies Record<string, MenuItem[]>
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TOOLBAR
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function Toolbar() {
-  const canUndo    = useEditorStore(selectCanUndo)
-  const canRedo    = useEditorStore(selectCanRedo)
-  const undo       = useEditorStore(s => s.undo)
-  const redo       = useEditorStore(s => s.redo)
+  const canUndo = useEditorStore(selectCanUndo)
+  const canRedo = useEditorStore(selectCanRedo)
+  const undo = useEditorStore(s => s.undo)
+  const redo = useEditorStore(s => s.redo)
   const loadFromFile = useEditorStore(s => s.loadLayoutFromFile)
 
   const [showImport, setShowImport] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [showBgImport, setShowBgImport] = useState(false)
   const [showLayouts, setShowLayouts] = useState(false)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
@@ -115,10 +119,10 @@ export default function Toolbar() {
   const menus = useMenuItems(
     () => { setShowImport(true); setOpenMenu(null) },
     () => { setShowExport(true); setOpenMenu(null) },
+    () => { setShowBgImport(true); setOpenMenu(null) },
     () => { setShowLayouts(true); setOpenMenu(null) },
     () => { setOpenMenu(null); fileInputRef.current?.click() },
   )
-
 
   function toggleMenu(name: string) {
     setOpenMenu(prev => prev === name ? null : name)
@@ -128,12 +132,9 @@ export default function Toolbar() {
 
   return (
     <div className="shrink-0">
-      {/* ── Top bar: menu tabs + quick tools ───────────────────────────── */}
       <div className="h-10 bg-white border-b border-gray-200 flex items-center">
-        {/* App name */}
         <span className="font-semibold text-gray-800 text-sm px-4">Floorplanner</span>
 
-        {/* Menu tabs */}
         {Object.keys(menus).map(name => (
           <button
             key={name}
@@ -149,10 +150,8 @@ export default function Toolbar() {
           </button>
         ))}
 
-        {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Undo/Redo */}
         <div className="flex items-center gap-1 px-2">
           <button
             onClick={undo}
@@ -181,7 +180,6 @@ export default function Toolbar() {
         </div>
       </div>
 
-      {/* ── Submenu ribbon ─────────────────────────────────────────────── */}
       {openMenu && activeItems.length > 0 && (
         <div className="h-9 bg-gray-50 border-b border-gray-200 flex items-center gap-1 px-4 overflow-x-auto">
           {activeItems.map(item => (
@@ -211,9 +209,9 @@ export default function Toolbar() {
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
+      {showBgImport && <BackgroundImageModal onClose={() => setShowBgImport(false)} />}
       {showLayouts && <LayoutManagerModal onClose={() => setShowLayouts(false)} />}
 
-      {/* Hidden file input for Open File */}
       <input
         ref={fileInputRef}
         type="file"
@@ -222,11 +220,10 @@ export default function Toolbar() {
         onChange={handleFileChange}
       />
 
-      {/* File load error toast */}
       {fileError && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-600 text-white text-sm px-4 py-2 rounded shadow-lg z-50 flex items-center gap-3">
           <span>{fileError}</span>
-          <button onClick={() => setFileError(null)} className="ml-2 font-bold hover:opacity-75">✕</button>
+          <button onClick={() => setFileError(null)} className="ml-2 font-bold hover:opacity-75">x</button>
         </div>
       )}
     </div>

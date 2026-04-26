@@ -7,16 +7,9 @@ import {
   selectRoom,
   selectSelectedDoorId,
 } from '@/store/index'
-import type { DoorSide, DoorId } from '@/domain/types'
+import type { DoorId } from '@/domain/types'
 import { computeRoomBounds } from '@/domain/room-contour'
 import { formatDimension } from '@/lib/units'
-
-const SIDES: { value: DoorSide; label: string }[] = [
-  { value: 'top', label: 'Top' },
-  { value: 'bottom', label: 'Bottom' },
-  { value: 'left', label: 'Left' },
-  { value: 'right', label: 'Right' },
-]
 
 export default function DoorPropertiesPanel() {
   const doors = useEditorStore(selectDoors)
@@ -31,13 +24,11 @@ export default function DoorPropertiesPanel() {
   // Local state for editing — in feet
   const [widthFt, setWidthFt] = useState(0)
   const [positionFt, setPositionFt] = useState(0)
-  const [side, setSide] = useState<DoorSide>('bottom')
 
   // Sync local state when selection changes
   useEffect(() => {
     if (!door || !bounds) return
     setWidthFt(Math.round(door.width / 12 * 10) / 10)
-    setSide(door.side)
     // Position is distance from wall start to door start
     if (door.side === 'top' || door.side === 'bottom') {
       setPositionFt(Math.round((door.x - bounds.x) / 12 * 10) / 10)
@@ -50,27 +41,29 @@ export default function DoorPropertiesPanel() {
 
   function applyChanges() {
     if (!door || !bounds) return
-    const newWidth = widthFt * 12
-    const newPos = positionFt * 12
+    const wallLength = door.side === 'top' || door.side === 'bottom'
+      ? bounds.width
+      : bounds.height
+    const newWidth = Math.max(12, Math.min(wallLength, widthFt * 12))
+    const newPos = Math.max(0, Math.min(wallLength - newWidth, positionFt * 12))
 
     let newX = door.x
     let newY = door.y
 
-    if (side === 'top' || side === 'bottom') {
+    if (door.side === 'top' || door.side === 'bottom') {
       newX = bounds.x + newPos
-      newY = side === 'top' ? bounds.y : bounds.y + bounds.height
+      newY = door.side === 'top' ? bounds.y : bounds.y + bounds.height
     } else {
-      newX = side === 'left' ? bounds.x : bounds.x + bounds.width
+      newX = door.side === 'left' ? bounds.x : bounds.x + bounds.width
       newY = bounds.y + newPos
     }
 
-    // Move if position or side changed
-    if (newX !== door.x || newY !== door.y || side !== door.side) {
+    if (newX !== door.x || newY !== door.y) {
       dispatch({
         type: 'MOVE_DOOR',
         doorId: door.id as DoorId,
         prev: { x: door.x, y: door.y, side: door.side },
-        next: { x: newX, y: newY, side },
+        next: { x: newX, y: newY, side: door.side },
         timestamp: Date.now(),
       })
     }
@@ -88,7 +81,7 @@ export default function DoorPropertiesPanel() {
   }
 
   // Wall length for reference
-  const wallLength = (side === 'top' || side === 'bottom')
+  const wallLength = (door.side === 'top' || door.side === 'bottom')
     ? bounds.width
     : bounds.height
 
@@ -107,15 +100,9 @@ export default function DoorPropertiesPanel() {
       {/* Wall side */}
       <div className="flex items-center gap-2">
         <label className="text-xs text-gray-500 w-16">Wall</label>
-        <select
-          value={side}
-          onChange={e => setSide(e.target.value as DoorSide)}
-          className="flex-1 px-1.5 py-1 border border-gray-300 rounded text-xs"
-        >
-          {SIDES.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+        <div className="flex-1 px-1.5 py-1 border border-gray-200 bg-gray-50 rounded text-xs text-gray-600 capitalize">
+          {door.side}
+        </div>
       </div>
 
       {/* Position from wall start */}

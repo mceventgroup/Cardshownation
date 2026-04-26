@@ -62,7 +62,6 @@ export default function LayoutManagerModal({ onClose }: Props) {
     clearAllLayouts()
     refresh()
   }
-
   function handleRename(id: string) {
     const name = renameText.trim()
     if (!name) return
@@ -185,7 +184,6 @@ export default function LayoutManagerModal({ onClose }: Props) {
             </button>
           </div>
         </div>
-
       </div>
     </div>
   )

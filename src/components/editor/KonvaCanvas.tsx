@@ -17,13 +17,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Stage, Layer, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import type { Point, TableId, DoorId } from '@/domain/types'
+import type { Point, TableId, DoorId, DoorSide } from '@/domain/types'
 import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
 import { rowModule } from '@/domain/rows.impl'
 import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
-import { createTableId, createRowId, createAssignmentId, createRoomSegmentId } from '@/lib/id'
+import { createTableId, createRowId, createAssignmentId, createRoomSegmentId, createDoorId } from '@/lib/id'
 import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID, vendorColor } from '@/lib/defaults'
 import { registerStage } from '@/lib/stage'
 import GridLayer from './GridLayer'
@@ -173,6 +173,11 @@ export default function KonvaCanvas() {
     setRoomDrawPreview(r)
   }
 
+  // Door placement preview (ghost door while in place-door mode)
+  const [doorPlacementPreview, setDoorPlacementPreview] = useState<
+    { side: DoorSide; x: number; y: number; width: number } | null
+  >(null)
+
   // Room drawing state (rectangle segments)
   const roomDrawRef = useRef<{ startX: number; startY: number } | null>(null)
   const [roomDrawPreview, setRoomDrawPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
@@ -192,6 +197,14 @@ export default function KonvaCanvas() {
   const spaceHeldRef  = useRef(false)
   const panStartRef   = useRef<{ pointer: Point; stagePos: Point } | null>(null)
 
+
+  // ── Clear door ghost when leaving place-door mode ────────────────────────
+
+  useEffect(() => {
+    if (activeTool !== 'place-door' && doorPlacementPreview !== null) {
+      setDoorPlacementPreview(null)
+    }
+  }, [activeTool, doorPlacementPreview])
 
   // ── Container resize observer ──────────────────────────────────────────────
 
@@ -358,6 +371,72 @@ export default function KonvaCanvas() {
     setActiveTool('select')
   }, [settings, tables, dispatch, setSelected, setActiveTool])
 
+  // ── Door placement helpers ─────────────────────────────────────────────────
+
+  /**
+   * Given a pointer in canvas coords and the room bounding rect, pick the
+   * nearest wall and return a snapped door position on that wall.
+   * Returns null if the room has no bounds.
+   */
+  const computeDoorSnap = useCallback((
+    canvasPos: Point,
+    doorWidthIn: number,
+  ): { side: DoorSide; x: number; y: number; width: number } | null => {
+    const currentRoom = useEditorStore.getState().room
+    if (!currentRoom) return null
+    const b = computeRoomBounds(currentRoom)
+    if (!b) return null
+
+    const dTop    = Math.abs(canvasPos.y - b.y)
+    const dBottom = Math.abs(canvasPos.y - (b.y + b.height))
+    const dLeft   = Math.abs(canvasPos.x - b.x)
+    const dRight  = Math.abs(canvasPos.x - (b.x + b.width))
+
+    const min = Math.min(dTop, dBottom, dLeft, dRight)
+    let side: DoorSide
+    if      (min === dTop)    side = 'top'
+    else if (min === dBottom) side = 'bottom'
+    else if (min === dLeft)   side = 'left'
+    else                      side = 'right'
+
+    let x: number, y: number
+    if (side === 'top' || side === 'bottom') {
+      const rawX = canvasPos.x - doorWidthIn / 2
+      x = Math.max(b.x, Math.min(b.x + b.width - doorWidthIn, rawX))
+      y = side === 'top' ? b.y : b.y + b.height
+      x = Math.round(snapping.snapToGrid({ x, y: 0 }, settings.gridSize).x)
+      x = Math.max(b.x, Math.min(b.x + b.width - doorWidthIn, x))
+    } else {
+      const rawY = canvasPos.y - doorWidthIn / 2
+      y = Math.max(b.y, Math.min(b.y + b.height - doorWidthIn, rawY))
+      x = side === 'left' ? b.x : b.x + b.width
+      y = Math.round(snapping.snapToGrid({ x: 0, y }, settings.gridSize).y)
+      y = Math.max(b.y, Math.min(b.y + b.height - doorWidthIn, y))
+    }
+
+    return { side, x, y, width: doorWidthIn }
+  }, [settings.gridSize])
+
+  const placeDoorAt = useCallback((canvasPos: Point) => {
+    const cfg = useEditorStore.getState().doorPlacementConfig
+    const widthIn = cfg?.widthIn ?? 72
+    const snap = computeDoorSnap(canvasPos, widthIn)
+    if (!snap) return
+    const existingCount = Object.keys(useEditorStore.getState().doors).length
+    dispatch({
+      type: 'PLACE_DOOR',
+      door: {
+        id: createDoorId(),
+        label: `Door ${existingCount + 1}`,
+        x: snap.x,
+        y: snap.y,
+        width: snap.width,
+        side: snap.side,
+      },
+      timestamp: Date.now(),
+    })
+  }, [computeDoorSnap, dispatch])
+
   // ── Wheel zoom ─────────────────────────────────────────────────────────────
 
   const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
@@ -437,6 +516,11 @@ export default function KonvaCanvas() {
       if (!isTable) {
         placeRowAt(canvasPos)
       }
+      return
+    }
+
+    if (activeTool === 'place-door') {
+      placeDoorAt(canvasPos)
       return
     }
 
@@ -574,7 +658,7 @@ export default function KonvaCanvas() {
         currentY: canvasPos.y,
       })
     }
-  }, [activeTool, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, dispatch])
+  }, [activeTool, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, placeDoorAt, dispatch])
 
   // ── Mouse move ─────────────────────────────────────────────────────────────
 
@@ -702,11 +786,20 @@ export default function KonvaCanvas() {
       return
     }
 
+    // Door placement ghost preview
+    if (activeTool === 'place-door') {
+      const cfg = useEditorStore.getState().doorPlacementConfig
+      const widthIn = cfg?.widthIn ?? 72
+      const snap = computeDoorSnap(canvasPos, widthIn)
+      setDoorPlacementPreview(snap)
+      return
+    }
+
     // Selection rect update — read from ref to avoid stale closure
     if (selectionStateRef.current) {
       updateSelectionState({ ...selectionStateRef.current, currentX: canvasPos.x, currentY: canvasPos.y })
     }
-  }, [toCanvas, tables, settings, stageScale, setStageTransform])
+  }, [toCanvas, tables, settings, stageScale, setStageTransform, activeTool, computeDoorSnap])
 
   // ── Mouse up ───────────────────────────────────────────────────────────────
 
@@ -835,7 +928,7 @@ export default function KonvaCanvas() {
     ? 'canvas-panning'
     : spaceHeldRef.current
       ? 'canvas-pan'
-      : (activeTool === 'place-table' || activeTool === 'place-row')
+      : (activeTool === 'place-table' || activeTool === 'place-row' || activeTool === 'place-door')
         ? 'canvas-place'
         : (activeTool === 'draw-room' || activeTool === 'draw-room-freehand')
           ? 'canvas-place'
@@ -1040,6 +1133,30 @@ export default function KonvaCanvas() {
             ))}
           </Layer>
         )}
+
+        {/* Overlay: door placement ghost */}
+        {doorPlacementPreview && (() => {
+          const p = doorPlacementPreview
+          const thickness = 6
+          const isHoriz = p.side === 'top' || p.side === 'bottom'
+          const gx = isHoriz ? p.x : p.x - thickness / 2
+          const gy = isHoriz ? p.y - thickness / 2 : p.y
+          const gw = isHoriz ? p.width : thickness
+          const gh = isHoriz ? thickness : p.width
+          return (
+            <Layer listening={false}>
+              <Rect
+                x={gx}
+                y={gy}
+                width={gw}
+                height={gh}
+                fill="#2563eb"
+                opacity={0.55}
+                cornerRadius={1}
+              />
+            </Layer>
+          )
+        })()}
 
         {/* Overlay: selection rect */}
         {selectionState && (

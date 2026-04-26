@@ -7,55 +7,33 @@ import {
   selectRoom,
   selectDoors,
   selectSettings,
+  selectActiveTool,
 } from '@/store/index'
-import type { DoorSide } from '@/domain/types'
-import { createDoorId } from '@/lib/id'
 import { formatDimension } from '@/lib/units'
-import { computeRoomBounds } from '@/domain/room-contour'
-
-const DOOR_SIDES: { value: DoorSide; label: string }[] = [
-  { value: 'top',    label: 'Top' },
-  { value: 'bottom', label: 'Bottom' },
-  { value: 'left',   label: 'Left' },
-  { value: 'right',  label: 'Right' },
-]
 
 export default function DoorsPanel() {
-  const room     = useEditorStore(selectRoom)
-  const doors    = useEditorStore(selectDoors)
-  const settings = useEditorStore(selectSettings)
-  const dispatch = useEditorStore(s => s.dispatch)
+  const room        = useEditorStore(selectRoom)
+  const doors       = useEditorStore(selectDoors)
+  const settings    = useEditorStore(selectSettings)
+  const activeTool  = useEditorStore(selectActiveTool)
+  const dispatch    = useEditorStore(s => s.dispatch)
+  const setActiveTool = useEditorStore(s => s.setActiveTool)
+  const setDoorPlacementConfig = useEditorStore(s => s.setDoorPlacementConfig)
 
   const doorList = Object.values(doors)
-  const bounds = room ? computeRoomBounds(room) : null
 
-  const [newDoorSide, setNewDoorSide]     = useState<DoorSide>('bottom')
   const [newDoorWidthFt, setNewDoorWidthFt] = useState(6)
 
-  function handleAddDoor() {
-    if (!bounds) return
-    const doorWidth = newDoorWidthFt * 12
-    const id = createDoorId()
+  const placing = activeTool === 'place-door'
 
-    let x: number, y: number
-    switch (newDoorSide) {
-      case 'top':
-      case 'bottom':
-        x = bounds.x + Math.round((bounds.width - doorWidth) / 2)
-        y = newDoorSide === 'top' ? bounds.y : bounds.y + bounds.height
-        break
-      case 'left':
-      case 'right':
-        x = newDoorSide === 'left' ? bounds.x : bounds.x + bounds.width
-        y = bounds.y + Math.round((bounds.height - doorWidth) / 2)
-        break
-    }
+  function handleStartPlacing() {
+    setDoorPlacementConfig({ widthIn: newDoorWidthFt * 12 })
+    setActiveTool('place-door')
+  }
 
-    dispatch({
-      type: 'PLACE_DOOR',
-      door: { id, label: `Door ${doorList.length + 1}`, x, y, width: doorWidth, side: newDoorSide },
-      timestamp: Date.now(),
-    })
+  function handleCancelPlacing() {
+    setActiveTool('select')
+    setDoorPlacementConfig(null)
   }
 
   function handleDeleteDoor(doorId: string) {
@@ -102,28 +80,35 @@ export default function DoorsPanel() {
         <div>
           <div className="font-medium text-gray-700 mb-1">Add Door</div>
           <div className="flex items-center gap-2">
-            <select
-              value={newDoorSide}
-              onChange={e => setNewDoorSide(e.target.value as DoorSide)}
-              className="flex-1 px-1.5 py-1 border border-gray-300 rounded text-xs"
-            >
-              {DOOR_SIDES.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
+            <label className="text-xs text-gray-500">Width</label>
             <input
               type="number" min={2} max={30} value={newDoorWidthFt}
               onChange={e => setNewDoorWidthFt(Number(e.target.value))}
-              className="w-14 px-1.5 py-1 border border-gray-300 rounded text-xs"
+              disabled={placing}
+              className="w-14 px-1.5 py-1 border border-gray-300 rounded text-xs disabled:bg-gray-100"
             />
             <span className="text-xs text-gray-400">ft</span>
           </div>
-          <button
-            onClick={handleAddDoor}
-            className="mt-1.5 w-full px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            Add Door
-          </button>
+          {placing ? (
+            <>
+              <div className="mt-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                Move onto the canvas to preview the snapped door. Click anywhere inside or around the room to place it. Esc to cancel.
+              </div>
+              <button
+                onClick={handleCancelPlacing}
+                className="mt-1.5 w-full px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleStartPlacing}
+              className="mt-1.5 w-full px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              Place Door
+            </button>
+          )}
         </div>
       ) : (
         <div className="text-xs text-gray-400">Set a room first to add doors.</div>

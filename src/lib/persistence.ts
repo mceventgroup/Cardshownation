@@ -1,12 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// PERSISTENCE
-//
-// Auto-saves document state to localStorage. Only the document fields are
-// persisted — UI state (selection, tool, zoom, history) is session-scoped.
-//
-// Supports multiple named layouts via a manifest + per-layout storage keys.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import type {
   TableObject,
   Row,
@@ -19,16 +10,12 @@ import type {
   BackgroundImage,
 } from '@/domain/types'
 
-const STORAGE_KEY = 'floorplanner:layout'           // legacy single layout
-const MANIFEST_KEY = 'floorplanner:manifest'         // layout index
-const LAYOUT_PREFIX = 'floorplanner:layouts:'        // per-layout prefix
+const STORAGE_KEY = 'floorplanner:layout'
+const MANIFEST_KEY = 'floorplanner:manifest'
+const LAYOUT_PREFIX = 'floorplanner:layouts:'
 const CURRENT_VERSION = 1
+const FILE_APP_TAG = 'floorplanner-1'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** The subset of EditorState that gets persisted. */
 export interface DocumentSlice {
   tables: Record<string, TableObject>
   rows: Record<string, Row>
@@ -47,7 +34,6 @@ interface PersistedPayload {
   savedAt: string
 }
 
-/** Entry in the layout manifest. */
 export interface LayoutEntry {
   id: string
   name: string
@@ -61,11 +47,6 @@ interface LayoutManifest {
   layouts: LayoutEntry[]
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EXTRACT
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Pick only the document fields from the full store state. */
 export function extractDocumentSlice(state: {
   tables: Record<string, TableObject>
   rows: Record<string, Row>
@@ -90,10 +71,6 @@ export function extractDocumentSlice(state: {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SAVE / LOAD — active layout (autosave target)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export type SaveError = 'quota-exceeded' | 'unknown'
 
 export function saveToLocalStorage(slice: DocumentSlice): SaveError | null {
@@ -105,14 +82,9 @@ export function saveToLocalStorage(slice: DocumentSlice): SaveError | null {
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 
-    // Also update the active layout in multi-layout storage
     const manifest = loadManifest()
     if (manifest.activeLayoutId) {
-      localStorage.setItem(
-        LAYOUT_PREFIX + manifest.activeLayoutId,
-        JSON.stringify(payload),
-      )
-      // Update manifest entry stats
+      localStorage.setItem(LAYOUT_PREFIX + manifest.activeLayoutId, JSON.stringify(payload))
       const entry = manifest.layouts.find(l => l.id === manifest.activeLayoutId)
       if (entry) {
         entry.savedAt = payload.savedAt
@@ -140,8 +112,7 @@ export function loadFromLocalStorage(): DocumentSlice | null {
     }
 
     const migrated = migrate(payload)
-    // Migrate legacy single-layout to multi-layout on first load
-    migrateToMultiLayout()
+    migrateToMultiLayout(migrated.data)
     return migrated.data
   } catch {
     return null
@@ -156,15 +127,13 @@ export function clearLocalStorage(): void {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MULTI-LAYOUT MANAGEMENT
-// ─────────────────────────────────────────────────────────────────────────────
-
 function loadManifest(): LayoutManifest {
   try {
     const raw = localStorage.getItem(MANIFEST_KEY)
     if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
+  } catch {
+    // Ignore malformed manifest
+  }
   return { activeLayoutId: null, layouts: [] }
 }
 
@@ -172,26 +141,23 @@ function saveManifest(manifest: LayoutManifest): void {
   localStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest))
 }
 
-/** List all saved layouts. */
 export function listLayouts(): LayoutEntry[] {
   return loadManifest().layouts
 }
 
-/** Get the active layout ID. */
 export function getActiveLayoutId(): string | null {
   return loadManifest().activeLayoutId
 }
 
-/** Save current data as a new named layout. Returns the new layout ID. */
 export function saveLayoutAs(name: string, slice: DocumentSlice): string {
   const id = 'layout-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
   const now = new Date().toISOString()
-
   const payload: PersistedPayload = {
     version: CURRENT_VERSION,
     data: slice,
     savedAt: now,
   }
+
   localStorage.setItem(LAYOUT_PREFIX + id, JSON.stringify(payload))
 
   const manifest = loadManifest()
@@ -205,36 +171,29 @@ export function saveLayoutAs(name: string, slice: DocumentSlice): string {
   manifest.activeLayoutId = id
   saveManifest(manifest)
 
-  // Also set as the active autosave target
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-
   return id
 }
 
-/** Load a specific layout by ID. Returns null if not found. */
 export function loadLayout(id: string): DocumentSlice | null {
   try {
     const raw = localStorage.getItem(LAYOUT_PREFIX + id)
     if (!raw) return null
+
     const payload: PersistedPayload = JSON.parse(raw)
     if (!payload?.data) return null
-    const migrated = migrate(payload)
 
-    // Set as active
+    const migrated = migrate(payload)
     const manifest = loadManifest()
     manifest.activeLayoutId = id
     saveManifest(manifest)
-
-    // Also update the main autosave key
     localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
-
     return migrated.data
   } catch {
     return null
   }
 }
 
-/** Rename a saved layout. */
 export function renameLayout(id: string, newName: string): void {
   const manifest = loadManifest()
   const entry = manifest.layouts.find(l => l.id === id)
@@ -244,17 +203,15 @@ export function renameLayout(id: string, newName: string): void {
   }
 }
 
-/** Delete all saved layouts and reset manifest. */
 export function clearAllLayouts(): void {
   const manifest = loadManifest()
-  for (const l of manifest.layouts) {
-    localStorage.removeItem(LAYOUT_PREFIX + l.id)
+  for (const layout of manifest.layouts) {
+    localStorage.removeItem(LAYOUT_PREFIX + layout.id)
   }
   localStorage.removeItem(MANIFEST_KEY)
   localStorage.removeItem(STORAGE_KEY)
 }
 
-/** Delete a saved layout. */
 export function deleteLayout(id: string): void {
   localStorage.removeItem(LAYOUT_PREFIX + id)
   const manifest = loadManifest()
@@ -265,30 +222,19 @@ export function deleteLayout(id: string): void {
   saveManifest(manifest)
 }
 
-/** Migrate legacy single-layout storage to multi-layout if needed. */
-export function migrateToMultiLayout(): void {
+export function migrateToMultiLayout(legacySlice?: DocumentSlice | null): void {
   const manifest = loadManifest()
-  // Already migrated or has layouts
   if (manifest.layouts.length > 0) return
 
-  // Check if legacy data exists
-  const slice = loadFromLocalStorage()
+  const slice = legacySlice
   if (!slice) return
 
-  // Only migrate if there's actual content
   const hasContent = Object.keys(slice.tables).length > 0 || slice.room !== null
   if (!hasContent) return
 
   saveLayoutAs('Default Layout', slice)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FILE SAVE / LOAD (download + upload JSON)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const FILE_APP_TAG = 'floorplanner-1'
-
-/** Trigger a JSON file download of the current layout. */
 export function saveToFile(slice: DocumentSlice, layoutName: string): void {
   const payload = {
     appVersion: FILE_APP_TAG,
@@ -305,7 +251,6 @@ export function saveToFile(slice: DocumentSlice, layoutName: string): void {
   URL.revokeObjectURL(url)
 }
 
-/** Parse a JSON file string back into a DocumentSlice. Throws on invalid input. */
 export function parseFilePayload(jsonText: string): DocumentSlice {
   let payload: Record<string, unknown>
   try {
@@ -313,16 +258,14 @@ export function parseFilePayload(jsonText: string): DocumentSlice {
   } catch {
     throw new Error('File is not valid JSON.')
   }
+
   if (!payload || typeof payload.version !== 'number' || !payload.data) {
     throw new Error('File does not look like a Floorplanner layout.')
   }
+
   const migrated = migrate(payload as unknown as PersistedPayload)
   return migrated.data
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MIGRATIONS
-// ─────────────────────────────────────────────────────────────────────────────
 
 function migrate(payload: PersistedPayload): PersistedPayload {
   if (payload.version > CURRENT_VERSION) {

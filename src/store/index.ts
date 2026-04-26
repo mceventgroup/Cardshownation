@@ -46,7 +46,7 @@ function safeAssignDefined<T extends object>(target: T, updates: Partial<T>): vo
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-freehand'
+export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-freehand' | 'place-door'
 
 export interface EditorState {
   // ── Canvas (document) state ─────────────────────────────────────────────
@@ -76,6 +76,7 @@ export interface EditorState {
   // ── Builder configs (read by canvas mouse handlers) ────────────────────
   tableBuilderConfig: { tableWidth: number; tableHeight: number } | null
   rowBuilderConfig: { tableCount: number; tableWidth: number; tableHeight: number; spacing: number; orientation: 'horizontal' | 'vertical'; sectionId: SectionId | null } | null
+  doorPlacementConfig: { widthIn: number } | null
 
   // ── Canvas actions ───────────────────────────────────────────────────────
   dispatch: (command: LayoutCommand) => void
@@ -97,6 +98,7 @@ export interface EditorState {
   // ── Builder config actions ─────────────────────────────────────────────
   setTableBuilderConfig: (config: { tableWidth: number; tableHeight: number } | null) => void
   setRowBuilderConfig: (config: { tableCount: number; tableWidth: number; tableHeight: number; spacing: number; orientation: 'horizontal' | 'vertical'; sectionId: SectionId | null } | null) => void
+  setDoorPlacementConfig: (config: { widthIn: number } | null) => void
 
   // ── Stage transform actions ──────────────────────────────────────────────
   setStageTransform: (scale: number, position: Point) => void
@@ -163,6 +165,7 @@ export const useEditorStore = create<EditorState>()(
     stagePosition: { x: 0, y: 0 },
     tableBuilderConfig: null,
     rowBuilderConfig: null,
+    doorPlacementConfig: null,
     importSession: null,
     saveStatus: 'idle' as const,
     saveError: null,
@@ -274,6 +277,10 @@ export const useEditorStore = create<EditorState>()(
 
     setRowBuilderConfig(config) {
       set(state => { state.rowBuilderConfig = config })
+    },
+
+    setDoorPlacementConfig(config) {
+      set(state => { state.doorPlacementConfig = config })
     },
 
     // ── Stage transform ────────────────────────────────────────────────────
@@ -547,7 +554,6 @@ export const useEditorStore = create<EditorState>()(
       })
       return null
     },
-
     switchToLayout(layoutId) {
       const slice = loadLayout(layoutId)
       if (!slice) return false

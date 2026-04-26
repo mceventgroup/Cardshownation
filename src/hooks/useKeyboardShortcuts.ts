@@ -199,6 +199,7 @@ export function useKeyboardShortcuts() {
 
       if ((e.key === 's' && !ctrl) || e.key === 'Escape') {
         setActiveTool('select')
+        useEditorStore.getState().setDoorPlacementConfig(null)
         return
       }
 
