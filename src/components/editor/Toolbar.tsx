@@ -20,7 +20,7 @@ function useMenuItems(
   openBgImport: () => void,
   openLayouts: () => void,
   openFilePicker: () => void,
-) {
+): Record<string, MenuItem[]> {
   const setTool = useEditorStore(s => s.setActiveTool)
   const undo = useEditorStore(s => s.undo)
   const redo = useEditorStore(s => s.redo)
@@ -90,7 +90,7 @@ function useMenuItems(
     Help: [
       { label: 'Keyboard Shortcuts', shortcut: '?', action: () => emit('?') },
     ],
-  } satisfies Record<string, MenuItem[]>
+  }
 }
 
 export default function Toolbar() {
