@@ -91,18 +91,24 @@ export function autoAssignVendors(
     tableOrientations.set(t.id, getTableOrientation(t))
   }
 
-  // Get vendors still needing tables, sorted by tablesNeeded descending
+  // Get vendors still needing tables, sorted: premium first, then by tablesNeeded descending
   const vendorsNeedingTables = Object.values(vendors)
     .map(v => ({
       ...v,
       remaining: v.tablesNeeded - (vendorAssignedCount.get(v.id) ?? 0),
     }))
     .filter(v => v.remaining > 0)
-    .sort((a, b) => b.remaining - a.remaining)
+    .sort((a, b) => {
+      if (a.premium !== b.premium) return a.premium ? -1 : 1
+      return b.remaining - a.remaining
+    })
 
   // Track which unassigned tables are still available
   const availableSet = new Set(unassignedTables.map(t => t.id))
   const availableList = [...unassignedTables] // ordered copy
+
+  // Premium tables form a reserved pool — premium vendors draw from it first
+  const premiumTableIds = new Set(unassignedTables.filter(t => t.premium).map(t => t.id))
 
   const result: AutoAssignResult = {
     assignments: [],
@@ -112,8 +118,19 @@ export function autoAssignVendors(
 
   for (const vendor of vendorsNeedingTables) {
     const needed = vendor.remaining
+
+    // For premium vendors, prefer premium tables; fall back to any if not enough
+    let candidateList = availableList.filter(t => availableSet.has(t.id))
+    if (vendor.premium && premiumTableIds.size > 0) {
+      const premiumAvailable = candidateList.filter(t => premiumTableIds.has(t.id))
+      if (premiumAvailable.length >= needed) {
+        candidateList = premiumAvailable
+      }
+    }
+
+    const candidateSet = new Set(candidateList.map(t => t.id))
     const assigned = findConsecutiveSameOrientation(
-      availableList, availableSet, tableOrientations, needed,
+      candidateList, candidateSet, tableOrientations, needed,
     )
 
     if (assigned.length > 0) {
@@ -126,6 +143,7 @@ export function autoAssignVendors(
           tableId: tableId as TableId,
         })
         availableSet.delete(tableId as TableId)
+        premiumTableIds.delete(tableId as TableId)
       }
     } else {
       result.unassignedVendors.push(vendor)

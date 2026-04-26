@@ -364,6 +364,7 @@ export default function KonvaCanvas() {
         rowId:           null,
         sectionId:       null,
         order:           0,
+        premium:         false,
       },
       timestamp: Date.now(),
     })
@@ -1098,6 +1099,7 @@ export default function KonvaCanvas() {
                 key={table.id}
                 table={table}
                 isSelected={selectedIds.has(table.id)}
+                isPremium={table.premium}
                 isDuplicate={duplicateIds.has(table.id)}
                 warningSeverity={warningSeverity}
                 draftPos={draftPositions[table.id] ?? null}
@@ -1251,6 +1253,23 @@ export default function KonvaCanvas() {
               }
             },
             disabled: !assignment,
+          },
+          {
+            label: table.premium
+              ? `Remove Premium${selectedIds.size > 1 ? ` (${selectedIds.size})` : ''}`
+              : `Mark as Premium${selectedIds.size > 1 ? ` (${selectedIds.size})` : ''}`,
+            action: () => {
+              const ids = selectedIds.size > 1 ? [...selectedIds] : [table.id]
+              const prev: Record<string, boolean> = {}
+              for (const id of ids) prev[id] = tables[id]?.premium ?? false
+              dispatch({
+                type: 'SET_TABLE_PREMIUM',
+                tableIds: ids as import('@/domain/types').TableId[],
+                premium: !table.premium,
+                prev,
+                timestamp: Date.now(),
+              })
+            },
           },
           {
             label: 'Resize → 6ft',

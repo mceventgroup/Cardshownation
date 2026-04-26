@@ -85,6 +85,14 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
       break
     }
 
+    case 'SET_TABLE_PREMIUM': {
+      for (const id of command.tableIds) {
+        const t = state.tables[id]
+        if (t) t.premium = command.premium
+      }
+      break
+    }
+
     case 'DELETE_TABLES': {
       for (const t of command.tables) {
         delete state.tables[t.id]
@@ -320,6 +328,14 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
       for (const r of command.rotations) {
         const t = state.tables[r.tableId]
         if (t) t.rotation = r.prevRotation
+      }
+      break
+    }
+
+    case 'SET_TABLE_PREMIUM': {
+      for (const id of command.tableIds) {
+        const t = state.tables[id]
+        if (t) t.premium = command.prev[id] ?? false
       }
       break
     }

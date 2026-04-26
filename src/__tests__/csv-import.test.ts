@@ -11,7 +11,7 @@ function makeTable(label: string, id = `t-${label}` as TableId): TableObject {
     label, labelOverridden: false,
     rowId: null as RowId | null,
     sectionId: null as SectionId | null,
-    order: 0,
+    order: 0, premium: false,
   }
 }
 

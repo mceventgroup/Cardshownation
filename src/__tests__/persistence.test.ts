@@ -58,7 +58,7 @@ describe('persistence round-trip', () => {
         't1': {
           id: 't1' as TableId, x: 100, y: 200, width: 72, height: 30,
           rotation: 0, shape: 'rectangle', label: '1', labelOverridden: false,
-          rowId: null as RowId | null, sectionId: null as SectionId | null, order: 0,
+          rowId: null as RowId | null, sectionId: null as SectionId | null, order: 0, premium: false,
         },
       },
     })

@@ -15,6 +15,7 @@ function makeTable(overrides: Partial<TableObject> = {}): TableObject {
     rowId:           null,
     sectionId:       null,
     order:           0,
+    premium:         false,
     ...overrides,
   }
 }

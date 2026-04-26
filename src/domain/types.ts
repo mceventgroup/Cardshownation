@@ -64,6 +64,7 @@ export interface TableObject {
   rowId: RowId | null       // null if not part of a row
   sectionId: SectionId | null
   order: number             // sort position within row (0-based); used for numbering
+  premium: boolean          // true = prime spot, preferred for premium vendors
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -136,6 +137,7 @@ export interface Vendor {
   category: string | null
   paymentStatus: PaymentStatus
   notes: string | null
+  premium: boolean              // true = preferred for premium table spots
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

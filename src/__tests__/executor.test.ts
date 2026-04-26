@@ -29,7 +29,7 @@ function makeTable(id: string, label: string): TableObject {
   return {
     id: id as TableId, x: 100, y: 200, width: 72, height: 30,
     rotation: 0, shape: 'rectangle', label, labelOverridden: false,
-    rowId: null as RowId | null, sectionId: null as SectionId | null, order: 0,
+    rowId: null as RowId | null, sectionId: null as SectionId | null, order: 0, premium: false,
   }
 }
 

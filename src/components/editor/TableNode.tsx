@@ -32,6 +32,7 @@ import {
 interface TableNodeProps {
   table:        TableObject
   isSelected:   boolean
+  isPremium?:   boolean
   isDuplicate?: boolean              // kept for backward compat, superseded by warningSeverity
   warningSeverity?: WarningSeverity | null  // highest severity warning on this table
   draftPos:     Point | null
@@ -44,6 +45,7 @@ interface TableNodeProps {
 const TableNode = memo(function TableNode({
   table,
   isSelected,
+  isPremium,
   isDuplicate,
   warningSeverity,
   draftPos,
@@ -139,6 +141,23 @@ const TableNode = memo(function TableNode({
           listening={false}
           ellipsis={true}
           wrap="none"
+        />
+      )}
+
+      {/* Gold star badge for premium tables */}
+      {isPremium && (
+        <Text
+          text="★"
+          x={w - Math.min(w, h) * 0.28 - 1}
+          y={1}
+          width={Math.min(w, h) * 0.28}
+          height={Math.min(w, h) * 0.28}
+          align="center"
+          verticalAlign="middle"
+          fontSize={Math.min(10, Math.max(5, Math.min(w, h) * 0.22))}
+          fontFamily="system-ui, sans-serif"
+          fill="#d97706"
+          listening={false}
         />
       )}
     </Group>

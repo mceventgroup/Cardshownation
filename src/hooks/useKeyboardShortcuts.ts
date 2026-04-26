@@ -127,9 +127,10 @@ export function useKeyboardShortcuts() {
               shape: entry.shape,
               label: String(nextLabel),
               labelOverridden: false,
-              rowId: null,     // pasted tables are not part of original row
+              rowId: null,
               sectionId: entry.sectionId,
               order: 0,
+              premium: false,
             },
             timestamp: Date.now(),
           })

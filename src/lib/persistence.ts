@@ -274,6 +274,17 @@ function migrate(payload: PersistedPayload): PersistedPayload {
   if (!payload.data.backgroundImages) {
     payload.data.backgroundImages = {}
   }
+  // Backfill premium flag on existing tables and vendors
+  for (const t of Object.values(payload.data.tables)) {
+    if ((t as { premium?: boolean }).premium === undefined) {
+      (t as { premium: boolean }).premium = false
+    }
+  }
+  for (const v of Object.values(payload.data.vendors)) {
+    if ((v as { premium?: boolean }).premium === undefined) {
+      (v as { premium: boolean }).premium = false
+    }
+  }
 
   payload.version = CURRENT_VERSION
   return payload

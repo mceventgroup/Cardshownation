@@ -20,6 +20,7 @@ function makeTable(id: string, overrides: Partial<TableObject> = {}): TableObjec
     rowId:           null,
     sectionId:       null,
     order:           0,
+    premium:         false,
     ...overrides,
   }
 }

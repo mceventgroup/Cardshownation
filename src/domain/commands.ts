@@ -94,6 +94,14 @@ export interface RotateTablesCommand extends CommandBase {
   }>
 }
 
+/** Toggle premium flag on one or more tables. */
+export interface SetTablePremiumCommand extends CommandBase {
+  readonly type: 'SET_TABLE_PREMIUM'
+  readonly tableIds: ReadonlyArray<TableId>
+  readonly premium: boolean
+  readonly prev: Readonly<Record<string, boolean>>  // tableId → previous premium value
+}
+
 /**
  * Delete one or more tables. Stores full table snapshots and their vendor
  * assignments so undo can fully restore them.
@@ -323,6 +331,7 @@ export type LayoutCommand =
   | MoveTablesCommand
   | ResizeTableCommand
   | RotateTablesCommand
+  | SetTablePremiumCommand
   | DeleteTablesCommand
   | RelabelTableCommand
   | PlaceRowCommand

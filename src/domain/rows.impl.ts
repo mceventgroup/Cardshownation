@@ -40,6 +40,7 @@ function buildRow(config: RowConfig, rowId: RowId): BuiltRow {
       rowId,
       sectionId: config.sectionId,
       order: i,
+      premium: false,
     })
   }
 

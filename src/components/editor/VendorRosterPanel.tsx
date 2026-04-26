@@ -98,6 +98,7 @@ export default function VendorRosterPanel() {
       category: null,
       paymentStatus: 'unknown',
       notes: null,
+      premium: false,
     }
     addVendor(vendor)
     setNewName('')
@@ -159,6 +160,7 @@ export default function VendorRosterPanel() {
           category: null,
           paymentStatus: 'unknown',
           notes: null,
+          premium: false,
         })
 
         // Collect assignments to matching tables on the floor plan
@@ -197,6 +199,7 @@ export default function VendorRosterPanel() {
             category: null,
             paymentStatus: 'unknown',
             notes: null,
+            premium: false,
           })
         }
       }
@@ -350,6 +353,9 @@ export default function VendorRosterPanel() {
                   <span className={`font-medium truncate ${isActive ? 'text-blue-800' : 'text-gray-800'}`}>
                     {v.name}
                   </span>
+                  {v.premium && (
+                    <span className="text-amber-500 text-xs shrink-0" title="Premium vendor">★</span>
+                  )}
                   <span
                     className="text-xs px-1 py-0.5 rounded text-white shrink-0"
                     style={{ backgroundColor: badge.bg }}
@@ -427,6 +433,18 @@ export default function VendorRosterPanel() {
                   edit
                 </button>
               )}
+
+              {/* Premium toggle */}
+              <button
+                onClick={e => {
+                  e.stopPropagation()
+                  updateVendor(v.id, { premium: !v.premium })
+                }}
+                title={v.premium ? 'Remove premium status' : 'Mark as premium'}
+                className={`text-sm leading-none opacity-0 group-hover:opacity-100 transition-opacity ${v.premium ? 'text-amber-500 opacity-100' : 'text-gray-300 hover:text-amber-400'}`}
+              >
+                ★
+              </button>
 
               {/* Remove */}
               <button
