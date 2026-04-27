@@ -149,6 +149,66 @@ export function getActiveLayoutId(): string | null {
   return loadManifest().activeLayoutId
 }
 
+export function recoverLayoutsFromStorage(): number {
+  const existingManifest = loadManifest()
+  const recoveredLayouts: LayoutEntry[] = []
+  const seenIds = new Set<string>()
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i)
+    if (!key || !key.startsWith(LAYOUT_PREFIX)) continue
+
+    const id = key.slice(LAYOUT_PREFIX.length)
+    if (!id || seenIds.has(id)) continue
+
+    const raw = localStorage.getItem(key)
+    if (!raw) continue
+
+    try {
+      const payload = migrate(JSON.parse(raw) as PersistedPayload)
+      if (!payload?.data) continue
+
+      const existingEntry = existingManifest.layouts.find(layout => layout.id === id)
+      recoveredLayouts.push({
+        id,
+        name: existingEntry?.name ?? `Recovered Layout ${recoveredLayouts.length + 1}`,
+        savedAt: payload.savedAt,
+        tableCount: Object.keys(payload.data.tables ?? {}).length,
+        vendorCount: Object.keys(payload.data.vendors ?? {}).length,
+      })
+      seenIds.add(id)
+    } catch {
+      // Ignore malformed layout payloads during recovery.
+    }
+  }
+
+  recoveredLayouts.sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+
+  const activeLayoutId =
+    existingManifest.activeLayoutId && seenIds.has(existingManifest.activeLayoutId)
+      ? existingManifest.activeLayoutId
+      : recoveredLayouts[0]?.id ?? null
+
+  saveManifest({
+    activeLayoutId,
+    layouts: recoveredLayouts,
+  })
+
+  if (activeLayoutId) {
+    const raw = localStorage.getItem(LAYOUT_PREFIX + activeLayoutId)
+    if (raw) {
+      try {
+        const payload = migrate(JSON.parse(raw) as PersistedPayload)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+      } catch {
+        // Ignore malformed active payload during recovery.
+      }
+    }
+  }
+
+  return recoveredLayouts.length
+}
+
 export function saveLayoutAs(name: string, slice: DocumentSlice): string {
   const id = 'layout-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
   const now = new Date().toISOString()

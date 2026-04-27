@@ -7,7 +7,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import dynamic from 'next/dynamic'
+import { useEffect } from 'react'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { useEditorStore } from '@/store'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar from './LeftSidebar'
@@ -24,6 +26,11 @@ const KonvaCanvas = dynamic(() => import('./KonvaCanvas'), {
 
 export default function EditorShell() {
   useKeyboardShortcuts()
+  const hydrateFromStorage = useEditorStore(s => s.hydrateFromStorage)
+
+  useEffect(() => {
+    hydrateFromStorage()
+  }, [hydrateFromStorage])
 
   return (
     <div className="flex flex-col h-screen w-screen">

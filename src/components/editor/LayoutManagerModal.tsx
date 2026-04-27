@@ -3,12 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useEditorStore } from '@/store'
 import {
-  listLayouts, deleteLayout, renameLayout, getActiveLayoutId, clearAllLayouts,
+  listLayouts, deleteLayout, renameLayout, getActiveLayoutId, clearAllLayouts, recoverLayoutsFromStorage,
   type LayoutEntry,
 } from '@/lib/persistence'
 
 interface Props {
   onClose: () => void
+}
+
+function formatSavedAt(savedAt: string): string {
+  const d = new Date(savedAt)
+  if (Number.isNaN(d.getTime())) return 'Unknown date'
+  return d.toISOString().slice(0, 10)
 }
 
 export default function LayoutManagerModal({ onClose }: Props) {
@@ -20,6 +26,7 @@ export default function LayoutManagerModal({ onClose }: Props) {
   const [newName, setNewName] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null)
 
   function refresh() {
     setLayouts(listLayouts())
@@ -70,6 +77,16 @@ export default function LayoutManagerModal({ onClose }: Props) {
     refresh()
   }
 
+  function handleRecover() {
+    const recoveredCount = recoverLayoutsFromStorage()
+    refresh()
+    setRecoveryMessage(
+      recoveredCount > 0
+        ? `Recovered ${recoveredCount} saved layout${recoveredCount === 1 ? '' : 's'}.`
+        : 'No recoverable saved layouts were found in this browser profile.',
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
@@ -84,6 +101,17 @@ export default function LayoutManagerModal({ onClose }: Props) {
 
         {/* Layout list */}
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
+          <button
+            onClick={handleRecover}
+            className="w-full mb-3 px-3 py-2 text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-900/20 rounded border border-amber-900/40 hover:border-amber-700/60 transition-colors"
+          >
+            Recover Saved Layouts
+          </button>
+          {recoveryMessage && (
+            <p className="mb-3 text-xs text-amber-200 bg-amber-950/40 border border-amber-900/40 rounded px-3 py-2">
+              {recoveryMessage}
+            </p>
+          )}
           {layouts.length === 0 && (
             <p className="text-gray-500 text-sm text-center py-6">No saved layouts yet. Save your current layout below.</p>
           )}
@@ -123,7 +151,7 @@ export default function LayoutManagerModal({ onClose }: Props) {
                     <div className="text-xs text-gray-500 mt-0.5">
                       {l.tableCount} tables, {l.vendorCount} vendors
                       {' — '}
-                      {new Date(l.savedAt).toLocaleDateString()}
+                      {formatSavedAt(l.savedAt)}
                     </div>
                   </>
                 )}

@@ -29,8 +29,6 @@ import { createImportSessionId, createAssignmentId, createVendorId } from '@/lib
 import { applyCommand, reverseCommand } from './executor'
 
 // Load persisted document state (client-only — avoids SSR/client hydration mismatch)
-const _persisted = typeof window !== 'undefined' ? loadFromLocalStorage() : null
-
 function safeAssignDefined<T extends object>(target: T, updates: Partial<T>): void {
   const blocked = new Set(['__proto__', 'constructor', 'prototype'])
   for (const key of Object.keys(updates) as Array<keyof T>) {
@@ -136,6 +134,8 @@ export interface EditorState {
   // ── Persistence status (autosave feedback) ─────────────────────────────
   saveStatus: 'idle' | 'saving' | 'saved' | 'error'
   saveError: 'quota-exceeded' | 'unknown' | null
+  hasHydratedFromStorage: boolean
+  hydrateFromStorage: () => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,16 +145,16 @@ export interface EditorState {
 export const useEditorStore = create<EditorState>()(
   immer((set, get) => ({
     // ── Initial state (hydrated from localStorage if available) ────────────
-    tables:        _persisted?.tables ?? {},
-    rows:          _persisted?.rows ?? {},
-    sections:      _persisted?.sections ?? {},
-    vendors:       _persisted?.vendors ?? {},
-    vendorAssignments: _persisted?.vendorAssignments ?? {},
-    room:          _persisted?.room ?? null,
+    tables:        {},
+    rows:          {},
+    sections:      {},
+    vendors:       {},
+    vendorAssignments: {},
+    room:          null,
     selectedSegmentId: null,
-    doors:         _persisted?.doors ?? {},
-    backgroundImages: _persisted?.backgroundImages ?? {},
-    settings:      _persisted?.settings ?? DEFAULT_SETTINGS,
+    doors:         {},
+    backgroundImages: {},
+    settings:      DEFAULT_SETTINGS,
     history:       EMPTY_HISTORY,
     selectedIds:   new Set<string>(),
     activeTool:    'select',
@@ -169,8 +169,28 @@ export const useEditorStore = create<EditorState>()(
     importSession: null,
     saveStatus: 'idle' as const,
     saveError: null,
+    hasHydratedFromStorage: false,
 
     // ── Canvas actions ─────────────────────────────────────────────────────
+
+    hydrateFromStorage() {
+      if (get().hasHydratedFromStorage || typeof window === 'undefined') return
+
+      const slice = loadFromLocalStorage()
+      set(state => {
+        state.hasHydratedFromStorage = true
+        if (!slice) return
+        state.tables = slice.tables
+        state.rows = slice.rows
+        state.sections = slice.sections
+        state.vendors = slice.vendors
+        state.vendorAssignments = slice.vendorAssignments
+        state.room = slice.room
+        state.doors = slice.doors
+        state.backgroundImages = slice.backgroundImages
+        state.settings = slice.settings
+      })
+    },
 
     dispatch(command) {
       set(state => {
