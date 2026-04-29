@@ -14,7 +14,7 @@
 // (pre-commit local drag state), not from the store after the fact.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Row, Section, Door, CompositeRoom, VendorAssignment, LayoutSettings } from '@/domain/types'
+import type { TableObject, Row, Section, Door, CompositeRoom, Vendor, VendorAssignment, LayoutSettings } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
 
 function cloneRoom(room: CompositeRoom): CompositeRoom {
@@ -42,6 +42,7 @@ export type MutableCanvasState = {
   tables: Record<string, TableObject>
   rows: Record<string, Row>
   sections: Record<string, Section>
+  vendors: Record<string, Vendor>
   vendorAssignments: Record<string, VendorAssignment>
   room: CompositeRoom | null
   doors: Record<string, Door>
@@ -201,6 +202,11 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
 
     case 'BATCH_ASSIGN_VENDORS':
     case 'APPLY_IMPORT': {
+      if (command.type === 'APPLY_IMPORT') {
+        for (const v of command.createdVendors) {
+          state.vendors[v.id] = { ...v }
+        }
+      }
       for (const a of command.replacedAssignments) {
         delete state.vendorAssignments[a.id]
       }
@@ -448,6 +454,11 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
 
     case 'BATCH_ASSIGN_VENDORS':
     case 'APPLY_IMPORT': {
+      if (command.type === 'APPLY_IMPORT') {
+        for (const v of command.createdVendors) {
+          delete state.vendors[v.id]
+        }
+      }
       for (const a of command.createdAssignments) {
         delete state.vendorAssignments[a.id]
       }

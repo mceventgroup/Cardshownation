@@ -220,8 +220,16 @@ export const csvImportModule: CSVImportModule = {
       vendorLastName: [
         /^last[\s_]?name$/i, /^last$/i, /^surname$/i,
       ],
+      companyName: [
+        /^company$/i, /^company[\s_\(]?billing\)?$/i, /^business[\s_]?name$/i,
+        /^billing[\s_]?company$/i, /^organization$/i, /^organisation$/i,
+      ],
       vendorCategory: [
         /^vendor[\s_]?cat(egory)?$/i, /^category$/i, /^cat$/i, /^type$/i,
+      ],
+      quantity: [
+        /^quantity$/i, /^qty$/i, /^tables?$/i, /^table[\s_]?count$/i,
+        /^count$/i, /^booths?$/i,
       ],
       color: [/^color$/i, /^colour$/i, /^table[\s_]?color$/i],
       notes: [/^notes?$/i, /^comments?$/i, /^remarks?$/i, /^memo$/i],
@@ -232,11 +240,13 @@ export const csvImportModule: CSVImportModule = {
     }
 
     const fieldMapping: FieldMapping = {
-      tableNumber: null, vendorName: null, vendorLastName: null, vendorCategory: null,
+      tableNumber: null, vendorName: null, vendorLastName: null, companyName: null, vendorCategory: null,
+      quantity: null,
       color: null, notes: null, paymentStatus: null, section: null,
     }
     const confidence: Record<Field, number> = {
-      tableNumber: 0, vendorName: 0, vendorLastName: 0, vendorCategory: 0,
+      tableNumber: 0, vendorName: 0, vendorLastName: 0, companyName: 0, vendorCategory: 0,
+      quantity: 0,
       color: 0, notes: 0, paymentStatus: 0, section: 0,
     }
     const unmappedHeaders: string[] = []
@@ -277,9 +287,18 @@ export const csvImportModule: CSVImportModule = {
       if (!val) errors.push({ field: 'tableNumber', value: val, message: 'Table number is required' })
     }
 
-    if (mapping.vendorName !== null) {
-      const val = (row[mapping.vendorName] ?? '').trim()
-      if (!val) errors.push({ field: 'vendorName', value: val, message: 'Vendor name is required' })
+    const firstName = mapping.vendorName !== null ? (row[mapping.vendorName] ?? '').trim() : ''
+    const companyName = mapping.companyName !== null ? (row[mapping.companyName] ?? '').trim() : ''
+    if (!firstName && !companyName) {
+      errors.push({ field: 'vendorName', value: '', message: 'Vendor first name or company is required' })
+    }
+
+    if (mapping.quantity !== null) {
+      const val = (row[mapping.quantity] ?? '').trim()
+      const parsed = parseInt(val, 10)
+      if (!val || isNaN(parsed) || parsed < 1) {
+        errors.push({ field: 'quantity', value: val, message: 'Quantity must be a whole number of at least 1' })
+      }
     }
 
     if (mapping.color !== null) {
@@ -321,15 +340,25 @@ export const csvImportModule: CSVImportModule = {
     for (let rowIndex = 0; rowIndex < parsed.rows.length; rowIndex++) {
       const rawData = parsed.rows[rowIndex]
       const rawTableNumber = (mapping.tableNumber ? rawData[mapping.tableNumber] ?? '' : '').trim()
-      const firstName   = (mapping.vendorName     ? rawData[mapping.vendorName]     ?? '' : '').trim()
-      const lastName    = (mapping.vendorLastName  ? rawData[mapping.vendorLastName] ?? '' : '').trim()
-      const vendorName  = lastName ? `${firstName} ${lastName}` : firstName
+      const firstName = (mapping.vendorName ? rawData[mapping.vendorName] ?? '' : '').trim()
+      const lastName = (mapping.vendorLastName ? rawData[mapping.vendorLastName] ?? '' : '').trim()
+      const companyName = (mapping.companyName ? rawData[mapping.companyName] ?? '' : '').trim()
+      const fullName = [firstName, lastName].filter(Boolean).join(' ')
+      const vendorName = companyName || fullName
+      const expandedTables = expandTableNumbers(rawTableNumber)
+      const quantity = mapping.quantity
+        ? Math.max(1, parseInt(rawData[mapping.quantity] ?? '', 10) || 1)
+        : Math.max(1, expandedTables.length || 1)
 
       const rawPayStatus = mapping.paymentStatus ? rawData[mapping.paymentStatus] ?? '' : ''
       const normStatus   = normalizePaymentStatus(rawPayStatus)
 
       const sharedFields = {
+        firstName,
+        lastName,
+        companyName: companyName || null,
         vendorCategory: mapping.vendorCategory ? (rawData[mapping.vendorCategory] ?? '').trim() || null : null,
+        quantity,
         color:          mapping.color          ? (rawData[mapping.color]          ?? '').trim() || null : null,
         notes:          mapping.notes          ? (rawData[mapping.notes]          ?? '').trim() || null : null,
         paymentStatus:  normStatus,
@@ -354,64 +383,65 @@ export const csvImportModule: CSVImportModule = {
       }
 
       // Expand table numbers: "1,2,3" or "1-5" → multiple entries
-      const expandedTables = expandTableNumbers(rawTableNumber)
-      // If expansion produced nothing, fall back to the raw value
-      const tableNumbers = expandedTables.length > 0 ? expandedTables : [rawTableNumber]
+      const mapped: MappedImportRow = { tableNumber: rawTableNumber, vendorName, ...sharedFields }
 
-      for (const tableNumber of tableNumbers) {
-        const mapped: MappedImportRow = { tableNumber, vendorName, ...sharedFields }
+      if (expandedTables.length === 0) {
+        rows.push({ rowIndex, rawData, mapped, status: 'valid' as ImportRowStatus, conflict: null })
+        continue
+      }
 
-        // duplicate-in-import
+      let conflict: ImportRow['conflict'] = null
+      for (const tableNumber of expandedTables) {
         const labelKey = tableNumber.toLowerCase()
         if (seenLabels.has(labelKey)) {
           const firstRow = seenLabels.get(labelKey)!
-          rows.push({
-            rowIndex, rawData, mapped,
-            status: 'conflict' as ImportRowStatus,
-            conflict: {
-              type: 'duplicate-in-import',
-              message: `Table "${tableNumber}" appears more than once (first at row ${firstRow + 1})`,
-              affectedTableId: null,
-              resolution: null,
-            },
-          })
-          continue
+          conflict = {
+            type: 'duplicate-in-import',
+            message: `Table "${tableNumber}" appears more than once (first at row ${firstRow + 1})`,
+            affectedTableId: null,
+            resolution: null,
+          }
+          break
         }
-        seenLabels.set(labelKey, rowIndex)
 
-        // table-not-found
         const table = tablesByLabel.get(labelKey)
         if (!table) {
-          rows.push({
-            rowIndex, rawData, mapped,
-            status: 'conflict' as ImportRowStatus,
-            conflict: {
-              type: 'table-not-found',
-              message: `No table labeled "${tableNumber}" found on the floor plan`,
-              affectedTableId: null,
-              resolution: null,
-            },
-          })
-          continue
+          conflict = {
+            type: 'table-not-found',
+            message: `No table labeled "${tableNumber}" found on the floor plan`,
+            affectedTableId: null,
+            resolution: null,
+          }
+          break
         }
 
-        // already-assigned
         if (assignedTableIds.has(table.id)) {
-          rows.push({
-            rowIndex, rawData, mapped,
-            status: 'conflict' as ImportRowStatus,
-            conflict: {
-              type: 'already-assigned',
-              message: `Table "${tableNumber}" already has a vendor assigned`,
-              affectedTableId: table.id,
-              resolution: null,
-            },
-          })
-          continue
+          conflict = {
+            type: 'already-assigned',
+            message: `Table "${tableNumber}" already has a vendor assigned`,
+            affectedTableId: table.id,
+            resolution: null,
+          }
+          break
         }
-
-        rows.push({ rowIndex, rawData, mapped, status: 'valid' as ImportRowStatus, conflict: null })
       }
+
+      if (conflict) {
+        rows.push({
+          rowIndex,
+          rawData,
+          mapped,
+          status: 'conflict' as ImportRowStatus,
+          conflict,
+        })
+        continue
+      }
+
+      for (const tableNumber of expandedTables) {
+        seenLabels.set(tableNumber.toLowerCase(), rowIndex)
+      }
+
+      rows.push({ rowIndex, rawData, mapped, status: 'valid' as ImportRowStatus, conflict: null })
     }
 
     return {

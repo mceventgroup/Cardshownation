@@ -1,5 +1,6 @@
 'use client'
 
+import { useWarnings } from '@/hooks/useWarnings'
 import { useEditorStore, selectActiveTool, selectSelectedIds, selectSelectedRowId } from '@/store/index'
 import type { ActiveTool } from '@/store/index'
 import CollapsibleSection from './CollapsibleSection'
@@ -8,7 +9,11 @@ import RowBuilderPanel from './RowBuilderPanel'
 import RowEditPanel from './RowEditPanel'
 import TablePropertiesPanel from './TablePropertiesPanel'
 import NumberingPanel from './NumberingPanel'
-import VendorRosterPanel from './VendorRosterPanel'
+import RoomPanel from './RoomPanel'
+import DoorsPanel from './DoorsPanel'
+import SectionsPanel from './SectionsPanel'
+import WarningsPanel from './WarningsPanel'
+import BackgroundImagePanel from './BackgroundImagePanel'
 
 const TOOLS: { tool: ActiveTool; label: string; shortcut: string }[] = [
   { tool: 'select',      label: 'Select',      shortcut: 'S' },
@@ -78,20 +83,43 @@ function ToolOptions() {
   return null
 }
 
+function WarningsBadge() {
+  const result = useWarnings()
+  if (result.warnings.length === 0) return null
+  return (
+    <span className="text-xs bg-red-100 text-red-700 rounded-full px-1.5 py-0.5 font-medium">
+      {result.warnings.length}
+    </span>
+  )
+}
+
 export default function LeftSidebar() {
   return (
-    <div className="w-72 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+    <div className="w-72 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
       <CollapsibleSection title="Tables" panelId="tools">
         <ToolSelector />
         <ToolOptions />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Vendors" panelId="vendors">
-        <VendorRosterPanel />
+      <CollapsibleSection title="Room" panelId="room">
+        <RoomPanel />
       </CollapsibleSection>
 
-      {/* Fill remaining space */}
-      <div className="flex-1" />
+      <CollapsibleSection title="Doors" panelId="doors">
+        <DoorsPanel />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Sections" panelId="sections">
+        <SectionsPanel />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Warnings" panelId="warnings" badge={<WarningsBadge />}>
+        <WarningsPanel />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Background Images" panelId="background-images">
+        <BackgroundImagePanel />
+      </CollapsibleSection>
     </div>
   )
 }

@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: LayoutSettings = {
   doorClearance: 48,    // 48 in = 4 ft door clearance
   wallSetback: 36,      // 36 in = 3 ft from wall to nearest table
   showWallSetback: false,
+  roomLocked: true,
   defaultTableWidth: 72,  // 6 ft table length
   defaultTableHeight: 30, // 30 in table width
   defaultTableShape: 'rectangle',

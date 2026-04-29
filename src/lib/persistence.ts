@@ -345,6 +345,9 @@ function migrate(payload: PersistedPayload): PersistedPayload {
       (v as { premium: boolean }).premium = false
     }
   }
+  if ((payload.data.settings as { roomLocked?: boolean }).roomLocked === undefined) {
+    (payload.data.settings as { roomLocked: boolean }).roomLocked = true
+  }
 
   payload.version = CURRENT_VERSION
   return payload

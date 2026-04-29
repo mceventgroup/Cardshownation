@@ -1,5 +1,3 @@
-'use client'
-
 import { useState } from 'react'
 import {
   useEditorStore,
@@ -13,26 +11,28 @@ import { formatDimension } from '@/lib/units'
 import { computeRoomBounds } from '@/domain/room-contour'
 
 export default function RoomPanel() {
-  const room              = useEditorStore(selectRoom)
-  const settings          = useEditorStore(selectSettings)
-  const dispatch          = useEditorStore(s => s.dispatch)
+  const room = useEditorStore(selectRoom)
+  const settings = useEditorStore(selectSettings)
+  const dispatch = useEditorStore(s => s.dispatch)
   const selectedSegmentId = useEditorStore(selectSelectedSegmentId)
 
-  // Room dimension inputs (in feet for display, stored as inches)
-  const [roomWidthFt, setRoomWidthFt]   = useState(80)
+  const [roomWidthFt, setRoomWidthFt] = useState(80)
   const [roomHeightFt, setRoomHeightFt] = useState(60)
-
-  // Segment editing
   const [editingSegId, setEditingSegId] = useState<string | null>(null)
   const [editW, setEditW] = useState(0)
   const [editH, setEditH] = useState(0)
+  const [editX, setEditX] = useState(0)
+  const [editY, setEditY] = useState(0)
+  const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set())
 
   const bounds = room ? computeRoomBounds(room) : null
 
   function handleAddRectSegment() {
     const w = roomWidthFt * 12
     const h = roomHeightFt * 12
-    let x: number, y: number
+    let x: number
+    let y: number
+
     if (room && room.segments.length > 0) {
       const b = computeRoomBounds(room)!
       x = b.x + b.width
@@ -44,7 +44,10 @@ export default function RoomPanel() {
 
     const segment: RoomSegment = {
       id: createRoomSegmentId(),
-      x, y, width: w, height: h,
+      x,
+      y,
+      width: w,
+      height: h,
     }
 
     dispatch({
@@ -54,7 +57,6 @@ export default function RoomPanel() {
       timestamp: Date.now(),
     })
 
-    // Expand canvas if the new segment extends beyond it
     const maxX = x + w
     const maxY = y + h
     const padding = Math.round(Math.max(w, h) * 0.2)
@@ -76,15 +78,12 @@ export default function RoomPanel() {
   function handleSetSingleRoom() {
     const w = roomWidthFt * 12
     const h = roomHeightFt * 12
-
-    // Resize canvas to fit room with 20% padding on each side
     const padding = 0.2
     const canvasW = Math.round(w * (1 + padding * 2))
     const canvasH = Math.round(h * (1 + padding * 2))
     const x = Math.round(w * padding)
     const y = Math.round(h * padding)
 
-    // Update canvas size to match room
     dispatch({
       type: 'UPDATE_SETTINGS',
       prev: { canvasWidth: settings.canvasWidth, canvasHeight: settings.canvasHeight },
@@ -95,10 +94,14 @@ export default function RoomPanel() {
     const nextRoom: CompositeRoom = {
       segments: [{
         id: createRoomSegmentId(),
-        x, y, width: w, height: h,
+        x,
+        y,
+        width: w,
+        height: h,
       }],
       freehandVertices: null,
     }
+
     dispatch({
       type: 'SET_ROOM',
       prevRoom: room,
@@ -114,6 +117,7 @@ export default function RoomPanel() {
       nextRoom: null,
       timestamp: Date.now(),
     })
+    setMergeSelection(new Set())
   }
 
   function handleDeleteSegment(seg: RoomSegment) {
@@ -122,10 +126,12 @@ export default function RoomPanel() {
       segment: seg,
       timestamp: Date.now(),
     })
+    setMergeSelection(prev => {
+      const next = new Set(prev)
+      next.delete(seg.id)
+      return next
+    })
   }
-
-  const [editX, setEditX] = useState(0)
-  const [editY, setEditY] = useState(0)
 
   function startEditSegment(seg: RoomSegment) {
     setEditingSegId(seg.id)
@@ -152,21 +158,69 @@ export default function RoomPanel() {
     setEditingSegId(null)
   }
 
+  function toggleMergeSelection(segId: string) {
+    setMergeSelection(prev => {
+      const next = new Set(prev)
+      if (next.has(segId)) next.delete(segId)
+      else next.add(segId)
+      return next
+    })
+  }
+
+  function handleMergeSelected() {
+    if (!room) return
+    const selected = room.segments.filter(seg => mergeSelection.has(seg.id))
+    if (selected.length < 2) return
+
+    const minX = Math.min(...selected.map(seg => seg.x))
+    const minY = Math.min(...selected.map(seg => seg.y))
+    const maxX = Math.max(...selected.map(seg => seg.x + seg.width))
+    const maxY = Math.max(...selected.map(seg => seg.y + seg.height))
+
+    const mergedSegment: RoomSegment = {
+      id: createRoomSegmentId(),
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+    }
+
+    dispatch({
+      type: 'SET_ROOM',
+      prevRoom: room,
+      nextRoom: {
+        segments: [
+          ...room.segments.filter(seg => !mergeSelection.has(seg.id)),
+          mergedSegment,
+        ],
+        freehandVertices: room.freehandVertices,
+      },
+      timestamp: Date.now(),
+    })
+
+    setMergeSelection(new Set([mergedSegment.id]))
+  }
+
   return (
     <div className="px-3 py-2 space-y-3 text-sm">
-      {/* Room dimensions — add rectangle */}
       <div>
         <div className="font-medium text-gray-700 mb-1">Add Rectangle</div>
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 w-8">W</label>
           <input
-            type="number" min={10} max={500} value={roomWidthFt}
+            type="number"
+            min={10}
+            max={500}
+            value={roomWidthFt}
             onChange={e => setRoomWidthFt(Number(e.target.value))}
             className="w-16 px-1.5 py-1 border border-gray-300 rounded text-xs"
           />
           <label className="text-xs text-gray-500 w-8">D</label>
           <input
-            type="number" min={10} max={500} value={roomHeightFt}
+            type="number"
+            min={10}
+            max={500}
+            value={roomHeightFt}
             onChange={e => setRoomHeightFt(Number(e.target.value))}
             className="w-16 px-1.5 py-1 border border-gray-300 rounded text-xs"
           />
@@ -197,16 +251,40 @@ export default function RoomPanel() {
             </button>
           )}
         </div>
+        <div className="flex items-center gap-2 mt-2">
+          <label className="flex items-center gap-1 ml-auto cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.roomLocked}
+              onChange={e => {
+                dispatch({
+                  type: 'UPDATE_SETTINGS',
+                  prev: { roomLocked: settings.roomLocked },
+                  next: { roomLocked: e.target.checked },
+                  timestamp: Date.now(),
+                })
+              }}
+              className="w-3.5 h-3.5 rounded border-gray-300"
+            />
+            <span className="text-xs text-gray-500">Lock room movement</span>
+          </label>
+        </div>
         <div className="text-xs text-gray-400 mt-1">
-          Draw on canvas: <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">B</kbd> rectangle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">F</kbd> freehand · Click a segment to select and drag to reposition
+          Draw on canvas: <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">B</kbd> rectangle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">F</kbd> freehand. Lock the room to prevent accidental dragging and allow box-select over the room.
         </div>
       </div>
 
-      {/* Segment list */}
       {room && room.segments.length > 0 && (
         <div>
-          <div className="font-medium text-gray-700 mb-1">
-            Segments ({room.segments.length})
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="font-medium text-gray-700">Segments ({room.segments.length})</div>
+            <button
+              onClick={handleMergeSelected}
+              disabled={mergeSelection.size < 2}
+              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+            >
+              Merge Selected
+            </button>
           </div>
           <div className="space-y-1">
             {room.segments.map((seg, idx) => (
@@ -216,13 +294,19 @@ export default function RoomPanel() {
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-gray-400 w-3">W</span>
                       <input
-                        type="number" min={5} max={500} value={editW}
+                        type="number"
+                        min={5}
+                        max={500}
+                        value={editW}
                         onChange={e => setEditW(Number(e.target.value))}
                         className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
                       />
                       <span className="text-xs text-gray-400 w-3">D</span>
                       <input
-                        type="number" min={5} max={500} value={editH}
+                        type="number"
+                        min={5}
+                        max={500}
+                        value={editH}
                         onChange={e => setEditH(Number(e.target.value))}
                         className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
                       />
@@ -231,13 +315,15 @@ export default function RoomPanel() {
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-gray-400 w-3">X</span>
                       <input
-                        type="number" value={editX}
+                        type="number"
+                        value={editX}
                         onChange={e => setEditX(Number(e.target.value))}
                         className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
                       />
                       <span className="text-xs text-gray-400 w-3">Y</span>
                       <input
-                        type="number" value={editY}
+                        type="number"
+                        value={editY}
                         onChange={e => setEditY(Number(e.target.value))}
                         className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
                       />
@@ -259,14 +345,21 @@ export default function RoomPanel() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-medium">Rect {idx + 1}</span>
-                      <span className="text-xs text-gray-400 ml-1.5">
-                        {formatDimension(seg.width)} × {formatDimension(seg.height)}
-                      </span>
-                      <div className="text-xs text-gray-400">
-                        at ({formatDimension(seg.x)}, {formatDimension(seg.y)})
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={mergeSelection.has(seg.id)}
+                        onChange={() => toggleMergeSelection(seg.id)}
+                      />
+                      <div>
+                        <span className="text-xs font-medium">Rect {idx + 1}</span>
+                        <span className="text-xs text-gray-400 ml-1.5">
+                          {formatDimension(seg.width)} x {formatDimension(seg.height)}
+                        </span>
+                        <div className="text-xs text-gray-400">
+                          at ({formatDimension(seg.x)}, {formatDimension(seg.y)})
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-1.5">
@@ -296,13 +389,15 @@ export default function RoomPanel() {
         </div>
       )}
 
-      {/* Wall setback */}
       {room && (
         <div>
           <div className="font-medium text-gray-700 mb-1">Wall Setback</div>
           <div className="flex items-center gap-2">
             <input
-              type="number" min={0} max={30} step={0.5}
+              type="number"
+              min={0}
+              max={30}
+              step={0.5}
               value={Math.round(settings.wallSetback / 12 * 10) / 10}
               onChange={e => {
                 const parsed = parseFloat(e.target.value)
@@ -340,7 +435,6 @@ export default function RoomPanel() {
         </div>
       )}
 
-      {/* Freehand polygon info */}
       {room && room.freehandVertices && (
         <div>
           <div className="font-medium text-gray-700 mb-1">Freehand Room</div>

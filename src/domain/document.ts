@@ -177,7 +177,9 @@ export interface FieldMapping {
   tableNumber: string | null
   vendorName: string | null
   vendorLastName: string | null  // optional — concatenated with vendorName as "First Last"
+  companyName: string | null
   vendorCategory: string | null
+  quantity: string | null
   color: string | null
   notes: string | null
   paymentStatus: string | null
@@ -205,7 +207,11 @@ export interface ImportRow {
 export interface MappedImportRow {
   tableNumber: string
   vendorName: string
+  firstName: string
+  lastName: string
+  companyName: string | null
   vendorCategory: string | null
+  quantity: number
   color: string | null
   notes: string | null
   paymentStatus: string | null

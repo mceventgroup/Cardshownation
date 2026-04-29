@@ -24,7 +24,7 @@ import {
   loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage,
   saveLayoutAs, loadLayout, saveToFile as saveToFileLib, parseFilePayload,
 } from '@/lib/persistence'
-import { csvImportModule } from '@/domain/csv-import.impl'
+import { csvImportModule, expandTableNumbers } from '@/domain/csv-import.impl'
 import { createImportSessionId, createAssignmentId, createVendorId } from '@/lib/id'
 import { applyCommand, reverseCommand } from './executor'
 
@@ -448,6 +448,7 @@ export const useEditorStore = create<EditorState>()(
         Object.values(state.vendorAssignments).map(a => [a.tableId, a]),
       )
 
+      const createdVendors: Vendor[] = []
       const createdAssignments: VendorAssignment[] = []
       const replacedAssignments: VendorAssignment[] = []
 
@@ -457,31 +458,49 @@ export const useEditorStore = create<EditorState>()(
           (row.status === 'conflict' && row.conflict?.resolution === 'overwrite')
         if (!willApply) continue
 
-        const table = tablesByLabel.get(row.mapped.tableNumber.toLowerCase().trim())
-        if (!table) continue
-
-        const existing = assignmentByTableId.get(table.id)
-        if (existing) replacedAssignments.push(existing)
-
-        const newAssignment: VendorAssignment = {
-          id: createAssignmentId(),
-          tableId: table.id,
-          layoutId: DRAFT_LAYOUT_ID,
-          vendorId: createVendorId(),
-          vendorName: row.mapped.vendorName,
-          vendorCategory: row.mapped.vendorCategory,
-          colorOverride: row.mapped.color,
+        const vendorId = createVendorId()
+        createdVendors.push({
+          id: vendorId,
+          name: row.mapped.vendorName,
+          firstName: row.mapped.firstName || null,
+          lastName: row.mapped.lastName || null,
+          companyName: row.mapped.companyName ?? null,
+          tablesNeeded: Math.max(1, row.mapped.quantity || 1),
+          category: row.mapped.vendorCategory,
+          paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as Vendor['paymentStatus'],
           notes: row.mapped.notes,
-          paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as VendorAssignment['paymentStatus'],
-          importSessionId: state.importSession.id,
+          premium: (row.mapped.vendorCategory ?? '').toLowerCase() === 'premium',
+        })
+
+        const tableNumbers = expandTableNumbers(row.mapped.tableNumber)
+        for (const tableNumber of tableNumbers) {
+          const table = tablesByLabel.get(tableNumber.toLowerCase().trim())
+          if (!table) continue
+
+          const existing = assignmentByTableId.get(table.id)
+          if (existing) replacedAssignments.push(existing)
+
+          const newAssignment: VendorAssignment = {
+            id: createAssignmentId(),
+            tableId: table.id,
+            layoutId: DRAFT_LAYOUT_ID,
+            vendorId,
+            vendorName: row.mapped.vendorName,
+            vendorCategory: row.mapped.vendorCategory,
+            colorOverride: row.mapped.color,
+            notes: row.mapped.notes,
+            paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as VendorAssignment['paymentStatus'],
+            importSessionId: state.importSession.id,
+          }
+          createdAssignments.push(newAssignment)
         }
-        createdAssignments.push(newAssignment)
       }
 
       get().dispatch({
         type: 'APPLY_IMPORT',
         timestamp: Date.now(),
         importSessionId: state.importSession.id,
+        createdVendors,
         replacedAssignments,
         createdAssignments,
       })

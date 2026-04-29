@@ -478,6 +478,7 @@ export default function KonvaCanvas() {
 
     // Middle mouse button or space+drag = pan
     if (e.evt.button === 1 || spaceHeldRef.current) {
+      e.evt.preventDefault()
       isPanningRef.current = true
       panStartRef.current  = { pointer, stagePos }
       return
@@ -633,21 +634,9 @@ export default function KonvaCanvas() {
         isDragging:     false,
       }
     } else {
-      // Check if click lands inside a room segment (drag to reposition)
-      const currentRoom = useEditorStore.getState().room
-      if (currentRoom && !e.evt.shiftKey && !e.evt.ctrlKey && !e.evt.metaKey) {
-        const hitSeg = currentRoom.segments
-          .filter(s => canvasPos.x >= s.x && canvasPos.x <= s.x + s.width && canvasPos.y >= s.y && canvasPos.y <= s.y + s.height)
-          .sort((a, b) => (a.width * a.height) - (b.width * b.height))[0] // pick smallest (most specific)
-        if (hitSeg) {
-          setSelectedSegmentId(hitSeg.id as import('@/domain/types').RoomSegmentId)
-          segmentDragRef.current = { segmentId: hitSeg.id, startPointer: canvasPos, startPos: { x: hitSeg.x, y: hitSeg.y } }
-          clearSelected()
-          return
-        }
-      }
-
-      // Clicked on empty canvas — clear segment selection and start drag-select
+      // Clicked on empty canvas — clear segment selection and start drag-select.
+      // Room segments are edited from the Room panel so canvas marquee selection
+      // is never blocked by room dragging.
       setSelectedSegmentId(null)
       if (!e.evt.shiftKey) {
         clearSelected()
@@ -1036,6 +1025,7 @@ export default function KonvaCanvas() {
       className={`w-full h-full ${cursorClass}`}
       style={{ background: '#e2e8f0' }}
       onContextMenu={e => e.preventDefault()}
+      onAuxClick={e => e.preventDefault()}
     >
       <Stage
         ref={stageRef}

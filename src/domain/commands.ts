@@ -40,6 +40,7 @@ import type {
   CompositeRoom,
   Point,
   VendorAssignment,
+  Vendor,
   LayoutSettings,
 } from './types'
 
@@ -241,6 +242,7 @@ export interface BatchAssignVendorsCommand extends CommandBase {
 export interface ApplyImportCommand extends CommandBase {
   readonly type: 'APPLY_IMPORT'
   readonly importSessionId: ImportSessionId
+  readonly createdVendors: ReadonlyArray<Vendor>
   readonly replacedAssignments: ReadonlyArray<VendorAssignment>
   readonly createdAssignments: ReadonlyArray<VendorAssignment>
 }

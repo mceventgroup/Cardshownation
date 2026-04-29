@@ -133,6 +133,9 @@ export interface VendorAssignment {
 export interface Vendor {
   id: VendorId
   name: string
+  firstName?: string | null
+  lastName?: string | null
+  companyName?: string | null
   tablesNeeded: number          // how many tables this vendor purchased
   category: string | null
   paymentStatus: PaymentStatus
@@ -215,6 +218,7 @@ export interface LayoutSettings {
   doorClearance: number         // minimum clearance in front of any door
   wallSetback: number           // minimum distance from wall to nearest table edge (canvas units)
   showWallSetback: boolean      // render yellow setback zone overlay
+  roomLocked: boolean           // when true, room segments cannot be dragged on canvas
   defaultTableWidth: number
   defaultTableHeight: number
   defaultTableShape: TableShape
