@@ -6,7 +6,6 @@ import RoomPanel from './RoomPanel'
 import DoorsPanel from './DoorsPanel'
 import SectionsPanel from './SectionsPanel'
 import WarningsPanel from './WarningsPanel'
-import BackgroundImagePanel from './BackgroundImagePanel'
 
 function WarningsBadge() {
   const result = useWarnings()
@@ -36,11 +35,6 @@ export default function RightSidebar() {
       <CollapsibleSection title="Warnings" panelId="warnings" badge={<WarningsBadge />}>
         <WarningsPanel />
       </CollapsibleSection>
-
-      <CollapsibleSection title="Background Images" panelId="background-images">
-        <BackgroundImagePanel />
-      </CollapsibleSection>
-
       {/* Fill remaining space */}
       <div className="flex-1" />
     </div>

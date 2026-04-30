@@ -1,3 +1,5 @@
+'use client'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TABLE NODE
 //
@@ -40,6 +42,8 @@ interface TableNodeProps {
   vendorName?:  string          // shown as secondary label on assigned tables
   onRegister:   (id: string, node: Konva.Node | null) => void
   onDoubleClick: (tableId: string) => void
+  onHoverStart?: (tableId: string) => void
+  onHoverEnd?: () => void
 }
 
 const TableNode = memo(function TableNode({
@@ -53,6 +57,8 @@ const TableNode = memo(function TableNode({
   vendorName,
   onRegister,
   onDoubleClick,
+  onHoverStart,
+  onHoverEnd,
 }: TableNodeProps) {
   const shapeRef = useRef<Konva.Rect | Konva.Ellipse>(null)
 
@@ -84,6 +90,8 @@ const TableNode = memo(function TableNode({
     shadowBlur:    4,
     shadowOpacity: 0.3,
     onDblClick:  () => onDoubleClick(table.id),
+    onMouseEnter: () => onHoverStart?.(table.id),
+    onMouseLeave: () => onHoverEnd?.(),
   }
 
   const labelFontSize = Math.min(11, Math.max(7, Math.min(w, h) / 3.5))
@@ -123,7 +131,7 @@ const TableNode = memo(function TableNode({
         verticalAlign={vendorName ? 'bottom' : 'middle'}
         fontSize={labelFontSize}
         fontFamily="system-ui, sans-serif"
-        fill={isSelected ? '#1e40af' : '#334155'}
+        fill={isSelected ? '#1e3a8a' : '#1f2937'}
         fontStyle="bold"
         listening={false}
       />

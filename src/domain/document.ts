@@ -178,6 +178,7 @@ export interface FieldMapping {
   vendorName: string | null
   vendorLastName: string | null  // optional — concatenated with vendorName as "First Last"
   companyName: string | null
+  email: string | null
   vendorCategory: string | null
   quantity: string | null
   color: string | null
@@ -210,6 +211,7 @@ export interface MappedImportRow {
   firstName: string
   lastName: string
   companyName: string | null
+  email: string | null
   vendorCategory: string | null
   quantity: number
   color: string | null

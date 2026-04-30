@@ -44,7 +44,7 @@ function safeAssignDefined<T extends object>(target: T, updates: Partial<T>): vo
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-freehand' | 'place-door'
+export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-freehand' | 'place-door' | 'measure'
 
 export interface EditorState {
   // ── Canvas (document) state ─────────────────────────────────────────────
@@ -68,6 +68,8 @@ export interface EditorState {
   activeVendorId: VendorId | null   // vendor being assigned to tables
   selectedDoorId: string | null     // door selected for editing
   collapsedPanels: Set<string>      // sidebar sections that are collapsed
+  gridVisible: boolean
+  showMode: boolean
   stageScale: number
   stagePosition: Point
 
@@ -92,6 +94,8 @@ export interface EditorState {
 
   // ── Panel actions ──────────────────────────────────────────────────────
   togglePanelCollapsed: (panelId: string) => void
+  setGridVisible: (visible: boolean) => void
+  setShowMode: (visible: boolean) => void
 
   // ── Builder config actions ─────────────────────────────────────────────
   setTableBuilderConfig: (config: { tableWidth: number; tableHeight: number } | null) => void
@@ -161,6 +165,8 @@ export const useEditorStore = create<EditorState>()(
     activeVendorId: null,
     selectedDoorId: null,
     collapsedPanels: new Set<string>(),
+    gridVisible: true,
+    showMode: false,
     stageScale:    1,
     stagePosition: { x: 0, y: 0 },
     tableBuilderConfig: null,
@@ -285,6 +291,22 @@ export const useEditorStore = create<EditorState>()(
           state.collapsedPanels.delete(panelId)
         } else {
           state.collapsedPanels.add(panelId)
+        }
+      })
+    },
+
+    setGridVisible(visible) {
+      set(state => {
+        state.gridVisible = visible
+      })
+    },
+
+    setShowMode(visible) {
+      set(state => {
+        state.showMode = visible
+        if (visible) {
+          state.activeTool = 'select'
+          state.activeVendorId = null
         }
       })
     },
@@ -447,10 +469,17 @@ export const useEditorStore = create<EditorState>()(
       const assignmentByTableId = new Map(
         Object.values(state.vendorAssignments).map(a => [a.tableId, a]),
       )
+      const vendorIdByEmail = new Map(
+        Object.values(state.vendors)
+          .filter(v => v.email?.trim())
+          .map(v => [v.email!.trim().toLowerCase(), v.id]),
+      )
 
       const createdVendors: Vendor[] = []
       const createdAssignments: VendorAssignment[] = []
       const replacedAssignments: VendorAssignment[] = []
+      const createdVendorByKey = new Map<string, Vendor>()
+      const existingVendorTableDeltas = new Map<Vendor['id'], number>()
 
       for (const row of state.importSession.rows) {
         const willApply =
@@ -458,21 +487,49 @@ export const useEditorStore = create<EditorState>()(
           (row.status === 'conflict' && row.conflict?.resolution === 'overwrite')
         if (!willApply) continue
 
-        const vendorId = createVendorId()
-        createdVendors.push({
-          id: vendorId,
-          name: row.mapped.vendorName,
-          firstName: row.mapped.firstName || null,
-          lastName: row.mapped.lastName || null,
-          companyName: row.mapped.companyName ?? null,
-          tablesNeeded: Math.max(1, row.mapped.quantity || 1),
-          category: row.mapped.vendorCategory,
-          paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as Vendor['paymentStatus'],
-          notes: row.mapped.notes,
-          premium: (row.mapped.vendorCategory ?? '').toLowerCase() === 'premium',
-        })
-
+        const normalizedEmail = row.mapped.email?.trim().toLowerCase() || null
+        const vendorKey = normalizedEmail ? `email:${normalizedEmail}` : `row:${row.rowIndex}`
         const tableNumbers = expandTableNumbers(row.mapped.tableNumber)
+        const importedTableCount = Math.max(
+          1,
+          tableNumbers.length > 0 ? tableNumbers.length : (row.mapped.quantity || 1),
+        )
+
+        let vendorId: Vendor['id']
+        let createdVendor = createdVendorByKey.get(vendorKey)
+
+        if (createdVendor) {
+          createdVendor.tablesNeeded += importedTableCount
+          if (!createdVendor.notes && row.mapped.notes) createdVendor.notes = row.mapped.notes
+          if (!createdVendor.category && row.mapped.vendorCategory) createdVendor.category = row.mapped.vendorCategory
+          if (createdVendor.paymentStatus === 'unknown' && row.mapped.paymentStatus) {
+            createdVendor.paymentStatus = row.mapped.paymentStatus as Vendor['paymentStatus']
+          }
+          createdVendor.premium ||= (row.mapped.vendorCategory ?? '').toLowerCase() === 'premium'
+          vendorId = createdVendor.id
+        } else if (normalizedEmail && vendorIdByEmail.has(normalizedEmail)) {
+          vendorId = vendorIdByEmail.get(normalizedEmail)!
+          existingVendorTableDeltas.set(vendorId, (existingVendorTableDeltas.get(vendorId) ?? 0) + importedTableCount)
+        } else {
+          vendorId = createVendorId()
+          createdVendor = {
+            id: vendorId,
+            name: row.mapped.vendorName,
+            firstName: row.mapped.firstName || null,
+            lastName: row.mapped.lastName || null,
+            companyName: row.mapped.companyName ?? null,
+            email: normalizedEmail,
+            tablesNeeded: importedTableCount,
+            category: row.mapped.vendorCategory,
+            paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as Vendor['paymentStatus'],
+            notes: row.mapped.notes,
+            premium: (row.mapped.vendorCategory ?? '').toLowerCase() === 'premium',
+          }
+          createdVendors.push(createdVendor)
+          createdVendorByKey.set(vendorKey, createdVendor)
+          if (normalizedEmail) vendorIdByEmail.set(normalizedEmail, vendorId)
+        }
+
         for (const tableNumber of tableNumbers) {
           const table = tablesByLabel.get(tableNumber.toLowerCase().trim())
           if (!table) continue
@@ -505,6 +562,15 @@ export const useEditorStore = create<EditorState>()(
         createdAssignments,
       })
 
+      if (existingVendorTableDeltas.size > 0) {
+        set(s => {
+          for (const [vendorId, delta] of existingVendorTableDeltas) {
+            const vendor = s.vendors[vendorId]
+            if (vendor) vendor.tablesNeeded += delta
+          }
+        })
+      }
+
       set(s => { s.importSession = null })
     },
 
@@ -536,6 +602,7 @@ export const useEditorStore = create<EditorState>()(
         state.activeVendorId = null
         state.selectedDoorId = null
         state.selectedSegmentId = null
+        state.showMode = false
         state.history = { ...EMPTY_HISTORY, past: [], future: [] }
       })
       clearLocalStorage()
@@ -589,6 +656,7 @@ export const useEditorStore = create<EditorState>()(
         state.activeVendorId = null
         state.selectedDoorId = null
         state.selectedSegmentId = null
+        state.showMode = false
         state.history = { ...EMPTY_HISTORY, past: [], future: [] }
       })
       return null
@@ -611,6 +679,7 @@ export const useEditorStore = create<EditorState>()(
         state.activeVendorId = null
         state.selectedDoorId = null
         state.selectedSegmentId = null
+        state.showMode = false
         state.history = { ...EMPTY_HISTORY, past: [], future: [] }
       })
       return true
@@ -689,6 +758,8 @@ export const selectBackgroundImages = (s: EditorState) => s.backgroundImages
 export const selectCanUndo = (s: EditorState) => s.history.past.length > 0
 export const selectCanRedo = (s: EditorState) => s.history.future.length > 0
 export const selectCollapsedPanels = (s: EditorState) => s.collapsedPanels
+export const selectGridVisible = (s: EditorState) => s.gridVisible
+export const selectShowMode = (s: EditorState) => s.showMode
 
 /** Derives the RowId when all selected tables share the same row, else null. */
 export const selectSelectedRowId = (s: EditorState): RowId | null => {

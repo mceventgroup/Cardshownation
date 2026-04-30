@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useEditorStore } from '@/store/index'
-import { DEFAULT_SETTINGS } from '@/lib/defaults'
+import { useEditorStore, selectSettings } from '@/store/index'
 import { formatDimension } from '@/lib/units'
 
 export interface TableBuilderConfig {
@@ -17,14 +16,20 @@ function clamp(raw: string, min: number, max: number, def: number): number {
 }
 
 export default function TableBuilderPanel() {
+  const settings = useEditorStore(selectSettings)
   const setConfig = useEditorStore(s => s.setTableBuilderConfig)
 
-  const [lengthStr, setLengthStr] = useState(String(DEFAULT_SETTINGS.defaultTableWidth))
-  const [widthStr, setWidthStr]   = useState(String(DEFAULT_SETTINGS.defaultTableHeight))
+  const [lengthStr, setLengthStr] = useState(String(settings.defaultTableWidth))
+  const [widthStr, setWidthStr]   = useState(String(settings.defaultTableHeight))
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
 
-  const length = clamp(lengthStr, 12, 240, DEFAULT_SETTINGS.defaultTableWidth)
-  const tableWidth = clamp(widthStr, 6, 120, DEFAULT_SETTINGS.defaultTableHeight)
+  useEffect(() => {
+    setLengthStr(String(settings.defaultTableWidth))
+    setWidthStr(String(settings.defaultTableHeight))
+  }, [settings.defaultTableWidth, settings.defaultTableHeight])
+
+  const length = clamp(lengthStr, 12, 240, settings.defaultTableWidth)
+  const tableWidth = clamp(widthStr, 6, 120, settings.defaultTableHeight)
 
   useEffect(() => {
     const w = orientation === 'horizontal' ? length : tableWidth

@@ -6,69 +6,84 @@
 // Three-column layout: LeftSidebar | Canvas | RightSidebar
 // ─────────────────────────────────────────────────────────────────────────────
 
-import dynamic from 'next/dynamic'
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
-import { useEditorStore, selectCollapsedPanels } from '@/store/index'
+import { useEditorStore, selectShowMode } from '@/store/index'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar from './LeftSidebar'
-import VendorRosterPanel from './VendorRosterPanel'
+import KonvaCanvas from './KonvaCanvas'
+import HelpCheatSheetModal from './HelpCheatSheetModal'
+import FirstRunModal from './FirstRunModal'
 
-const KonvaCanvas = dynamic(() => import('./KonvaCanvas'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex-1 flex items-center justify-center bg-gray-200 text-gray-500 text-sm">
-      Loading canvas…
-    </div>
-  ),
-})
+const FIRST_RUN_BYPASS_KEY = 'floorplanner:onboarding:bypass'
 
 export default function EditorShell() {
   useKeyboardShortcuts()
   const hydrateFromStorage = useEditorStore(s => s.hydrateFromStorage)
-  const collapsed = useEditorStore(selectCollapsedPanels)
-  const togglePanelCollapsed = useEditorStore(s => s.togglePanelCollapsed)
-  const vendorDockCollapsed = collapsed.has('vendor-dock')
+  const showMode = useEditorStore(selectShowMode)
+  const setShowMode = useEditorStore(s => s.setShowMode)
+  const [showHelp, setShowHelp] = useState(false)
+  const [showFirstRun, setShowFirstRun] = useState(false)
 
   useEffect(() => {
     hydrateFromStorage()
   }, [hydrateFromStorage])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.localStorage.getItem(FIRST_RUN_BYPASS_KEY) !== 'true') {
+      setShowFirstRun(true)
+    }
+  }, [])
+
+  const persistBypass = useCallback((skipNextTime: boolean) => {
+    if (typeof window === 'undefined') return
+    if (skipNextTime) {
+      window.localStorage.setItem(FIRST_RUN_BYPASS_KEY, 'true')
+    } else {
+      window.localStorage.removeItem(FIRST_RUN_BYPASS_KEY)
+    }
+  }, [])
+
+  const handleStart = useCallback((skipNextTime: boolean) => {
+    persistBypass(skipNextTime)
+    setShowFirstRun(false)
+  }, [persistBypass])
+
+  const handleOpenHelp = useCallback((skipNextTime: boolean) => {
+    persistBypass(skipNextTime)
+    setShowFirstRun(false)
+    setShowHelp(true)
+  }, [persistBypass])
+
   return (
-    <div className="flex flex-col h-screen w-screen">
-      <Toolbar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 flex flex-row overflow-hidden">
-          <LeftSidebar />
-          <div className="flex-1 relative overflow-hidden">
+    <div className="flex h-screen w-screen flex-col bg-slate-100">
+      {!showMode && <Toolbar />}
+      <div className="flex-1 overflow-hidden">
+        <div className="flex h-full flex-row overflow-hidden">
+          {!showMode && <LeftSidebar />}
+          <div className="relative flex-1 overflow-hidden">
             <KonvaCanvas />
+            {showMode && (
+              <button
+                onClick={() => setShowMode(false)}
+                className="absolute left-4 top-4 z-30 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+              >
+                Exit Show Mode
+              </button>
+            )}
           </div>
         </div>
-        <div className={`border-t border-gray-200 overflow-hidden bg-white ${vendorDockCollapsed ? 'h-10' : 'h-72'}`}>
-          <button
-            onClick={() => togglePanelCollapsed('vendor-dock')}
-            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition-colors border-b border-gray-200"
-          >
-            <svg
-              className={`w-3 h-3 text-gray-400 transition-transform ${vendorDockCollapsed ? '' : 'rotate-90'}`}
-              viewBox="0 0 12 12"
-              fill="currentColor"
-            >
-              <path d="M4 2l4 4-4 4z" />
-            </svg>
-            <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-1 text-left">
-              Vendors
-            </span>
-          </button>
-          {!vendorDockCollapsed && (
-            <div className="h-[calc(100%-41px)]">
-              <VendorRosterPanel />
-            </div>
-          )}
-        </div>
       </div>
-      <StatusBar />
+      {!showMode && <StatusBar />}
+      {showHelp && <HelpCheatSheetModal onClose={() => setShowHelp(false)} />}
+      {showFirstRun && !showMode && (
+        <FirstRunModal
+          onStart={handleStart}
+          onOpenHelp={handleOpenHelp}
+        />
+      )}
     </div>
   )
 }

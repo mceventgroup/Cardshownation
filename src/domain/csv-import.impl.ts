@@ -130,6 +130,11 @@ function normalizePaymentStatus(value: string): PaymentStatusValue | null {
   return PAYMENT_STATUS_ALIASES[value.toLowerCase().trim()] ?? null
 }
 
+function normalizeEmail(value: string): string | null {
+  const normalized = value.trim().toLowerCase()
+  return normalized || null
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MODULE IMPLEMENTATION
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,6 +229,9 @@ export const csvImportModule: CSVImportModule = {
         /^company$/i, /^company[\s_\(]?billing\)?$/i, /^business[\s_]?name$/i,
         /^billing[\s_]?company$/i, /^organization$/i, /^organisation$/i,
       ],
+      email: [
+        /^email$/i, /^e-?mail$/i, /^email[\s_]?address$/i, /^contact[\s_]?email$/i,
+      ],
       vendorCategory: [
         /^vendor[\s_]?cat(egory)?$/i, /^category$/i, /^cat$/i, /^type$/i,
       ],
@@ -240,12 +248,12 @@ export const csvImportModule: CSVImportModule = {
     }
 
     const fieldMapping: FieldMapping = {
-      tableNumber: null, vendorName: null, vendorLastName: null, companyName: null, vendorCategory: null,
+      tableNumber: null, vendorName: null, vendorLastName: null, companyName: null, email: null, vendorCategory: null,
       quantity: null,
       color: null, notes: null, paymentStatus: null, section: null,
     }
     const confidence: Record<Field, number> = {
-      tableNumber: 0, vendorName: 0, vendorLastName: 0, companyName: 0, vendorCategory: 0,
+      tableNumber: 0, vendorName: 0, vendorLastName: 0, companyName: 0, email: 0, vendorCategory: 0,
       quantity: 0,
       color: 0, notes: 0, paymentStatus: 0, section: 0,
     }
@@ -343,6 +351,7 @@ export const csvImportModule: CSVImportModule = {
       const firstName = (mapping.vendorName ? rawData[mapping.vendorName] ?? '' : '').trim()
       const lastName = (mapping.vendorLastName ? rawData[mapping.vendorLastName] ?? '' : '').trim()
       const companyName = (mapping.companyName ? rawData[mapping.companyName] ?? '' : '').trim()
+      const email = normalizeEmail(mapping.email ? rawData[mapping.email] ?? '' : '')
       const fullName = [firstName, lastName].filter(Boolean).join(' ')
       const vendorName = companyName || fullName
       const expandedTables = expandTableNumbers(rawTableNumber)
@@ -357,6 +366,7 @@ export const csvImportModule: CSVImportModule = {
         firstName,
         lastName,
         companyName: companyName || null,
+        email,
         vendorCategory: mapping.vendorCategory ? (rawData[mapping.vendorCategory] ?? '').trim() || null : null,
         quantity,
         color:          mapping.color          ? (rawData[mapping.color]          ?? '').trim() || null : null,

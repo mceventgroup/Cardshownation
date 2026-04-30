@@ -14,6 +14,7 @@ const FIELD_LABELS: Record<keyof FieldMapping, string> = {
   vendorName: 'First Name',
   vendorLastName: 'Last Name',
   companyName: 'Company (Billing)',
+  email: 'Email',
   vendorCategory: 'Category',
   quantity: 'Quantity',
   color: 'Color',

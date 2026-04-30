@@ -204,7 +204,7 @@ export default function RoomPanel() {
   return (
     <div className="px-3 py-2 space-y-3 text-sm">
       <div>
-        <div className="font-medium text-gray-700 mb-1">Add Rectangle</div>
+        <div className="font-medium text-gray-700 mb-1">Add Room / Add Wall</div>
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 w-8">W</label>
           <input
@@ -232,14 +232,14 @@ export default function RoomPanel() {
               onClick={handleSetSingleRoom}
               className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
             >
-              Set Room
+              Set Layout
             </button>
           ) : (
             <button
               onClick={handleAddRectSegment}
               className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
             >
-              Add Segment
+              Add Wall
             </button>
           )}
           {room && (
@@ -266,7 +266,7 @@ export default function RoomPanel() {
               }}
               className="w-3.5 h-3.5 rounded border-gray-300"
             />
-            <span className="text-xs text-gray-500">Lock room movement</span>
+            <span className="text-xs text-gray-500">Lock Layout</span>
           </label>
         </div>
         <div className="text-xs text-gray-400 mt-1">
@@ -386,52 +386,6 @@ export default function RoomPanel() {
               Overall: {formatDimension(bounds.width)} x {formatDimension(bounds.height)}
             </div>
           )}
-        </div>
-      )}
-
-      {room && (
-        <div>
-          <div className="font-medium text-gray-700 mb-1">Wall Setback</div>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={0}
-              max={30}
-              step={0.5}
-              value={Math.round(settings.wallSetback / 12 * 10) / 10}
-              onChange={e => {
-                const parsed = parseFloat(e.target.value)
-                if (isNaN(parsed) || parsed < 0) return
-                dispatch({
-                  type: 'UPDATE_SETTINGS',
-                  prev: { wallSetback: settings.wallSetback },
-                  next: { wallSetback: parsed * 12 },
-                  timestamp: Date.now(),
-                })
-              }}
-              className="w-16 px-1.5 py-1 border border-gray-300 rounded text-xs"
-            />
-            <span className="text-xs text-gray-400">ft</span>
-            <label className="flex items-center gap-1 ml-auto cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.showWallSetback}
-                onChange={e => {
-                  dispatch({
-                    type: 'UPDATE_SETTINGS',
-                    prev: { showWallSetback: settings.showWallSetback },
-                    next: { showWallSetback: e.target.checked },
-                    timestamp: Date.now(),
-                  })
-                }}
-                className="w-3.5 h-3.5 rounded border-gray-300"
-              />
-              <span className="text-xs text-gray-500">Show</span>
-            </label>
-          </div>
-          <div className="text-xs text-gray-400 mt-0.5">
-            Tables cannot be placed within this distance from walls.
-          </div>
         </div>
       )}
 

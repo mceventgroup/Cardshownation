@@ -214,6 +214,11 @@ export function useKeyboardShortcuts() {
         return
       }
 
+      if (e.key === 'm') {
+        setActiveTool('measure')
+        return
+      }
+
       if (e.key === 'b') {
         setActiveTool('draw-room')
         return

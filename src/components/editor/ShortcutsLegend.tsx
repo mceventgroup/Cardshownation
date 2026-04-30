@@ -18,6 +18,7 @@ const SECTIONS = [
       { keys: 'S', desc: 'Select tool' },
       { keys: 'T', desc: 'Place single table' },
       { keys: 'R', desc: 'Place row of tables' },
+      { keys: 'M', desc: 'Measure between two points' },
       { keys: 'B', desc: 'Draw room rectangle' },
       { keys: 'F', desc: 'Freehand room polygon' },
       { keys: 'Esc', desc: 'Back to select tool' },

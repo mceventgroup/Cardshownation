@@ -1,3 +1,5 @@
+'use client'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOM LAYER
 //
@@ -9,7 +11,7 @@
 import React, { memo, useMemo } from 'react'
 import { Group, Line, Rect } from 'react-konva'
 import type { CompositeRoom, Door, Point, RoomSegmentId } from '@/domain/types'
-import { computeRoomContour, computeRoomBounds } from '@/domain/room-contour'
+import { computeRoomContour } from '@/domain/room-contour'
 
 interface RoomLayerProps {
   room: CompositeRoom | null
@@ -22,7 +24,6 @@ interface RoomLayerProps {
 
 const RoomLayer = memo(function RoomLayer({ room, doors, doorClearance, wallSetback, showWallSetback, selectedSegmentId }: RoomLayerProps) {
   const contours = useMemo(() => (room ? computeRoomContour(room) : []), [room])
-  const bounds = useMemo(() => (room ? computeRoomBounds(room) : null), [room])
 
   if (!room || contours.length === 0) return null
 
@@ -34,8 +35,8 @@ const RoomLayer = memo(function RoomLayer({ room, doors, doorClearance, wallSetb
           key={`fill-${i}`}
           points={polygon.flatMap(p => [p.x, p.y])}
           closed
-          fill="#f8fafc"
-          opacity={0.6}
+          fill="#f1f5f9"
+          opacity={0.95}
           listening={false}
         />
       ))}
@@ -46,7 +47,6 @@ const RoomLayer = memo(function RoomLayer({ room, doors, doorClearance, wallSetb
           key={`walls-${ci}`}
           polygon={polygon}
           doors={doors}
-          bounds={bounds}
         />
       ))}
 
@@ -55,7 +55,6 @@ const RoomLayer = memo(function RoomLayer({ room, doors, doorClearance, wallSetb
         <DoorElement
           key={door.id}
           door={door}
-          bounds={bounds}
           clearance={doorClearance}
         />
       ))}
@@ -98,10 +97,9 @@ export default RoomLayer
 interface WallEdgesProps {
   polygon: Point[]
   doors: Door[]
-  bounds: { x: number; y: number; width: number; height: number } | null
 }
 
-function WallEdges({ polygon, doors, bounds }: WallEdgesProps) {
+function WallEdges({ polygon, doors }: WallEdgesProps) {
   const segments: React.ReactNode[] = []
 
   for (let i = 0; i < polygon.length; i++) {
@@ -118,8 +116,8 @@ function WallEdges({ polygon, doors, bounds }: WallEdgesProps) {
         <Line
           key={`wall-${i}`}
           points={[p1.x, p1.y, p2.x, p2.y]}
-          stroke="#334155"
-          strokeWidth={3}
+          stroke="#1e293b"
+          strokeWidth={4}
           listening={false}
         />,
       )
@@ -127,15 +125,15 @@ function WallEdges({ polygon, doors, bounds }: WallEdgesProps) {
     }
 
     // Find doors that overlap this edge
-    const edgeDoorGaps = findDoorGapsOnEdge(p1, p2, doors, bounds)
+    const edgeDoorGaps = findDoorGapsOnEdge(p1, p2, doors)
 
     if (edgeDoorGaps.length === 0) {
       segments.push(
         <Line
           key={`wall-${i}`}
           points={[p1.x, p1.y, p2.x, p2.y]}
-          stroke="#334155"
-          strokeWidth={3}
+          stroke="#1e293b"
+          strokeWidth={4}
           listening={false}
         />,
       )
@@ -159,8 +157,8 @@ function WallEdges({ polygon, doors, bounds }: WallEdgesProps) {
             <Line
               key={`wall-${i}-${cursor}`}
               points={pts}
-              stroke="#334155"
-              strokeWidth={3}
+              stroke="#1e293b"
+              strokeWidth={4}
               listening={false}
             />,
           )
@@ -190,10 +188,7 @@ function WallEdges({ polygon, doors, bounds }: WallEdgesProps) {
 // Find door gaps that lie on a given polygon edge
 function findDoorGapsOnEdge(
   p1: Point, p2: Point, doors: Door[],
-  bounds: { x: number; y: number; width: number; height: number } | null,
 ): { start: number; end: number }[] {
-  if (!bounds) return []
-
   const isHorizontal = p1.y === p2.y
   const gaps: { start: number; end: number }[] = []
 
@@ -204,16 +199,7 @@ function findDoorGapsOnEdge(
       const edgeMinX = Math.min(p1.x, p2.x)
       const edgeMaxX = Math.max(p1.x, p2.x)
 
-      // Door on top wall
-      if (door.side === 'top' && Math.abs(edgeY - bounds.y) < 1) {
-        const dStart = door.x
-        const dEnd = door.x + door.width
-        if (dStart < edgeMaxX && dEnd > edgeMinX) {
-          gaps.push({ start: Math.max(dStart, edgeMinX), end: Math.min(dEnd, edgeMaxX) })
-        }
-      }
-      // Door on bottom wall
-      if (door.side === 'bottom' && Math.abs(edgeY - (bounds.y + bounds.height)) < 1) {
+      if ((door.side === 'top' || door.side === 'bottom') && Math.abs(edgeY - door.y) < 1) {
         const dStart = door.x
         const dEnd = door.x + door.width
         if (dStart < edgeMaxX && dEnd > edgeMinX) {
@@ -226,16 +212,7 @@ function findDoorGapsOnEdge(
       const edgeMinY = Math.min(p1.y, p2.y)
       const edgeMaxY = Math.max(p1.y, p2.y)
 
-      // Door on left wall
-      if (door.side === 'left' && Math.abs(edgeX - bounds.x) < 1) {
-        const dStart = door.y
-        const dEnd = door.y + door.width
-        if (dStart < edgeMaxY && dEnd > edgeMinY) {
-          gaps.push({ start: Math.max(dStart, edgeMinY), end: Math.min(dEnd, edgeMaxY) })
-        }
-      }
-      // Door on right wall
-      if (door.side === 'right' && Math.abs(edgeX - (bounds.x + bounds.width)) < 1) {
+      if ((door.side === 'left' || door.side === 'right') && Math.abs(edgeX - door.x) < 1) {
         const dStart = door.y
         const dEnd = door.y + door.width
         if (dStart < edgeMaxY && dEnd > edgeMinY) {
@@ -251,9 +228,8 @@ function findDoorGapsOnEdge(
 // ─────────────────────────────────────────────────────────────────────────────
 // WALL SETBACK OVERLAY
 //
-// Renders a yellow band along the inside of every wall edge showing the
-// no-table zone. Uses the difference between outer contour and an inset
-// contour — drawn as a filled strip along each polygon edge.
+// Renders a yellow band just outside every wall edge so the setback sits on
+// the gray map background instead of the usable room interior.
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface WallSetbackOverlayProps {
@@ -262,8 +238,7 @@ interface WallSetbackOverlayProps {
 }
 
 function WallSetbackOverlay({ contours, wallSetback }: WallSetbackOverlayProps) {
-  // For each contour polygon, draw a setback strip on each edge.
-  // Each strip is a quad: the original edge + a parallel edge inset by wallSetback.
+  // For clockwise contour polygons, the left-hand normal points outward.
   return (
     <>
       {contours.map((polygon, ci) => {
@@ -272,19 +247,18 @@ function WallSetbackOverlay({ contours, wallSetback }: WallSetbackOverlayProps) 
           const p1 = polygon[i]
           const p2 = polygon[(i + 1) % polygon.length]
 
-          // Compute inward normal (for clockwise polygon, inward = right of edge direction)
+          // Compute outward normal.
           const dx = p2.x - p1.x
           const dy = p2.y - p1.y
           const len = Math.sqrt(dx * dx + dy * dy)
           if (len === 0) continue
 
-          // Right-hand normal (inward for CW polygon)
-          const nx = dy / len
-          const ny = -dx / len
+          const nx = -dy / len
+          const ny = dx / len
 
-          const inset = wallSetback
-          const q1 = { x: p1.x + nx * inset, y: p1.y + ny * inset }
-          const q2 = { x: p2.x + nx * inset, y: p2.y + ny * inset }
+          const offset = wallSetback
+          const q1 = { x: p1.x + nx * offset, y: p1.y + ny * offset }
+          const q2 = { x: p2.x + nx * offset, y: p2.y + ny * offset }
 
           strips.push(
             <Line
@@ -322,27 +296,24 @@ function WallSetbackOverlay({ contours, wallSetback }: WallSetbackOverlayProps) 
 
 interface DoorElementProps {
   door: Door
-  bounds: { x: number; y: number; width: number; height: number } | null
   clearance: number
 }
 
-function DoorElement({ door, bounds, clearance }: DoorElementProps) {
-  if (!bounds) return null
-
+function DoorElement({ door, clearance }: DoorElementProps) {
   // Clearance zone only — interactive door line + swing are rendered by DoorNode
   let zone: { x: number; y: number; width: number; height: number }
   switch (door.side) {
     case 'top':
-      zone = { x: door.x, y: bounds.y, width: door.width, height: clearance }
+      zone = { x: door.x, y: door.y, width: door.width, height: clearance }
       break
     case 'bottom':
-      zone = { x: door.x, y: bounds.y + bounds.height - clearance, width: door.width, height: clearance }
+      zone = { x: door.x, y: door.y - clearance, width: door.width, height: clearance }
       break
     case 'left':
-      zone = { x: bounds.x, y: door.y, width: clearance, height: door.width }
+      zone = { x: door.x, y: door.y, width: clearance, height: door.width }
       break
     case 'right':
-      zone = { x: bounds.x + bounds.width - clearance, y: door.y, width: clearance, height: door.width }
+      zone = { x: door.x - clearance, y: door.y, width: clearance, height: door.width }
       break
   }
 
@@ -353,8 +324,8 @@ function DoorElement({ door, bounds, clearance }: DoorElementProps) {
         y={zone.y}
         width={zone.width}
         height={zone.height}
-        fill="#ef4444"
-        opacity={0.08}
+        fill="#f97316"
+        opacity={0.12}
         listening={false}
       />
       <Rect
@@ -362,8 +333,8 @@ function DoorElement({ door, bounds, clearance }: DoorElementProps) {
         y={zone.y}
         width={zone.width}
         height={zone.height}
-        stroke="#ef4444"
-        strokeWidth={0.5}
+        stroke="#ea580c"
+        strokeWidth={1}
         dash={[4, 4]}
         listening={false}
       />

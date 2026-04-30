@@ -4,13 +4,16 @@ const nextConfig = {
 
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // Konva's Node.js build optionally requires the 'canvas' package for SSR.
-      // We never SSR the canvas (it's loaded via dynamic() with ssr:false), so
-      // stub the import out entirely to prevent the "Can't resolve 'canvas'" error.
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        canvas: false,
+      // react-konva/konva may reference the Node-only `canvas` package while
+      // bundling server output. The editor canvas is client-only, so keep that
+      // dependency externalized and stubbed to avoid production bundle failures.
+      if (Array.isArray(config.externals)) {
+        config.externals = [...config.externals, { canvas: 'canvas' }]
       }
+    }
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      canvas: false,
     }
     return config
   },

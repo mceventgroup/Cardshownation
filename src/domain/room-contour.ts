@@ -14,7 +14,7 @@
 // Returns Point[][] — one polygon per connected component (most rooms = 1).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { Point, RoomSegment, CompositeRoom, Rect } from './types'
+import type { Point, RoomSegment, CompositeRoom, Rect, Door, DoorSide } from './types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -23,6 +23,14 @@ import type { Point, RoomSegment, CompositeRoom, Rect } from './types'
 interface DirectedEdge {
   x1: number; y1: number
   x2: number; y2: number
+}
+
+export interface RoomBoundaryEdge {
+  side: DoorSide
+  x1: number
+  y1: number
+  x2: number
+  y2: number
 }
 
 // Direction enum: 0=right, 1=down, 2=left, 3=up
@@ -69,6 +77,59 @@ export function computeRoomBounds(room: CompositeRoom): Rect | null {
     if (seg.y + seg.height > maxY) maxY = seg.y + seg.height
   }
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+export function getRoomBoundaryEdges(room: CompositeRoom): RoomBoundaryEdge[] {
+  const contours = computeRoomContour(room)
+  const edges: RoomBoundaryEdge[] = []
+
+  for (const polygon of contours) {
+    for (let i = 0; i < polygon.length; i++) {
+      const p1 = polygon[i]
+      const p2 = polygon[(i + 1) % polygon.length]
+      if (p1.x === p2.x) {
+        edges.push({
+          side: p2.y > p1.y ? 'right' : 'left',
+          x1: p1.x,
+          y1: p1.y,
+          x2: p2.x,
+          y2: p2.y,
+        })
+      } else if (p1.y === p2.y) {
+        edges.push({
+          side: p2.x > p1.x ? 'top' : 'bottom',
+          x1: p1.x,
+          y1: p1.y,
+          x2: p2.x,
+          y2: p2.y,
+        })
+      }
+    }
+  }
+
+  return edges
+}
+
+export function findBoundaryEdgeForDoor(
+  door: Pick<Door, 'x' | 'y' | 'width' | 'side'>,
+  edges: ReadonlyArray<RoomBoundaryEdge>,
+): RoomBoundaryEdge | null {
+  const tolerance = 1
+  for (const edge of edges) {
+    if (edge.side !== door.side) continue
+    if (door.side === 'top' || door.side === 'bottom') {
+      if (Math.abs(edge.y1 - door.y) > tolerance) continue
+      const minX = Math.min(edge.x1, edge.x2)
+      const maxX = Math.max(edge.x1, edge.x2)
+      if (door.x >= minX - tolerance && door.x + door.width <= maxX + tolerance) return edge
+    } else {
+      if (Math.abs(edge.x1 - door.x) > tolerance) continue
+      const minY = Math.min(edge.y1, edge.y2)
+      const maxY = Math.max(edge.y1, edge.y2)
+      if (door.y >= minY - tolerance && door.y + door.width <= maxY + tolerance) return edge
+    }
+  }
+  return null
 }
 
 /**
@@ -297,22 +358,22 @@ export function clampToWallSetback(
 }
 
 /**
- * Compute the clearance zone rect for a door given room bounds.
+ * Compute the clearance zone rect for a door projected inward from the wall.
  */
 export function getDoorClearanceZone(
   door: { x: number; y: number; width: number; side: 'top' | 'bottom' | 'left' | 'right' },
-  bounds: Rect,
+  _bounds: Rect,
   clearance: number,
 ): Rect {
   switch (door.side) {
     case 'top':
-      return { x: door.x, y: bounds.y, width: door.width, height: clearance }
+      return { x: door.x, y: door.y, width: door.width, height: clearance }
     case 'bottom':
-      return { x: door.x, y: bounds.y + bounds.height - clearance, width: door.width, height: clearance }
+      return { x: door.x, y: door.y - clearance, width: door.width, height: clearance }
     case 'left':
-      return { x: bounds.x, y: door.y, width: clearance, height: door.width }
+      return { x: door.x, y: door.y, width: clearance, height: door.width }
     case 'right':
-      return { x: bounds.x + bounds.width - clearance, y: door.y, width: clearance, height: door.width }
+      return { x: door.x - clearance, y: door.y, width: clearance, height: door.width }
   }
 }
 

@@ -1,10 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { useWarnings } from '@/hooks/useWarnings'
 import { useEditorStore, selectActiveTool, selectSelectedIds, selectSelectedRowId } from '@/store/index'
 import type { ActiveTool } from '@/store/index'
 import CollapsibleSection from './CollapsibleSection'
 import TableBuilderPanel from './TableBuilderPanel'
+import BulkTableEditPanel from './BulkTableEditPanel'
 import RowBuilderPanel from './RowBuilderPanel'
 import RowEditPanel from './RowEditPanel'
 import TablePropertiesPanel from './TablePropertiesPanel'
@@ -13,12 +15,14 @@ import RoomPanel from './RoomPanel'
 import DoorsPanel from './DoorsPanel'
 import SectionsPanel from './SectionsPanel'
 import WarningsPanel from './WarningsPanel'
-import BackgroundImagePanel from './BackgroundImagePanel'
+import VendorRosterPanel from './VendorRosterPanel'
+import SettingsPanel from './SettingsPanel'
 
 const TOOLS: { tool: ActiveTool; label: string; shortcut: string }[] = [
   { tool: 'select',      label: 'Select',      shortcut: 'S' },
   { tool: 'place-table', label: 'Place Table',  shortcut: 'T' },
   { tool: 'place-row',   label: 'Place Row',    shortcut: 'R' },
+  { tool: 'measure',     label: 'Measure',      shortcut: 'M' },
   { tool: 'draw-room',   label: 'Draw Room',    shortcut: 'B' },
   { tool: 'draw-room-freehand', label: 'Freehand Room', shortcut: 'F' },
 ]
@@ -67,6 +71,7 @@ function ToolOptions() {
   if (selectedIds.size >= 2) {
     return (
       <>
+        <BulkTableEditPanel />
         {selectedRowId && <RowEditPanel rowId={selectedRowId} />}
         <NumberingPanel />
       </>
@@ -94,32 +99,62 @@ function WarningsBadge() {
 }
 
 export default function LeftSidebar() {
+  const [activeTab, setActiveTab] = useState<'layout' | 'vendors' | 'settings'>('layout')
+
   return (
-    <div className="w-72 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
-      <CollapsibleSection title="Tables" panelId="tools">
-        <ToolSelector />
-        <ToolOptions />
-      </CollapsibleSection>
+    <aside className="w-[300px] shrink-0 border-r border-slate-200 bg-slate-50/95 backdrop-blur-sm">
+      <div className="border-b border-slate-200 bg-white/90 px-3 py-3 shadow-sm">
+        <div className="rounded-2xl bg-slate-100 p-1">
+          <div className="grid grid-cols-3 gap-1">
+            {[
+              ['layout', 'Layout'],
+              ['vendors', 'Vendors'],
+              ['settings', 'Settings'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setActiveTab(value as typeof activeTab)}
+                className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
-      <CollapsibleSection title="Room" panelId="room">
-        <RoomPanel />
-      </CollapsibleSection>
+      <div className="h-[calc(100vh-65px)] overflow-y-auto">
+        {activeTab === 'layout' && (
+          <div className="space-y-0">
+            <CollapsibleSection title="Tables" panelId="tools">
+              <ToolSelector />
+              <ToolOptions />
+            </CollapsibleSection>
 
-      <CollapsibleSection title="Doors" panelId="doors">
-        <DoorsPanel />
-      </CollapsibleSection>
+            <CollapsibleSection title="Add Room" panelId="room">
+              <RoomPanel />
+            </CollapsibleSection>
 
-      <CollapsibleSection title="Sections" panelId="sections">
-        <SectionsPanel />
-      </CollapsibleSection>
+            <CollapsibleSection title="Doors" panelId="doors">
+              <DoorsPanel />
+            </CollapsibleSection>
 
-      <CollapsibleSection title="Warnings" panelId="warnings" badge={<WarningsBadge />}>
-        <WarningsPanel />
-      </CollapsibleSection>
+            <CollapsibleSection title="Sections" panelId="sections">
+              <SectionsPanel />
+            </CollapsibleSection>
 
-      <CollapsibleSection title="Background Images" panelId="background-images">
-        <BackgroundImagePanel />
-      </CollapsibleSection>
-    </div>
+            <CollapsibleSection title="Warnings" panelId="warnings" badge={<WarningsBadge />}>
+              <WarningsPanel />
+            </CollapsibleSection>
+          </div>
+        )}
+
+        {activeTab === 'vendors' && <VendorRosterPanel />}
+
+        {activeTab === 'settings' && <SettingsPanel />}
+      </div>
+    </aside>
   )
 }

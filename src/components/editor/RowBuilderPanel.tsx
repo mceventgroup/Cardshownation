@@ -8,8 +8,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from 'react'
-import { useEditorStore, selectSections } from '@/store/index'
-import { DEFAULT_SETTINGS, DEFAULT_ROW_SPACING, DEFAULT_ROW_TABLE_COUNT } from '@/lib/defaults'
+import { useEditorStore, selectSections, selectSettings } from '@/store/index'
+import { DEFAULT_ROW_SPACING, DEFAULT_ROW_TABLE_COUNT } from '@/lib/defaults'
 import { formatDimension } from '@/lib/units'
 import type { SectionId } from '@/domain/types'
 
@@ -30,19 +30,25 @@ function clamp(raw: string, min: number, max: number, def: number): number {
 
 export default function RowBuilderPanel() {
   const sections = useEditorStore(selectSections)
+  const settings = useEditorStore(selectSettings)
   const setConfig = useEditorStore(s => s.setRowBuilderConfig)
 
   const [countStr, setCountStr]   = useState(String(DEFAULT_ROW_TABLE_COUNT))
-  const [widthStr, setWidthStr]   = useState(String(DEFAULT_SETTINGS.defaultTableWidth))
-  const [heightStr, setHeightStr] = useState(String(DEFAULT_SETTINGS.defaultTableHeight))
+  const [widthStr, setWidthStr]   = useState(String(settings.defaultTableWidth))
+  const [heightStr, setHeightStr] = useState(String(settings.defaultTableHeight))
   const [spacingStr, setSpacingStr] = useState(String(DEFAULT_ROW_SPACING))
 
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
   const [sectionId, setSectionId]     = useState<SectionId | null>(null)
 
   const tableCount  = clamp(countStr, 1, 100, DEFAULT_ROW_TABLE_COUNT)
-  const tableWidth  = clamp(widthStr, 10, 500, DEFAULT_SETTINGS.defaultTableWidth)
-  const tableHeight = clamp(heightStr, 10, 500, DEFAULT_SETTINGS.defaultTableHeight)
+  useEffect(() => {
+    setWidthStr(String(settings.defaultTableWidth))
+    setHeightStr(String(settings.defaultTableHeight))
+  }, [settings.defaultTableWidth, settings.defaultTableHeight])
+
+  const tableWidth  = clamp(widthStr, 10, 500, settings.defaultTableWidth)
+  const tableHeight = clamp(heightStr, 10, 500, settings.defaultTableHeight)
   const spacing     = clamp(spacingStr, 0, 200, DEFAULT_ROW_SPACING)
 
   useEffect(() => {

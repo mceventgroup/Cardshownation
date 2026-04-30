@@ -4,8 +4,8 @@ import { useState, useCallback, useRef } from 'react'
 import { useEditorStore, selectCanUndo, selectCanRedo } from '@/store/index'
 import ImportModal from './ImportModal'
 import ExportModal from './ExportModal'
-import BackgroundImageModal from './BackgroundImageModal'
 import LayoutManagerModal from './LayoutManagerModal'
+import HelpCheatSheetModal from './HelpCheatSheetModal'
 
 interface MenuItem {
   label: string
@@ -17,9 +17,9 @@ interface MenuItem {
 function useMenuItems(
   openImport: () => void,
   openExport: () => void,
-  openBgImport: () => void,
   openLayouts: () => void,
   openFilePicker: () => void,
+  openHelp: () => void,
 ): Record<string, MenuItem[]> {
   const setTool = useEditorStore(s => s.setActiveTool)
   const undo = useEditorStore(s => s.undo)
@@ -45,7 +45,6 @@ function useMenuItems(
           }
         },
       },
-      { label: 'Import Floor Plan Images...', action: openBgImport },
       { label: 'Saved Layouts...', action: openLayouts },
       { label: 'Save to File...', shortcut: 'Ctrl+S', action: () => saveToFile() },
       { label: 'Open File...', action: openFilePicker },
@@ -64,6 +63,7 @@ function useMenuItems(
       { label: 'Select', shortcut: 'S', action: () => setTool('select') },
       { label: 'Place Table', shortcut: 'T', action: () => setTool('place-table') },
       { label: 'Place Row', shortcut: 'R', action: () => setTool('place-row') },
+      { label: 'Measure', shortcut: 'M', action: () => setTool('measure') },
     ],
     Edit: [
       { label: 'Undo', shortcut: 'Ctrl+Z', action: undo, disabled: !canUndo },
@@ -88,6 +88,7 @@ function useMenuItems(
       { label: 'Reset Zoom', shortcut: '0', action: () => emit('0') },
     ],
     Help: [
+      { label: 'Cheat Sheet', action: openHelp },
       { label: 'Keyboard Shortcuts', shortcut: '?', action: () => emit('?') },
     ],
   }
@@ -99,11 +100,12 @@ export default function Toolbar() {
   const undo = useEditorStore(s => s.undo)
   const redo = useEditorStore(s => s.redo)
   const loadFromFile = useEditorStore(s => s.loadLayoutFromFile)
+  const setShowMode = useEditorStore(s => s.setShowMode)
 
   const [showImport, setShowImport] = useState(false)
   const [showExport, setShowExport] = useState(false)
-  const [showBgImport, setShowBgImport] = useState(false)
   const [showLayouts, setShowLayouts] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -119,9 +121,9 @@ export default function Toolbar() {
   const menus = useMenuItems(
     () => { setShowImport(true); setOpenMenu(null) },
     () => { setShowExport(true); setOpenMenu(null) },
-    () => { setShowBgImport(true); setOpenMenu(null) },
     () => { setShowLayouts(true); setOpenMenu(null) },
     () => { setOpenMenu(null); fileInputRef.current?.click() },
+    () => { setShowHelp(true); setOpenMenu(null) },
   )
 
   function toggleMenu(name: string) {
@@ -132,8 +134,8 @@ export default function Toolbar() {
 
   return (
     <div className="shrink-0">
-      <div className="h-10 bg-white border-b border-gray-200 flex items-center">
-        <span className="font-semibold text-gray-800 text-sm px-4">Floorplanner</span>
+      <div className="h-12 bg-white/95 border-b border-slate-200 flex items-center shadow-sm">
+        <span className="font-semibold text-slate-800 text-sm px-4">Floorplanner</span>
 
         {Object.keys(menus).map(name => (
           <button
@@ -151,6 +153,13 @@ export default function Toolbar() {
         ))}
 
         <div className="flex-1" />
+
+        <button
+          onClick={() => setShowMode(true)}
+          className="rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+        >
+          Show Mode
+        </button>
 
         <div className="flex items-center gap-1 px-2">
           <button
@@ -209,8 +218,8 @@ export default function Toolbar() {
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
-      {showBgImport && <BackgroundImageModal onClose={() => setShowBgImport(false)} />}
       {showLayouts && <LayoutManagerModal onClose={() => setShowLayouts(false)} />}
+      {showHelp && <HelpCheatSheetModal onClose={() => setShowHelp(false)} />}
 
       <input
         ref={fileInputRef}

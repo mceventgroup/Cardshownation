@@ -1,3 +1,5 @@
+'use client'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // KONVA CANVAS
 //
@@ -18,13 +20,13 @@ import { Stage, Layer, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Point, TableId, DoorId, DoorSide } from '@/domain/types'
-import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages } from '@/store/index'
+import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages, selectGridVisible, selectShowMode } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
 import { rowModule } from '@/domain/rows.impl'
 import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
 import { createTableId, createRowId, createAssignmentId, createRoomSegmentId, createDoorId } from '@/lib/id'
-import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID, vendorColor } from '@/lib/defaults'
+import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID, OPEN_TABLE_FILL, ASSIGNED_TABLE_FILL, PREMIUM_TABLE_FILL } from '@/lib/defaults'
 import { registerStage } from '@/lib/stage'
 import GridLayer from './GridLayer'
 import RoomLayer from './RoomLayer'
@@ -36,7 +38,7 @@ import InlineLabelEditor from './InlineLabelEditor'
 import ShortcutsLegend from './ShortcutsLegend'
 import BackgroundImageLayer from './BackgroundImageLayer'
 import TableContextMenu, { type ContextMenuAction } from './TableContextMenu'
-import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds } from '@/domain/room-contour'
+import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds, getRoomBoundaryEdges, findBoundaryEdgeForDoor } from '@/domain/room-contour'
 import { useWarnings } from '@/hooks/useWarnings'
 import { warningsModule } from '@/domain/warnings.impl'
 import type { WarningSeverity } from '@/domain/warnings'
@@ -94,6 +96,8 @@ export default function KonvaCanvas() {
   const setSelectedSegmentId = useEditorStore(s => s.setSelectedSegmentId)
   const bgImagesRecord    = useEditorStore(selectBackgroundImages)
   const updateBgImage     = useEditorStore(s => s.updateBackgroundImage)
+  const gridVisible       = useEditorStore(selectGridVisible)
+  const showMode          = useEditorStore(selectShowMode)
 
   // Store actions
   const dispatch      = useEditorStore(s => s.dispatch)
@@ -102,6 +106,7 @@ export default function KonvaCanvas() {
   const clearSelected = useEditorStore(s => s.clearSelected)
   const setActiveTool = useEditorStore(s => s.setActiveTool)
   const setStageTransform = useEditorStore(s => s.setStageTransform)
+  const setGridVisible    = useEditorStore(s => s.setGridVisible)
 
   // Stage size — tracks container element dimensions
   const [stageSize, setStageSize] = useState({ width: 1200, height: 800 })
@@ -119,6 +124,7 @@ export default function KonvaCanvas() {
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tableId: string } | null>(null)
+  const [hoveredTableId, setHoveredTableId] = useState<string | null>(null)
 
   // Computed warnings (derived, never stored)
   const warningResult = useWarnings()
@@ -149,6 +155,10 @@ export default function KonvaCanvas() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  useEffect(() => {
+    setStageTransform(stageScale, stagePos)
+  }, [stageScale, stagePos, setStageTransform])
 
   // Draft positions during drag (overrides store positions for rendering)
   const [draftPositions, setDraftPositions] = useState<Record<string, Point>>({})
@@ -375,9 +385,8 @@ export default function KonvaCanvas() {
   // ── Door placement helpers ─────────────────────────────────────────────────
 
   /**
-   * Given a pointer in canvas coords and the room bounding rect, pick the
-   * nearest wall and return a snapped door position on that wall.
-   * Returns null if the room has no bounds.
+   * Given a pointer in canvas coords, pick the nearest actual room boundary
+   * edge and return a snapped door position on that edge.
    */
   const computeDoorSnap = useCallback((
     canvasPos: Point,
@@ -385,37 +394,50 @@ export default function KonvaCanvas() {
   ): { side: DoorSide; x: number; y: number; width: number } | null => {
     const currentRoom = useEditorStore.getState().room
     if (!currentRoom) return null
-    const b = computeRoomBounds(currentRoom)
-    if (!b) return null
+    const edges = getRoomBoundaryEdges(currentRoom).filter(edge => {
+      if (edge.side === 'top' || edge.side === 'bottom') {
+        return Math.abs(edge.x2 - edge.x1) >= doorWidthIn
+      }
+      return Math.abs(edge.y2 - edge.y1) >= doorWidthIn
+    })
+    if (edges.length === 0) return null
 
-    const dTop    = Math.abs(canvasPos.y - b.y)
-    const dBottom = Math.abs(canvasPos.y - (b.y + b.height))
-    const dLeft   = Math.abs(canvasPos.x - b.x)
-    const dRight  = Math.abs(canvasPos.x - (b.x + b.width))
+    let best: { side: DoorSide; x: number; y: number; width: number } | null = null
+    let bestDistance = Infinity
 
-    const min = Math.min(dTop, dBottom, dLeft, dRight)
-    let side: DoorSide
-    if      (min === dTop)    side = 'top'
-    else if (min === dBottom) side = 'bottom'
-    else if (min === dLeft)   side = 'left'
-    else                      side = 'right'
-
-    let x: number, y: number
-    if (side === 'top' || side === 'bottom') {
-      const rawX = canvasPos.x - doorWidthIn / 2
-      x = Math.max(b.x, Math.min(b.x + b.width - doorWidthIn, rawX))
-      y = side === 'top' ? b.y : b.y + b.height
-      x = Math.round(snapping.snapToGrid({ x, y: 0 }, settings.gridSize).x)
-      x = Math.max(b.x, Math.min(b.x + b.width - doorWidthIn, x))
-    } else {
-      const rawY = canvasPos.y - doorWidthIn / 2
-      y = Math.max(b.y, Math.min(b.y + b.height - doorWidthIn, rawY))
-      x = side === 'left' ? b.x : b.x + b.width
-      y = Math.round(snapping.snapToGrid({ x: 0, y }, settings.gridSize).y)
-      y = Math.max(b.y, Math.min(b.y + b.height - doorWidthIn, y))
+    for (const edge of edges) {
+      if (edge.side === 'top' || edge.side === 'bottom') {
+        const minX = Math.min(edge.x1, edge.x2)
+        const maxX = Math.max(edge.x1, edge.x2) - doorWidthIn
+        if (maxX < minX) continue
+        const rawX = canvasPos.x - doorWidthIn / 2
+        const snappedX = Math.round(snapping.snapToGrid({ x: rawX, y: 0 }, settings.gridSize).x)
+        const x = Math.max(minX, Math.min(maxX, snappedX))
+        const y = edge.y1
+        const centerX = x + doorWidthIn / 2
+        const distance = Math.hypot(canvasPos.x - centerX, canvasPos.y - y)
+        if (distance < bestDistance) {
+          bestDistance = distance
+          best = { side: edge.side, x, y, width: doorWidthIn }
+        }
+      } else {
+        const minY = Math.min(edge.y1, edge.y2)
+        const maxY = Math.max(edge.y1, edge.y2) - doorWidthIn
+        if (maxY < minY) continue
+        const rawY = canvasPos.y - doorWidthIn / 2
+        const snappedY = Math.round(snapping.snapToGrid({ x: 0, y: rawY }, settings.gridSize).y)
+        const y = Math.max(minY, Math.min(maxY, snappedY))
+        const x = edge.x1
+        const centerY = y + doorWidthIn / 2
+        const distance = Math.hypot(canvasPos.x - x, canvasPos.y - centerY)
+        if (distance < bestDistance) {
+          bestDistance = distance
+          best = { side: edge.side, x, y, width: doorWidthIn }
+        }
+      }
     }
 
-    return { side, x, y, width: doorWidthIn }
+    return best
   }, [settings.gridSize])
 
   const placeDoorAt = useCallback((canvasPos: Point) => {
@@ -437,6 +459,32 @@ export default function KonvaCanvas() {
       timestamp: Date.now(),
     })
   }, [computeDoorSnap, dispatch])
+
+  const assignVendorToTableIds = useCallback((vendorId: string, tableIds: string[]) => {
+    const vendor = useEditorStore.getState().vendors[vendorId as import('@/domain/types').VendorId]
+    if (!vendor || tableIds.length === 0) return
+
+    for (const tableId of tableIds) {
+      const existing = Object.values(useEditorStore.getState().vendorAssignments).find(a => a.tableId === tableId)
+      dispatch({
+        type: 'ASSIGN_VENDOR',
+        assignment: {
+          id: createAssignmentId(),
+          tableId: tableId as TableId,
+          layoutId: DRAFT_LAYOUT_ID,
+          vendorId: vendorId as import('@/domain/types').VendorId,
+          vendorName: vendor.companyName || vendor.name,
+          vendorCategory: vendor.category,
+          colorOverride: null,
+          notes: null,
+          paymentStatus: vendor.paymentStatus,
+          importSessionId: null,
+        },
+        prevAssignment: existing ?? null,
+        timestamp: Date.now(),
+      })
+    }
+  }, [dispatch])
 
   // ── Wheel zoom ─────────────────────────────────────────────────────────────
 
@@ -597,19 +645,12 @@ export default function KonvaCanvas() {
         // If already selected (possibly multi), keep selection so the whole
         // group can be dragged. A click without drag will not change selection.
       } else {
-        // Shift+click: range-select spatially between anchor and clicked table
+        // Shift+click: range-select along the dominant axis between anchor and clicked table
         const anchorId = [...selectedIds].find(id => tables[id])
         if (!anchorId) {
           setSelected([tableId])
         } else {
-          const allTables = Object.values(tables)
-          // Sort spatially: top-to-bottom bands, then left-to-right
-          const sorted = spatialSort(allTables)
-          const anchorIdx = sorted.findIndex(t => t.id === anchorId)
-          const clickedIdx = sorted.findIndex(t => t.id === tableId)
-          const lo = Math.min(anchorIdx, clickedIdx)
-          const hi = Math.max(anchorIdx, clickedIdx)
-          setSelected(sorted.slice(lo, hi + 1).map(t => t.id))
+          setSelected(selectRangeBetweenTables(anchorId, tableId, Object.values(tables)).map(t => t.id))
         }
       }
 
@@ -983,13 +1024,7 @@ export default function KonvaCanvas() {
   // ── Door list for rendering ────────────────────────────────────────────────
 
   const doorList = useMemo(() => Object.values(doorsRecord), [doorsRecord])
-
-  // ── Room bounds for door positioning ─────────────────────────────────────
-
-  const roomBounds = useMemo(() => {
-    if (!room) return null
-    return computeRoomBounds(room)
-  }, [room])
+  const roomBoundaryEdges = useMemo(() => (room ? getRoomBoundaryEdges(room) : []), [room])
 
   // ── Door drag handler ───────────────────────────────────────────────────
 
@@ -1016,6 +1051,50 @@ export default function KonvaCanvas() {
   // ── Table list for rendering ───────────────────────────────────────────────
 
   const tableList = Object.values(tables)
+  const hoveredAssignment = hoveredTableId ? assignmentMap.get(hoveredTableId) ?? null : null
+  const hoveredTable = hoveredTableId ? tables[hoveredTableId] ?? null : null
+
+  const zoomBy = useCallback((factor: number) => {
+    const nextScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, stageScale * factor))
+    setStageScaleLocal(nextScale)
+  }, [stageScale])
+
+  const resetView = useCallback(() => {
+    setStageScaleLocal(1)
+    setStagePosLocal({ x: 0, y: 0 })
+  }, [])
+
+  const miniMap = useMemo(() => {
+    const canvasWidth = settings.canvasWidth
+    const canvasHeight = settings.canvasHeight
+    const width = 170
+    const height = Math.max(110, Math.round((canvasHeight / canvasWidth) * width))
+    const scale = width / canvasWidth
+    const viewport = {
+      x: Math.max(0, (-stagePos.x / stageScale) * scale),
+      y: Math.max(0, (-stagePos.y / stageScale) * scale),
+      width: Math.min(width, (stageSize.width / stageScale) * scale),
+      height: Math.min(height, (stageSize.height / stageScale) * scale),
+    }
+    return { width, height, scale, viewport }
+  }, [settings.canvasWidth, settings.canvasHeight, stagePos.x, stagePos.y, stageScale, stageSize.width, stageSize.height])
+
+  const handleVendorDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const vendorId = e.dataTransfer.getData('application/x-floorplanner-vendor')
+    if (!vendorId || showMode) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const canvasPos = toCanvas({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+    const droppedTable = Object.values(tables).find(table =>
+      canvasPos.x >= table.x &&
+      canvasPos.x <= table.x + table.width &&
+      canvasPos.y >= table.y &&
+      canvasPos.y <= table.y + table.height,
+    )
+    if (!droppedTable) return
+    const targetIds = selectedIds.has(droppedTable.id) && selectedIds.size > 0 ? [...selectedIds] : [droppedTable.id]
+    assignVendorToTableIds(vendorId, targetIds)
+  }, [assignVendorToTableIds, selectedIds, showMode, tables, toCanvas])
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -1023,9 +1102,11 @@ export default function KonvaCanvas() {
     <div
       ref={containerRef}
       className={`w-full h-full ${cursorClass}`}
-      style={{ background: '#e2e8f0' }}
+      style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)' }}
       onContextMenu={e => e.preventDefault()}
       onAuxClick={e => e.preventDefault()}
+      onDragOver={e => e.preventDefault()}
+      onDrop={handleVendorDrop}
     >
       <Stage
         ref={stageRef}
@@ -1042,11 +1123,13 @@ export default function KonvaCanvas() {
         onDblClick={handleStageDblClick}
       >
         {/* Grid — static, no events */}
-        <GridLayer
-          width={settings.canvasWidth}
-          height={settings.canvasHeight}
-          gridSize={settings.gridSize}
-        />
+        {gridVisible && (
+          <GridLayer
+            width={settings.canvasWidth}
+            height={settings.canvasHeight}
+            gridSize={settings.gridSize}
+          />
+        )}
 
         {/* Background images — behind everything */}
         {bgImageList.length > 0 && (
@@ -1070,8 +1153,11 @@ export default function KonvaCanvas() {
           {tableList.map(table => {
             const assignment = assignmentMap.get(table.id)
             const sectionColor = table.sectionId ? sections[table.sectionId]?.color : undefined
-            const assignedColor = assignment ? vendorColor(assignment.vendorId) : undefined
-            const fillColor = assignment?.colorOverride ?? sectionColor ?? assignedColor
+            const fillColor = table.premium
+              ? PREMIUM_TABLE_FILL
+              : assignment
+                ? ASSIGNED_TABLE_FILL
+                : sectionColor ?? OPEN_TABLE_FILL
 
             // Compute highest warning severity for this table
             let warningSeverity: WarningSeverity | null = null
@@ -1097,6 +1183,8 @@ export default function KonvaCanvas() {
                 vendorName={assignmentMap.get(table.id)?.vendorName}
                 onRegister={registerNode}
                 onDoubleClick={handleTableDoubleClick}
+                onHoverStart={setHoveredTableId}
+                onHoverEnd={() => setHoveredTableId(null)}
               />
             )
           })}
@@ -1109,20 +1197,24 @@ export default function KonvaCanvas() {
         </Layer>
 
         {/* Interactive door layer */}
-        {roomBounds && doorList.length > 0 && (
+        {doorList.length > 0 && (
           <Layer>
-            {doorList.map(door => (
-              <DoorNode
-                key={door.id}
-                door={door}
-                bounds={roomBounds}
-                isSelected={selectedDoorId === door.id}
-                gridSize={settings.gridSize}
-                unitLabel={settings.unitLabel}
-                onDragEnd={handleDoorDragEnd}
-                onClick={setSelectedDoor}
-              />
-            ))}
+            {doorList.map(door => {
+              const edge = findBoundaryEdgeForDoor(door, roomBoundaryEdges)
+              if (!edge) return null
+              return (
+                <DoorNode
+                  key={door.id}
+                  door={door}
+                  edge={edge}
+                  isSelected={selectedDoorId === door.id}
+                  gridSize={settings.gridSize}
+                  unitLabel={settings.unitLabel}
+                  onDragEnd={handleDoorDragEnd}
+                  onClick={setSelectedDoor}
+                />
+              )
+            })}
           </Layer>
         )}
 
@@ -1189,6 +1281,61 @@ export default function KonvaCanvas() {
           </Layer>
         )}
       </Stage>
+
+      {!showMode && (
+        <>
+          <div className="absolute left-4 top-4 z-20 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <button onClick={() => zoomBy(ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">+</button>
+              <button onClick={() => zoomBy(1 / ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">-</button>
+              <button onClick={resetView} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">Reset</button>
+              <button
+                onClick={() => setGridVisible(!gridVisible)}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold ${gridVisible ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                Grid
+              </button>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">Pan with space + drag. Drop vendors directly on tables to assign.</div>
+          </div>
+
+          <div className="absolute right-4 top-4 z-20 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Mini Map</div>
+            <div className="relative overflow-hidden rounded-xl bg-slate-100" style={{ width: miniMap.width, height: miniMap.height }}>
+              {tableList.map(table => (
+                <div
+                  key={`mini-${table.id}`}
+                  className="absolute rounded-sm"
+                  style={{
+                    left: table.x * miniMap.scale,
+                    top: table.y * miniMap.scale,
+                    width: Math.max(2, table.width * miniMap.scale),
+                    height: Math.max(2, table.height * miniMap.scale),
+                    backgroundColor: table.premium ? '#d97706' : assignmentMap.has(table.id) ? '#16a34a' : '#94a3b8',
+                  }}
+                />
+              ))}
+              <div
+                className="absolute rounded-md border-2 border-blue-500/90 bg-blue-500/10"
+                style={{
+                  left: miniMap.viewport.x,
+                  top: miniMap.viewport.y,
+                  width: miniMap.viewport.width,
+                  height: miniMap.viewport.height,
+                }}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {hoveredTable && (
+        <div className="pointer-events-none absolute z-20 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg backdrop-blur-sm" style={{ left: hoveredTable.x * stageScale + stagePos.x + 16, top: hoveredTable.y * stageScale + stagePos.y - 12 }}>
+          <div className="font-semibold text-slate-900">{hoveredAssignment?.vendorName ?? 'Open table'}</div>
+          <div>Table {hoveredTable.label}</div>
+          <div>{hoveredTable.shape === 'round' ? 'Round' : 'Rectangle'}{hoveredTable.premium ? ' · Premium' : ''}</div>
+        </div>
+      )}
 
       {/* Inline label editor — HTML overlay on top of Konva canvas */}
       {editingTableId && editingPos && (
@@ -1317,5 +1464,66 @@ function spatialSort(tables: import('@/domain/types').TableObject[]): import('@/
   }
   bands.push(band)
   return bands.flatMap(b => b.sort((a, c) => a.x - c.x))
+}
+
+function selectRangeBetweenTables(
+  anchorId: string,
+  clickedId: string,
+  tables: import('@/domain/types').TableObject[],
+): import('@/domain/types').TableObject[] {
+  const anchor = tables.find(t => t.id === anchorId)
+  const clicked = tables.find(t => t.id === clickedId)
+  if (!anchor || !clicked) return []
+
+  const anchorCenter = { x: anchor.x + anchor.width / 2, y: anchor.y + anchor.height / 2 }
+  const clickedCenter = { x: clicked.x + clicked.width / 2, y: clicked.y + clicked.height / 2 }
+  const dx = clickedCenter.x - anchorCenter.x
+  const dy = clickedCenter.y - anchorCenter.y
+  const vertical = Math.abs(dy) >= Math.abs(dx)
+
+  const orthogonalTolerance = vertical
+    ? Math.max(anchor.width, clicked.width) * 0.75
+    : Math.max(anchor.height, clicked.height) * 0.75
+
+  const axisMin = vertical
+    ? Math.min(anchorCenter.y, clickedCenter.y)
+    : Math.min(anchorCenter.x, clickedCenter.x)
+  const axisMax = vertical
+    ? Math.max(anchorCenter.y, clickedCenter.y)
+    : Math.max(anchorCenter.x, clickedCenter.x)
+
+  const orthogonalMid = vertical
+    ? (anchorCenter.x + clickedCenter.x) / 2
+    : (anchorCenter.y + clickedCenter.y) / 2
+
+  const aligned = tables.filter(table => {
+    const center = { x: table.x + table.width / 2, y: table.y + table.height / 2 }
+    const primary = vertical ? center.y : center.x
+    const secondary = vertical ? center.x : center.y
+    return (
+      primary >= axisMin - 1 &&
+      primary <= axisMax + 1 &&
+      Math.abs(secondary - orthogonalMid) <= orthogonalTolerance
+    )
+  })
+
+  const sorted = vertical
+    ? [...aligned].sort((a, b) => (a.y + a.height / 2) - (b.y + b.height / 2) || a.x - b.x)
+    : [...aligned].sort((a, b) => (a.x + a.width / 2) - (b.x + b.width / 2) || a.y - b.y)
+
+  const anchorIdx = sorted.findIndex(t => t.id === anchorId)
+  const clickedIdx = sorted.findIndex(t => t.id === clickedId)
+  if (anchorIdx >= 0 && clickedIdx >= 0) {
+    const lo = Math.min(anchorIdx, clickedIdx)
+    const hi = Math.max(anchorIdx, clickedIdx)
+    return sorted.slice(lo, hi + 1)
+  }
+
+  const fallback = spatialSort(tables)
+  const fallbackAnchorIdx = fallback.findIndex(t => t.id === anchorId)
+  const fallbackClickedIdx = fallback.findIndex(t => t.id === clickedId)
+  const lo = Math.min(fallbackAnchorIdx, fallbackClickedIdx)
+  const hi = Math.max(fallbackAnchorIdx, fallbackClickedIdx)
+  return fallback.slice(lo, hi + 1)
 }
 

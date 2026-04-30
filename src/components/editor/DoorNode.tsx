@@ -1,3 +1,5 @@
+'use client'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DOOR NODE
 //
@@ -11,11 +13,12 @@
 import React, { memo, useCallback, useState } from 'react'
 import { Group, Line, Rect, Shape } from 'react-konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import type { Door, Rect as RectType } from '@/domain/types'
+import type { Door } from '@/domain/types'
+import type { RoomBoundaryEdge } from '@/domain/room-contour'
 
 interface DoorNodeProps {
   door: Door
-  bounds: RectType
+  edge: RoomBoundaryEdge
   isSelected: boolean
   gridSize: number    // canvas units per grid cell (e.g. 12 = 1 foot)
   unitLabel: string   // 'in' | 'ft' | 'px'
@@ -40,7 +43,7 @@ function fmtDist(units: number, gridSize: number, unitLabel: string): string {
   return `${Math.round(units)}`
 }
 
-const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, unitLabel, onDragEnd, onClick }: DoorNodeProps) {
+const DoorNode = memo(function DoorNode({ door, edge, isSelected, gridSize, unitLabel, onDragEnd, onClick }: DoorNodeProps) {
   const { side, width: doorWidth } = door
 
   let groupX: number
@@ -59,7 +62,7 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, un
   switch (side) {
     case 'top':
       groupX = door.x
-      groupY = bounds.y
+      groupY = door.y
       dragAxis = 'x'
       barX = 0; barY = -panelThickness / 2; barW = doorWidth; barH = panelThickness
       hingeX = 0; hingeY = 0
@@ -67,14 +70,14 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, un
       break
     case 'bottom':
       groupX = door.x
-      groupY = bounds.y + bounds.height
+      groupY = door.y
       dragAxis = 'x'
       barX = 0; barY = -panelThickness / 2; barW = doorWidth; barH = panelThickness
       hingeX = 0; hingeY = 0
       arcStart = -Math.PI / 2; arcEnd = 0
       break
     case 'left':
-      groupX = bounds.x
+      groupX = door.x
       groupY = door.y
       dragAxis = 'y'
       barX = -panelThickness / 2; barY = 0; barW = panelThickness; barH = doorWidth
@@ -82,7 +85,7 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, un
       arcStart = 0; arcEnd = Math.PI / 2
       break
     case 'right':
-      groupX = bounds.x + bounds.width
+      groupX = door.x
       groupY = door.y
       dragAxis = 'y'
       barX = -panelThickness / 2; barY = 0; barW = panelThickness; barH = doorWidth
@@ -119,16 +122,20 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, un
     const node = e.target
     if (dragAxis === 'x') {
       node.y(groupY)
-      const clampedX = Math.max(bounds.x, Math.min(bounds.x + bounds.width - doorWidth, node.x()))
+      const minX = Math.min(edge.x1, edge.x2)
+      const maxX = Math.max(edge.x1, edge.x2) - doorWidth
+      const clampedX = Math.max(minX, Math.min(maxX, node.x()))
       node.x(clampedX)
       setLiveX(clampedX)
     } else {
       node.x(groupX)
-      const clampedY = Math.max(bounds.y, Math.min(bounds.y + bounds.height - doorWidth, node.y()))
+      const minY = Math.min(edge.y1, edge.y2)
+      const maxY = Math.max(edge.y1, edge.y2) - doorWidth
+      const clampedY = Math.max(minY, Math.min(maxY, node.y()))
       node.y(clampedY)
       setLiveY(clampedY)
     }
-  }, [dragAxis, groupX, groupY, bounds, doorWidth])
+  }, [dragAxis, groupX, groupY, edge, doorWidth])
 
   const handleDragEnd = useCallback((e: KonvaEventObject<DragEvent>) => {
     setIsDragging(false)
@@ -142,11 +149,11 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, un
 
   // Distance from each wall end to the door edges (in canvas units = inches)
   const distA = dragAxis === 'x'
-    ? liveX - bounds.x                                    // left gap (horizontal doors)
-    : liveY - bounds.y                                    // top gap (vertical doors)
+    ? liveX - Math.min(edge.x1, edge.x2)                  // left gap (horizontal doors)
+    : liveY - Math.min(edge.y1, edge.y2)                  // top gap (vertical doors)
   const distB = dragAxis === 'x'
-    ? (bounds.x + bounds.width) - (liveX + doorWidth)    // right gap
-    : (bounds.y + bounds.height) - (liveY + doorWidth)   // bottom gap
+    ? Math.max(edge.x1, edge.x2) - (liveX + doorWidth)    // right gap
+    : Math.max(edge.y1, edge.y2) - (liveY + doorWidth)   // bottom gap
 
   const labelA = fmtDist(distA, gridSize, unitLabel)
   const labelB = fmtDist(distB, gridSize, unitLabel)
@@ -257,10 +264,10 @@ const DoorNode = memo(function DoorNode({ door, bounds, isSelected, gridSize, un
 
             // In group-local coords, door occupies 0..doorWidth (horizontal)
             // or 0..doorWidth (vertical). The wall ends are at:
-            const wallStart = dragAxis === 'x' ? bounds.x - liveX : bounds.y - liveY
+            const wallStart = dragAxis === 'x' ? Math.min(edge.x1, edge.x2) - liveX : Math.min(edge.y1, edge.y2) - liveY
             const wallEnd   = dragAxis === 'x'
-              ? bounds.x + bounds.width - liveX
-              : bounds.y + bounds.height - liveY
+              ? Math.max(edge.x1, edge.x2) - liveX
+              : Math.max(edge.y1, edge.y2) - liveY
 
             const OFFSET = side === 'top' ? -22 : side === 'bottom' ? 22 : 0
             const OFFSET_V = side === 'left' ? -22 : side === 'right' ? 22 : 0

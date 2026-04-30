@@ -7,7 +7,7 @@ export const DEFAULT_SETTINGS: LayoutSettings = {
   gridSize: 12,         // snap every 12 inches (1 foot)
   snapToGrid: true,
   snapToObjects: false,
-  minAisleWidth: 36,    // 36 in = 3 ft minimum aisle
+  minAisleWidth: 84,    // 84 in = 7 ft default aisle
   doorClearance: 48,    // 48 in = 4 ft door clearance
   wallSetback: 36,      // 36 in = 3 ft from wall to nearest table
   showWallSetback: false,
@@ -71,13 +71,16 @@ export function vendorColor(vendorId: string): string {
 }
 
 // Default table fill / stroke colors
-export const DEFAULT_TABLE_FILL    = '#f8fafc'
-export const DEFAULT_TABLE_STROKE  = '#94a3b8'
+export const DEFAULT_TABLE_FILL = '#f8fafc'
+export const DEFAULT_TABLE_STROKE = '#94a3b8'
 export const SELECTED_TABLE_STROKE = '#2563eb'
-export const WARNING_TABLE_STROKE  = '#ef4444'   // error (red)
-export const CAUTION_TABLE_STROKE = '#f59e0b'   // warning (amber)
+export const WARNING_TABLE_STROKE = '#ef4444'
+export const CAUTION_TABLE_STROKE = '#f59e0b'
 export const SELECTED_STROKE_WIDTH = 2
-export const DEFAULT_STROKE_WIDTH  = 1
+export const DEFAULT_STROKE_WIDTH = 1
+export const OPEN_TABLE_FILL = '#e5e7eb'
+export const ASSIGNED_TABLE_FILL = '#86efac'
+export const PREMIUM_TABLE_FILL = '#fcd34d'
 
 // Placeholder layout ID until persistence (Phase 6)
 export const DRAFT_LAYOUT_ID = 'draft' as LayoutId

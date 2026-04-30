@@ -136,6 +136,7 @@ export interface Vendor {
   firstName?: string | null
   lastName?: string | null
   companyName?: string | null
+  email?: string | null
   tablesNeeded: number          // how many tables this vendor purchased
   category: string | null
   paymentStatus: PaymentStatus
