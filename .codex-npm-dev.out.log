@@ -1,0 +1,44 @@
+
+> floorplanner@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.14
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.0.111:3000
+
+ ✓ Starting...
+ ✓ Ready in 1116ms
+ ○ Compiling / ...
+ ✓ Compiled / in 2.2s (859 modules)
+ GET / 200 in 2462ms
+ ✓ Compiled in 85ms (390 modules)
+ GET / 200 in 25ms
+ GET / 200 in 30ms
+ ✓ Compiled in 245ms (814 modules)
+ GET / 200 in 57ms
+ GET / 200 in 16ms
+ ✓ Compiled in 172ms (800 modules)
+ ✓ Compiled in 104ms (800 modules)
+ ✓ Compiled in 117ms (800 modules)
+ ✓ Compiled in 87ms (367 modules)
+ GET / 200 in 111ms
+ ✓ Compiled in 132ms (367 modules)
+ GET / 200 in 359ms
+ GET / 200 in 341ms
+ GET / 200 in 76ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 762ms (1146 modules)
+ GET / 500 in 1478ms
+ GET / 500 in 602ms
+ GET / 500 in 259ms
+ GET / 500 in 256ms
+ ✓ Compiled in 372ms (1160 modules)
+ ✓ Compiled in 165ms (1162 modules)
+ ✓ Compiled in 147ms (1162 modules)
+ ✓ Compiled in 129ms (1162 modules)
+ ✓ Compiled in 161ms (1066 modules)
+ ✓ Compiled in 108ms (1052 modules)
+ ✓ Compiled in 87ms (1052 modules)
+ ✓ Compiled /_not-found in 383ms (1057 modules)
+ ✓ Compiled /_error in 217ms (1153 modules)
+ GET / 500 in 1562ms
