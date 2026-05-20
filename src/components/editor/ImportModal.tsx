@@ -23,6 +23,75 @@ const FIELD_LABELS: Record<keyof FieldMapping, string> = {
   section: 'Section',
 }
 
+const STRUCTURED_IMPORT_COLUMNS: Array<{ key: keyof FieldMapping; placeholder: string }> = [
+  { key: 'tableNumber', placeholder: '1-2' },
+  { key: 'vendorName', placeholder: 'Jane' },
+  { key: 'vendorLastName', placeholder: 'Doe' },
+  { key: 'companyName', placeholder: 'Card Castle' },
+  { key: 'email', placeholder: 'jane@example.com' },
+  { key: 'vendorCategory', placeholder: 'Premium' },
+  { key: 'quantity', placeholder: '2' },
+  { key: 'color', placeholder: '#ff0000' },
+  { key: 'notes', placeholder: 'Corner booth' },
+  { key: 'paymentStatus', placeholder: 'paid' },
+  { key: 'section', placeholder: 'Main Hall' },
+]
+
+type StructuredImportRow = Record<keyof FieldMapping, string>
+
+function createEmptyStructuredRow(): StructuredImportRow {
+  return {
+    tableNumber: '',
+    vendorName: '',
+    vendorLastName: '',
+    companyName: '',
+    email: '',
+    vendorCategory: '',
+    quantity: '',
+    color: '',
+    notes: '',
+    paymentStatus: '',
+    section: '',
+  }
+}
+
+function csvEscape(value: string): string {
+  const trimmed = value.trim()
+  if (!/[",\n]/.test(trimmed)) return trimmed
+  return `"${trimmed.replace(/"/g, '""')}"`
+}
+
+function structuredRowsToCsv(rows: StructuredImportRow[]): string {
+  const nonEmptyRows = rows.filter(row =>
+    STRUCTURED_IMPORT_COLUMNS.some(col => row[col.key].trim() !== ''),
+  )
+  if (nonEmptyRows.length === 0) return ''
+
+  const header = STRUCTURED_IMPORT_COLUMNS.map(col => FIELD_LABELS[col.key]).join(',')
+  const body = nonEmptyRows.map(row =>
+    STRUCTURED_IMPORT_COLUMNS.map(col => csvEscape(row[col.key])).join(','),
+  )
+  return [header, ...body].join('\n')
+}
+
+function parseStructuredPaste(text: string): StructuredImportRow[] {
+  const lines = text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(line => line.trimEnd())
+    .filter(Boolean)
+
+  return lines.map(line => {
+    const parts = line.split('\t')
+    const row = createEmptyStructuredRow()
+    STRUCTURED_IMPORT_COLUMNS.forEach((col, idx) => {
+      row[col.key] = parts[idx] ?? ''
+    })
+    return row
+  })
+}
+
 export default function ImportModal({ onClose }: Props) {
   const importSession = useEditorStore(s => s.importSession)
   const startImport = useEditorStore(s => s.startImportSession)
@@ -32,9 +101,13 @@ export default function ImportModal({ onClose }: Props) {
   const cancelImport = useEditorStore(s => s.cancelImport)
 
   const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [inputMode, setInputMode] = useState<'raw' | 'structured'>('raw')
   const [csvText, setCsvText] = useState('')
   const [parseError, setParseError] = useState('')
   const [parseWarnings, setParseWarnings] = useState<string[]>([])
+  const [structuredRows, setStructuredRows] = useState<StructuredImportRow[]>(
+    () => Array.from({ length: 8 }, () => createEmptyStructuredRow()),
+  )
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleClose = useCallback(() => {
@@ -61,20 +134,73 @@ export default function ImportModal({ onClose }: Props) {
       return
     }
     const reader = new FileReader()
-    reader.onload = ev => setCsvText((ev.target?.result as string) ?? '')
+    reader.onload = ev => {
+      setInputMode('raw')
+      setCsvText((ev.target?.result as string) ?? '')
+    }
     reader.readAsText(file)
   }
 
   function handleParse() {
-    if (!csvText.trim()) {
-      setParseError('Paste CSV content or choose a file.')
+    const sourceText = inputMode === 'structured'
+      ? structuredRowsToCsv(structuredRows)
+      : csvText
+
+    if (!sourceText.trim()) {
+      setParseError(inputMode === 'structured'
+        ? 'Paste spreadsheet rows or type into the grid before continuing.'
+        : 'Paste CSV content or choose a file.')
       return
     }
     setParseError('')
-    const preParsed = csvImportModule.parseCSV(csvText)
+    const preParsed = csvImportModule.parseCSV(sourceText)
     setParseWarnings(preParsed.parseErrors)
-    startImport(csvText)
+    startImport(sourceText)
     setStep(2)
+  }
+
+  function handleStructuredCellChange(rowIndex: number, field: keyof FieldMapping, value: string) {
+    setStructuredRows(rows => rows.map((row, idx) =>
+      idx === rowIndex ? { ...row, [field]: value } : row,
+    ))
+  }
+
+  function handleStructuredPaste(e: React.ClipboardEvent<HTMLTableSectionElement>) {
+    const active = document.activeElement
+    if (!(active instanceof HTMLInputElement)) return
+
+    const rowIndex = Number(active.dataset.rowIndex ?? '-1')
+    const colIndex = Number(active.dataset.colIndex ?? '-1')
+    if (rowIndex < 0 || colIndex < 0) return
+
+    const text = e.clipboardData.getData('text/plain')
+    if (!text.includes('\t') && !text.includes('\n')) return
+
+    e.preventDefault()
+    const pastedRows = parseStructuredPaste(text)
+    if (pastedRows.length === 0) return
+
+    setStructuredRows(current => {
+      const next = [...current]
+      const neededRows = rowIndex + pastedRows.length
+      while (next.length < neededRows) next.push(createEmptyStructuredRow())
+
+      pastedRows.forEach((pastedRow, pastedRowIndex) => {
+        const targetIndex = rowIndex + pastedRowIndex
+        const merged = { ...next[targetIndex] }
+
+        STRUCTURED_IMPORT_COLUMNS.forEach((col, pastedColIndex) => {
+          const targetColIndex = colIndex + pastedColIndex
+          if (targetColIndex >= STRUCTURED_IMPORT_COLUMNS.length) return
+          const targetKey = STRUCTURED_IMPORT_COLUMNS[targetColIndex].key
+          merged[targetKey] = pastedRow[col.key]
+        })
+
+        next[targetIndex] = merged
+      })
+
+      return next
+    })
   }
 
   function handleMappingChange(field: keyof FieldMapping, value: string) {
@@ -130,23 +256,98 @@ export default function ImportModal({ onClose }: Props) {
                 Table numbers are optional.
               </p>
 
-              <div className="flex items-center gap-3">
+              <div className="flex gap-2 text-sm">
                 <button
-                  onClick={() => fileRef.current?.click()}
-                  className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded"
+                  onClick={() => setInputMode('raw')}
+                  className={`px-3 py-1.5 rounded ${inputMode === 'raw' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                 >
-                  Choose File
+                  Raw CSV / TSV
                 </button>
-                <span className="text-gray-500 text-sm">or paste below</span>
-                <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileChange} />
+                <button
+                  onClick={() => setInputMode('structured')}
+                  className={`px-3 py-1.5 rounded ${inputMode === 'structured' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                >
+                  Spreadsheet View
+                </button>
               </div>
 
-              <textarea
-                value={csvText}
-                onChange={e => setCsvText(e.target.value)}
-                placeholder={'Paste tab-separated data or CSV:\n\nFirst Name\tLast Name\tCompany (Billing)\tCategory\tQuantity\nAaron\tMursch\tSenpai Nation\tPremium\t1\nAlex\tSeyler\t\tPremium\t2\n\nOr with table assignments:\nTable #,First Name,Last Name,Company,Quantity\n1-2,Jane,Doe,Card Castle,2'}
-                className="w-full h-48 bg-gray-800 border border-gray-600 rounded text-gray-200 text-xs font-mono p-3 resize-none focus:outline-none focus:border-blue-500"
-              />
+              {inputMode === 'raw' ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded"
+                    >
+                      Choose File
+                    </button>
+                    <span className="text-gray-500 text-sm">or paste below</span>
+                    <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileChange} />
+                  </div>
+
+                  <textarea
+                    value={csvText}
+                    onChange={e => setCsvText(e.target.value)}
+                    placeholder={'Paste tab-separated data or CSV:\n\nFirst Name\tLast Name\tCompany (Billing)\tCategory\tQuantity\nAaron\tMursch\tSenpai Nation\tPremium\t1\nAlex\tSeyler\t\tPremium\t2\n\nOr with table assignments:\nTable #,First Name,Last Name,Company,Quantity\n1-2,Jane,Doe,Card Castle,2'}
+                    className="w-full h-48 bg-gray-800 border border-gray-600 rounded text-gray-200 text-xs font-mono p-3 resize-none focus:outline-none focus:border-blue-500"
+                  />
+                </>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-gray-400">
+                      Paste directly from Excel or Google Sheets into the grid. Columns stay aligned with the importer fields.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setStructuredRows(rows => [...rows, createEmptyStructuredRow(), createEmptyStructuredRow()])}
+                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded"
+                      >
+                        Add Rows
+                      </button>
+                      <button
+                        onClick={() => setStructuredRows(Array.from({ length: 8 }, () => createEmptyStructuredRow()))}
+                        className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-auto border border-gray-700 rounded">
+                    <table className="min-w-full text-xs text-gray-200">
+                      <thead className="bg-gray-800">
+                        <tr>
+                          <th className="px-2 py-2 text-left text-gray-500 w-10">#</th>
+                          {STRUCTURED_IMPORT_COLUMNS.map(col => (
+                            <th key={col.key} className="px-2 py-2 text-left text-gray-400 whitespace-nowrap">
+                              {FIELD_LABELS[col.key]}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody onPaste={handleStructuredPaste}>
+                        {structuredRows.map((row, rowIndex) => (
+                          <tr key={rowIndex} className="border-t border-gray-800">
+                            <td className="px-2 py-1 text-gray-500 align-top">{rowIndex + 1}</td>
+                            {STRUCTURED_IMPORT_COLUMNS.map((col, colIndex) => (
+                              <td key={col.key} className="p-1">
+                                <input
+                                  data-row-index={rowIndex}
+                                  data-col-index={colIndex}
+                                  value={row[col.key]}
+                                  onChange={e => handleStructuredCellChange(rowIndex, col.key, e.target.value)}
+                                  placeholder={col.placeholder}
+                                  className="w-36 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {parseError && <p className="text-red-400 text-sm">{parseError}</p>}
             </div>

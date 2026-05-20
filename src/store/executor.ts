@@ -20,7 +20,9 @@ import type { LayoutCommand } from '@/domain/commands'
 function cloneRoom(room: CompositeRoom): CompositeRoom {
   return {
     segments: room.segments.map(s => ({ ...s })),
+    circles: room.circles?.map(circle => ({ ...circle })) ?? [],
     freehandVertices: room.freehandVertices ? room.freehandVertices.map(v => ({ ...v })) : null,
+    roomLabels: room.roomLabels ? { ...room.roomLabels } : undefined,
   }
 }
 
@@ -225,7 +227,7 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
 
     case 'ADD_ROOM_SEGMENT': {
       if (!state.room) {
-        state.room = { segments: [], freehandVertices: null }
+        state.room = { segments: [], circles: [], freehandVertices: null, roomLabels: {} }
       }
       state.room.segments.push({ ...command.segment })
       state.room.freehandVertices = null // adding segments clears freehand
@@ -258,7 +260,9 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
     case 'SET_FREEHAND_ROOM': {
       state.room = {
         segments: [],
+        circles: [],
         freehandVertices: command.vertices.map(v => ({ ...v })),
+        roomLabels: command.prevRoom?.roomLabels ? { ...command.prevRoom.roomLabels } : {},
       }
       break
     }
@@ -495,7 +499,7 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
 
     case 'DELETE_ROOM_SEGMENT': {
       if (!state.room) {
-        state.room = { segments: [], freehandVertices: null }
+        state.room = { segments: [], circles: [], freehandVertices: null, roomLabels: {} }
       }
       state.room.segments.push({ ...command.segment })
       break

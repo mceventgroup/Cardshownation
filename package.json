@@ -11,6 +11,7 @@
     "test:watch": "jest"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "immer": "^10.1.1",
     "konva": "^9.3.20",
     "next": "^15.5.14",

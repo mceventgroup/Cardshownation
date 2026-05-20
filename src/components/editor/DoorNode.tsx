@@ -27,6 +27,7 @@ interface DoorNodeProps {
 }
 
 const DOOR_COLOR = '#2563eb'
+const ENTRANCE_COLOR = '#7c3aed'
 
 /** Format a distance in canvas units (inches) as a readable string. */
 function fmtDist(units: number, gridSize: number, unitLabel: string): string {
@@ -45,6 +46,8 @@ function fmtDist(units: number, gridSize: number, unitLabel: string): string {
 
 const DoorNode = memo(function DoorNode({ door, edge, isSelected, gridSize, unitLabel, onDragEnd, onClick }: DoorNodeProps) {
   const { side, width: doorWidth } = door
+  const isEntrance = door.kind === 'entrance'
+  const accentColor = isEntrance ? ENTRANCE_COLOR : DOOR_COLOR
 
   let groupX: number
   let groupY: number
@@ -187,7 +190,7 @@ const DoorNode = memo(function DoorNode({ door, edge, isSelected, gridSize, unit
         y={barY}
         width={barW}
         height={barH}
-        fill={isSelected ? '#1d4ed8' : DOOR_COLOR}
+        fill={isSelected ? (isEntrance ? '#6d28d9' : '#1d4ed8') : accentColor}
         stroke={isSelected ? '#fbbf24' : undefined}
         strokeWidth={isSelected ? 2 : 0}
         cornerRadius={1}
@@ -201,18 +204,33 @@ const DoorNode = memo(function DoorNode({ door, edge, isSelected, gridSize, unit
           ctx.arc(hingeX, hingeY, doorWidth * 0.8, arcStart, arcEnd, false)
           ctx.strokeShape(shape)
         }}
-        stroke={DOOR_COLOR}
+        stroke={accentColor}
         strokeWidth={0.75}
         dash={[3, 3]}
         opacity={0.4}
         listening={false}
       />
 
+      {isEntrance && (
+        <Line
+          points={
+            side === 'top' ? [doorWidth / 2, -14, doorWidth / 2, 8, doorWidth / 2 - 5, 3, doorWidth / 2, 8, doorWidth / 2 + 5, 3]
+            : side === 'bottom' ? [doorWidth / 2, 14, doorWidth / 2, -8, doorWidth / 2 - 5, -3, doorWidth / 2, -8, doorWidth / 2 + 5, -3]
+            : side === 'left' ? [-14, doorWidth / 2, 8, doorWidth / 2, 3, doorWidth / 2 - 5, 8, doorWidth / 2, 3, doorWidth / 2 + 5]
+            : [14, doorWidth / 2, -8, doorWidth / 2, -3, doorWidth / 2 - 5, -8, doorWidth / 2, -3, doorWidth / 2 + 5]
+          }
+          stroke={accentColor}
+          strokeWidth={2}
+          lineCap="round"
+          lineJoin="round"
+          listening={false}
+        />
+      )}
+
       {/* Door label */}
       <Shape
         sceneFunc={(ctx) => {
-          ctx.font = '10px sans-serif'
-          ctx.fillStyle = DOOR_COLOR
+          ctx.font = 'bold 10px sans-serif'
           ctx.textAlign = 'center'
           ctx.textBaseline = 'middle'
 
@@ -231,6 +249,11 @@ const DoorNode = memo(function DoorNode({ door, edge, isSelected, gridSize, unit
               lx = 12; ly = doorWidth / 2
               break
           }
+          // Keep entrance labels readable against walls and background artwork.
+          ctx.lineWidth = 3
+          ctx.strokeStyle = 'rgba(255,255,255,0.95)'
+          ctx.strokeText(door.label, lx, ly)
+          ctx.fillStyle = '#111827'
           ctx.fillText(door.label, lx, ly)
         }}
         listening={false}

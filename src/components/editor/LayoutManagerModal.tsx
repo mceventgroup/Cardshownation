@@ -1,15 +1,30 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useEditorStore } from '@/store'
+import { useEffect, useState } from 'react'
+import { useEditorStore } from '@/store/index'
+import { extractDocumentSlice } from '@/lib/persistence'
 import {
-  listLayouts, deleteLayout, renameLayout, getActiveLayoutId, clearAllLayouts, recoverLayoutsFromStorage,
+  clearAllLayouts,
+  deleteLayout,
+  getActiveLayoutId,
+  listLayouts,
+  recoverLayoutsFromStorage,
+  renameLayout,
   type LayoutEntry,
 } from '@/lib/persistence'
+import {
+  deleteCloudLayout,
+  listCloudLayouts,
+  loadCloudLayout,
+  saveCloudLayout,
+  type CloudLayoutSummary,
+} from '@/lib/cloud-layouts'
 
 interface Props {
   onClose: () => void
 }
+
+const CLOUD_SAVE_KEY = 'floorplanner:cloud-save-key'
 
 function formatSavedAt(savedAt: string): string {
   const d = new Date(savedAt)
@@ -20,6 +35,10 @@ function formatSavedAt(savedAt: string): string {
 export default function LayoutManagerModal({ onClose }: Props) {
   const saveAs = useEditorStore(s => s.saveCurrentLayoutAs)
   const switchTo = useEditorStore(s => s.switchToLayout)
+  const loadDocumentSlice = useEditorStore(s => s.loadDocumentSlice)
+  const setActiveCloudLayout = useEditorStore(s => s.setActiveCloudLayout)
+  const activeCloudLayoutId = useEditorStore(s => s.activeCloudLayoutId)
+  const activeCloudLayoutName = useEditorStore(s => s.activeCloudLayoutName)
 
   const [layouts, setLayouts] = useState<LayoutEntry[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -28,13 +47,47 @@ export default function LayoutManagerModal({ onClose }: Props) {
   const [renameText, setRenameText] = useState('')
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null)
 
+  const [cloudSaveKey, setCloudSaveKey] = useState('')
+  const [cloudLayouts, setCloudLayouts] = useState<CloudLayoutSummary[]>([])
+  const [cloudName, setCloudName] = useState('')
+  const [cloudStatus, setCloudStatus] = useState<string | null>(null)
+  const [cloudError, setCloudError] = useState<string | null>(null)
+  const [cloudLoading, setCloudLoading] = useState(false)
+
   function refresh() {
     setLayouts(listLayouts())
     setActiveId(getActiveLayoutId())
   }
 
+  async function refreshCloudLayouts(saveKey = cloudSaveKey) {
+    if (!saveKey.trim()) {
+      setCloudLayouts([])
+      return
+    }
+
+    setCloudLoading(true)
+    setCloudError(null)
+    try {
+      setCloudLayouts(await listCloudLayouts(saveKey.trim()))
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : 'Failed to list cloud layouts.')
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
   useEffect(() => {
     refresh()
+    try {
+      const storedKey = window.localStorage.getItem(CLOUD_SAVE_KEY) ?? ''
+      setCloudSaveKey(storedKey)
+      if (storedKey) {
+        void refreshCloudLayouts(storedKey)
+      }
+    } catch {
+      // Ignore localStorage access issues.
+    }
+
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
     }
@@ -42,6 +95,19 @@ export default function LayoutManagerModal({ onClose }: Props) {
     return () => window.removeEventListener('keydown', onKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  function rememberCloudKey(value: string) {
+    setCloudSaveKey(value)
+    try {
+      if (value.trim()) {
+        window.localStorage.setItem(CLOUD_SAVE_KEY, value.trim())
+      } else {
+        window.localStorage.removeItem(CLOUD_SAVE_KEY)
+      }
+    } catch {
+      // Ignore localStorage access issues.
+    }
+  }
 
   function handleSaveNew() {
     const name = newName.trim()
@@ -69,6 +135,7 @@ export default function LayoutManagerModal({ onClose }: Props) {
     clearAllLayouts()
     refresh()
   }
+
   function handleRename(id: string) {
     const name = renameText.trim()
     if (!name) return
@@ -87,102 +154,272 @@ export default function LayoutManagerModal({ onClose }: Props) {
     )
   }
 
+  async function handleCloudSave() {
+    const trimmedKey = cloudSaveKey.trim()
+    const name = cloudName.trim() || activeCloudLayoutName || newName.trim() || 'Floor Plan'
+    if (!trimmedKey) {
+      setCloudError('Enter your cloud save key first.')
+      return
+    }
+
+    setCloudLoading(true)
+    setCloudError(null)
+    setCloudStatus(null)
+    try {
+      const saved = await saveCloudLayout({
+        id: activeCloudLayoutId,
+        name,
+        data: extractDocumentSlice(useEditorStore.getState()),
+        saveKey: trimmedKey,
+      })
+      setActiveCloudLayout({ id: saved.id, name: saved.name })
+      setCloudName(saved.name)
+      setCloudStatus(`Saved "${saved.name}" to cloud.`)
+      await refreshCloudLayouts(trimmedKey)
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : 'Failed to save cloud layout.')
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
+  async function handleCloudLoad(id: string) {
+    const trimmedKey = cloudSaveKey.trim()
+    if (!trimmedKey) {
+      setCloudError('Enter your cloud save key first.')
+      return
+    }
+    if (!window.confirm('Load this cloud layout into the editor? Current work will be replaced.')) return
+
+    setCloudLoading(true)
+    setCloudError(null)
+    setCloudStatus(null)
+    try {
+      const layout = await loadCloudLayout(id, trimmedKey)
+      loadDocumentSlice(layout.data)
+      setActiveCloudLayout({ id: layout.id, name: layout.name })
+      setCloudName(layout.name)
+      setCloudStatus(`Loaded "${layout.name}" from cloud.`)
+      refresh()
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : 'Failed to load cloud layout.')
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
+  async function handleCloudDelete(id: string, name: string) {
+    const trimmedKey = cloudSaveKey.trim()
+    if (!trimmedKey) {
+      setCloudError('Enter your cloud save key first.')
+      return
+    }
+    if (!window.confirm(`Delete cloud layout "${name}"? This cannot be undone.`)) return
+
+    setCloudLoading(true)
+    setCloudError(null)
+    setCloudStatus(null)
+    try {
+      await deleteCloudLayout(id, trimmedKey)
+      if (activeCloudLayoutId === id) {
+        setActiveCloudLayout(null)
+      }
+      setCloudStatus(`Deleted "${name}" from cloud.`)
+      await refreshCloudLayouts(trimmedKey)
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : 'Failed to delete cloud layout.')
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] flex flex-col"
+        className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-5xl max-h-[80vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
           <h2 className="text-white font-semibold text-base">Saved Layouts</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
 
-        {/* Layout list */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-1">
-          <button
-            onClick={handleRecover}
-            className="w-full mb-3 px-3 py-2 text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-900/20 rounded border border-amber-900/40 hover:border-amber-700/60 transition-colors"
-          >
-            Recover Saved Layouts
-          </button>
-          {recoveryMessage && (
-            <p className="mb-3 text-xs text-amber-200 bg-amber-950/40 border border-amber-900/40 rounded px-3 py-2">
-              {recoveryMessage}
-            </p>
-          )}
-          {layouts.length === 0 && (
-            <p className="text-gray-500 text-sm text-center py-6">No saved layouts yet. Save your current layout below.</p>
-          )}
-          {layouts.map(l => (
-            <div
-              key={l.id}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors group ${
-                l.id === activeId
-                  ? 'bg-blue-600/20 border border-blue-500/40'
-                  : 'bg-gray-800 border border-gray-700 hover:border-gray-600'
-              }`}
-              onClick={() => handleSwitch(l.id)}
-            >
-              <div className="flex-1 min-w-0">
-                {renamingId === l.id ? (
-                  <input
-                    autoFocus
-                    value={renameText}
-                    onChange={e => setRenameText(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleRename(l.id)
-                      if (e.key === 'Escape') setRenamingId(null)
-                      e.stopPropagation()
-                    }}
-                    onBlur={() => handleRename(l.id)}
-                    onClick={e => e.stopPropagation()}
-                    className="bg-gray-700 border border-blue-500 text-white text-sm rounded px-2 py-0.5 w-full focus:outline-none"
-                  />
-                ) : (
-                  <>
+        <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-2">
+          <div className="flex min-h-0 flex-col border-b border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-700">
+            <div className="border-b border-gray-800 px-5 py-3">
+              <h3 className="text-sm font-semibold text-white">Browser Saves</h3>
+              <p className="mt-1 text-xs text-gray-400">Stored only in this browser profile.</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-1">
+              <button
+                onClick={handleRecover}
+                className="w-full mb-3 px-3 py-2 text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-900/20 rounded border border-amber-900/40 hover:border-amber-700/60 transition-colors"
+              >
+                Recover Saved Layouts
+              </button>
+              {recoveryMessage && (
+                <p className="mb-3 text-xs text-amber-200 bg-amber-950/40 border border-amber-900/40 rounded px-3 py-2">
+                  {recoveryMessage}
+                </p>
+              )}
+              {layouts.length === 0 && (
+                <p className="text-gray-500 text-sm text-center py-6">No saved layouts yet. Save your current layout below.</p>
+              )}
+              {layouts.map(l => (
+                <div
+                  key={l.id}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors group ${
+                    l.id === activeId
+                      ? 'bg-blue-600/20 border border-blue-500/40'
+                      : 'bg-gray-800 border border-gray-700 hover:border-gray-600'
+                  }`}
+                  onClick={() => handleSwitch(l.id)}
+                >
+                  <div className="flex-1 min-w-0">
+                    {renamingId === l.id ? (
+                      <input
+                        autoFocus
+                        value={renameText}
+                        onChange={e => setRenameText(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleRename(l.id)
+                          if (e.key === 'Escape') setRenamingId(null)
+                          e.stopPropagation()
+                        }}
+                        onBlur={() => handleRename(l.id)}
+                        onClick={e => e.stopPropagation()}
+                        className="bg-gray-700 border border-blue-500 text-white text-sm rounded px-2 py-0.5 w-full focus:outline-none"
+                      />
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-white font-medium truncate">{l.name}</span>
+                          {l.id === activeId && (
+                            <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded">Active</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {l.tableCount} tables, {l.vendorCount} vendors
+                          {' - '}
+                          {formatSavedAt(l.savedAt)}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button
+                      onClick={e => {
+                        e.stopPropagation()
+                        setRenamingId(l.id)
+                        setRenameText(l.name)
+                      }}
+                      className="text-xs text-gray-400 hover:text-blue-400 px-1"
+                    >
+                      rename
+                    </button>
+                    {layouts.length > 1 && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDelete(l.id, l.name) }}
+                        className="text-xs text-gray-400 hover:text-red-400 px-1"
+                      >
+                        delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex min-h-0 flex-col">
+            <div className="border-b border-gray-800 px-5 py-3">
+              <h3 className="text-sm font-semibold text-white">Cloud Saves</h3>
+              <p className="mt-1 text-xs text-gray-400">Stored in Neon and available outside this browser.</p>
+            </div>
+            <div className="border-b border-gray-800 p-4 space-y-3">
+              <div className="flex gap-2">
+                <input
+                  value={cloudSaveKey}
+                  onChange={e => rememberCloudKey(e.target.value)}
+                  placeholder="Cloud save key..."
+                  className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  onClick={() => void refreshCloudLayouts()}
+                  disabled={cloudLoading || !cloudSaveKey.trim()}
+                  className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-gray-500 disabled:opacity-50"
+                >
+                  Refresh
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={cloudName}
+                  onChange={e => setCloudName(e.target.value)}
+                  placeholder={activeCloudLayoutName ? `Current: ${activeCloudLayoutName}` : 'Cloud layout name...'}
+                  className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  onClick={() => void handleCloudSave()}
+                  disabled={cloudLoading || !cloudSaveKey.trim()}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-medium rounded"
+                >
+                  {activeCloudLayoutId ? 'Update Cloud' : 'Save To Cloud'}
+                </button>
+              </div>
+              {cloudStatus && <p className="text-xs text-emerald-300">{cloudStatus}</p>}
+              {cloudError && <p className="text-xs text-red-300">{cloudError}</p>}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-1">
+              {!cloudSaveKey.trim() && (
+                <p className="text-gray-500 text-sm text-center py-6">Enter your cloud save key to list server-backed layouts.</p>
+              )}
+              {cloudSaveKey.trim() && !cloudLoading && cloudLayouts.length === 0 && !cloudError && (
+                <p className="text-gray-500 text-sm text-center py-6">No cloud layouts saved yet.</p>
+              )}
+              {cloudLayouts.map(l => (
+                <div
+                  key={l.id}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                    l.id === activeCloudLayoutId
+                      ? 'bg-emerald-600/20 border border-emerald-500/40'
+                      : 'bg-gray-800 border border-gray-700'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-white font-medium truncate">{l.name}</span>
-                      {l.id === activeId && (
-                        <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded">Active</span>
+                      {l.id === activeCloudLayoutId && (
+                        <span className="text-xs bg-emerald-600 text-white px-1.5 py-0.5 rounded">Active</span>
                       )}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       {l.tableCount} tables, {l.vendorCount} vendors
-                      {' — '}
+                      {' - '}
                       {formatSavedAt(l.savedAt)}
                     </div>
-                  </>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <button
-                  onClick={e => {
-                    e.stopPropagation()
-                    setRenamingId(l.id)
-                    setRenameText(l.name)
-                  }}
-                  className="text-xs text-gray-400 hover:text-blue-400 px-1"
-                >
-                  rename
-                </button>
-                {layouts.length > 1 && (
-                  <button
-                    onClick={e => { e.stopPropagation(); handleDelete(l.id, l.name) }}
-                    className="text-xs text-gray-400 hover:text-red-400 px-1"
-                  >
-                    delete
-                  </button>
-                )}
-              </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => void handleCloudLoad(l.id)}
+                      className="text-xs rounded border border-gray-600 px-2 py-1 text-gray-200 hover:border-blue-500"
+                    >
+                      load
+                    </button>
+                    <button
+                      onClick={() => void handleCloudDelete(l.id, l.name)}
+                      className="text-xs rounded border border-gray-600 px-2 py-1 text-gray-200 hover:border-red-500"
+                    >
+                      delete
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
 
-        {/* Save as new */}
         <div className="px-5 py-3 border-t border-gray-700 space-y-2">
           {layouts.length > 0 && (
             <button
@@ -200,7 +437,7 @@ export default function LayoutManagerModal({ onClose }: Props) {
                 if (e.key === 'Enter') handleSaveNew()
                 e.stopPropagation()
               }}
-              placeholder="New layout name..."
+              placeholder="New browser layout name..."
               className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
             />
             <button

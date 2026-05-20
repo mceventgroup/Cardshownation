@@ -1,6 +1,7 @@
 'use client'
 
 import { useEditorStore, selectSettings, selectGridVisible } from '@/store/index'
+import CollapsibleSection from './CollapsibleSection'
 
 export default function SettingsPanel() {
   const settings = useEditorStore(selectSettings)
@@ -9,7 +10,10 @@ export default function SettingsPanel() {
   const setGridVisible = useEditorStore(s => s.setGridVisible)
 
   const wallSetbackFt = Math.round(settings.wallSetback / 12 * 10) / 10
+  const wallThicknessIn = Math.round(settings.wallThickness)
   const tableLengthFt = Math.round(settings.defaultTableWidth / 12 * 10) / 10
+  const canvasWidthFt = Math.round(settings.canvasWidth / 12 * 10) / 10
+  const canvasHeightFt = Math.round(settings.canvasHeight / 12 * 10) / 10
 
   function updateSetting<T extends keyof typeof settings>(key: T, value: (typeof settings)[T]) {
     dispatch({
@@ -21,10 +25,41 @@ export default function SettingsPanel() {
   }
 
   return (
-    <div className="space-y-4 px-4 py-4 text-sm">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900">Canvas</h3>
-        <div className="mt-4 space-y-3">
+    <div className="text-sm">
+      <CollapsibleSection title="Canvas" panelId="settings-canvas">
+        <div className="space-y-3 bg-white px-4 py-4">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Map Width</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={10}
+                  max={1000}
+                  step={1}
+                  value={canvasWidthFt}
+                  onChange={e => updateSetting('canvasWidth', Math.max(120, (parseFloat(e.target.value) || canvasWidthFt) * 12))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                />
+                <span className="text-xs text-slate-500">ft</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Map Height</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={10}
+                  max={1000}
+                  step={1}
+                  value={canvasHeightFt}
+                  onChange={e => updateSetting('canvasHeight', Math.max(120, (parseFloat(e.target.value) || canvasHeightFt) * 12))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                />
+                <span className="text-xs text-slate-500">ft</span>
+              </div>
+            </label>
+          </div>
           <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-3 py-2">
             <span>
               <span className="block font-medium text-slate-800">Show Grid</span>
@@ -50,11 +85,10 @@ export default function SettingsPanel() {
             />
           </label>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900">Spacing</h3>
-        <div className="mt-4 space-y-3">
+      <CollapsibleSection title="Spacing" panelId="settings-spacing">
+        <div className="space-y-3 bg-white px-4 py-4">
           <label className="block">
             <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Grid Size</span>
             <div className="mt-1 flex items-center gap-2">
@@ -69,6 +103,22 @@ export default function SettingsPanel() {
               />
               <span className="text-xs text-slate-500">in</span>
             </div>
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Wall Thickness</span>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={24}
+                step={1}
+                value={wallThicknessIn}
+                onChange={e => updateSetting('wallThickness', Math.max(1, parseInt(e.target.value, 10) || 6))}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              />
+              <span className="text-xs text-slate-500">in</span>
+            </div>
+            <span className="mt-1 block text-xs text-slate-500">Rendered as a physical wall band outside the usable room footprint.</span>
           </label>
           <label className="block">
             <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Wall Setback</span>
@@ -99,11 +149,10 @@ export default function SettingsPanel() {
             />
           </label>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900">Table Defaults</h3>
-        <div className="mt-4 grid grid-cols-2 gap-3">
+      <CollapsibleSection title="Table Defaults" panelId="settings-table-defaults">
+        <div className="grid grid-cols-2 gap-3 bg-white px-4 py-4">
           <label>
             <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Length</span>
             <div className="mt-1 flex items-center gap-2">
@@ -135,7 +184,7 @@ export default function SettingsPanel() {
             </div>
           </label>
         </div>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

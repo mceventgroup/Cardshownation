@@ -346,7 +346,13 @@ function migrate(payload: PersistedPayload): PersistedPayload {
     }
   }
   if ((payload.data.settings as { roomLocked?: boolean }).roomLocked === undefined) {
-    (payload.data.settings as { roomLocked: boolean }).roomLocked = true
+    (payload.data.settings as { roomLocked: boolean }).roomLocked = false
+  }
+  if ((payload.data.settings as { wallThickness?: number }).wallThickness === undefined) {
+    (payload.data.settings as { wallThickness: number }).wallThickness = 6
+  }
+  if (payload.data.room && !Array.isArray((payload.data.room as { circles?: unknown }).circles)) {
+    ;(payload.data.room as CompositeRoom).circles = []
   }
 
   payload.version = CURRENT_VERSION

@@ -5,6 +5,7 @@
 import type { Rect, TableObject, Row, RowId } from './types'
 import type { RowModule, RowConfig, BuiltRow, RepositionedTable } from './rows'
 import { numberingModule } from './numbering.impl'
+import { formatDisplayId } from '@/domain/room-numbering'
 import { createTableId } from '@/lib/id'
 
 function buildRow(config: RowConfig, rowId: RowId): BuiltRow {
@@ -26,16 +27,21 @@ function buildRow(config: RowConfig, rowId: RowId): BuiltRow {
       : config.origin.y
 
     const label = numberingModule.generateLabel(config.numberingScheme, i)
+    const tableNumber = config.numberingScheme.startNumber + i
+    const displayId = formatDisplayId(config.roomId, tableNumber)
 
     tables.push({
       id: createTableId(),
+      roomId: config.roomId,
+      tableNumber,
+      displayId,
       x,
       y,
       width: vizWidth,
       height: vizHeight,
       rotation: 0,
       shape: 'rectangle',
-      label,
+      label: label === String(tableNumber) ? displayId : label,
       labelOverridden: false,
       rowId,
       sectionId: config.sectionId,

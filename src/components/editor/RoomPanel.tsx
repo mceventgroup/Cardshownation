@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   useEditorStore,
   selectRoom,
   selectSettings,
   selectSelectedSegmentId,
 } from '@/store/index'
-import type { CompositeRoom, RoomSegment, RoomSegmentId } from '@/domain/types'
-import { createRoomSegmentId } from '@/lib/id'
+import type { CompositeRoom, RoomCircle, RoomSegment, RoomSegmentId } from '@/domain/types'
+import { createRoomCircleId, createRoomSegmentId } from '@/lib/id'
 import { formatDimension } from '@/lib/units'
-import { computeRoomBounds } from '@/domain/room-contour'
+import { computeRoomBounds, computeRoomContour } from '@/domain/room-contour'
+import { getRoomZones } from '@/domain/room-numbering'
 
 export default function RoomPanel() {
   const room = useEditorStore(selectRoom)
@@ -26,8 +27,10 @@ export default function RoomPanel() {
   const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set())
 
   const bounds = room ? computeRoomBounds(room) : null
+  const roomCount = room ? computeRoomContour(room).length : 0
+  const roomZones = useMemo(() => getRoomZones(room), [room])
 
-  function handleAddRectSegment() {
+  function handleAddAttachedSegment() {
     const w = roomWidthFt * 12
     const h = roomHeightFt * 12
     let x: number
@@ -75,7 +78,43 @@ export default function RoomPanel() {
     }
   }
 
-  function handleSetSingleRoom() {
+  function handleAddSeparateRoom() {
+    const w = roomWidthFt * 12
+    const h = roomHeightFt * 12
+    const { x, y } = findSeparateRoomPlacement(room, settings.canvasWidth, settings.canvasHeight, w, h)
+
+    const segment: RoomSegment = {
+      id: createRoomSegmentId(),
+      x,
+      y,
+      width: w,
+      height: h,
+    }
+
+    dispatch({
+      type: 'ADD_ROOM_SEGMENT',
+      segment,
+      prevRoom: room,
+      timestamp: Date.now(),
+    })
+
+    const padding = Math.round(Math.max(w, h) * 0.2)
+    const neededW = x + w + padding
+    const neededH = y + h + padding
+    if (neededW > settings.canvasWidth || neededH > settings.canvasHeight) {
+      dispatch({
+        type: 'UPDATE_SETTINGS',
+        prev: { canvasWidth: settings.canvasWidth, canvasHeight: settings.canvasHeight },
+        next: {
+          canvasWidth: Math.max(settings.canvasWidth, neededW),
+          canvasHeight: Math.max(settings.canvasHeight, neededH),
+        },
+        timestamp: Date.now(),
+      })
+    }
+  }
+
+  function handleCreateFirstRoom() {
     const w = roomWidthFt * 12
     const h = roomHeightFt * 12
     const padding = 0.2
@@ -99,7 +138,9 @@ export default function RoomPanel() {
         width: w,
         height: h,
       }],
+      circles: [],
       freehandVertices: null,
+      roomLabels: { R1: 'Main Room' },
     }
 
     dispatch({
@@ -130,6 +171,83 @@ export default function RoomPanel() {
       const next = new Set(prev)
       next.delete(seg.id)
       return next
+    })
+  }
+
+  function handleAddCircularRoom() {
+    const width = roomWidthFt * 12
+    const height = roomHeightFt * 12
+    const radiusX = width / 2
+    const radiusY = height / 2
+
+    if (!room || (room.segments.length === 0 && (room.circles?.length ?? 0) === 0 && !room.freehandVertices)) {
+      const padding = 0.2
+      const canvasW = Math.round(width * (1 + padding * 2))
+      const canvasH = Math.round(height * (1 + padding * 2))
+      const circle: RoomCircle = {
+        id: createRoomCircleId(),
+        x: Math.round(width * padding) + radiusX,
+        y: Math.round(height * padding) + radiusY,
+        radiusX,
+        radiusY,
+      }
+
+      dispatch({
+        type: 'UPDATE_SETTINGS',
+        prev: { canvasWidth: settings.canvasWidth, canvasHeight: settings.canvasHeight },
+        next: { canvasWidth: canvasW, canvasHeight: canvasH },
+        timestamp: Date.now(),
+      })
+
+      dispatch({
+        type: 'SET_ROOM',
+        prevRoom: room,
+        nextRoom: {
+          segments: [],
+          circles: [circle],
+          freehandVertices: null,
+          roomLabels: { R1: 'Main Room' },
+        },
+        timestamp: Date.now(),
+      })
+      return
+    }
+
+    const { x, y } = findSeparateRoomPlacement(room, settings.canvasWidth, settings.canvasHeight, width, height)
+    const circle: RoomCircle = {
+      id: createRoomCircleId(),
+      x: x + radiusX,
+      y: y + radiusY,
+      radiusX,
+      radiusY,
+    }
+
+    dispatch({
+      type: 'SET_ROOM',
+      prevRoom: room,
+        nextRoom: {
+          segments: room.segments,
+          circles: [...(room.circles ?? []), circle],
+          freehandVertices: null,
+          roomLabels: room.roomLabels,
+        },
+        timestamp: Date.now(),
+    })
+  }
+
+  function handleRenameRoom(roomId: string, label: string) {
+    if (!room) return
+    dispatch({
+      type: 'SET_ROOM',
+      prevRoom: room,
+      nextRoom: {
+        ...room,
+        roomLabels: {
+          ...(room.roomLabels ?? {}),
+          [roomId]: label.trim() || roomId,
+        },
+      },
+      timestamp: Date.now(),
     })
   }
 
@@ -194,6 +312,7 @@ export default function RoomPanel() {
           mergedSegment,
         ],
         freehandVertices: room.freehandVertices,
+        roomLabels: room.roomLabels,
       },
       timestamp: Date.now(),
     })
@@ -204,7 +323,7 @@ export default function RoomPanel() {
   return (
     <div className="px-3 py-2 space-y-3 text-sm">
       <div>
-        <div className="font-medium text-gray-700 mb-1">Add Room / Add Wall</div>
+        <div className="font-medium text-gray-700 mb-1">Room Builder</div>
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 w-8">W</label>
           <input
@@ -227,20 +346,42 @@ export default function RoomPanel() {
           <span className="text-xs text-gray-400">ft</span>
         </div>
         <div className="flex gap-2 mt-1.5">
-          {!room || room.segments.length === 0 ? (
-            <button
-              onClick={handleSetSingleRoom}
-              className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Set Layout
-            </button>
+          {!room || (room.segments.length === 0 && (room.circles?.length ?? 0) === 0 && !room.freehandVertices) ? (
+            <>
+              <button
+                onClick={handleCreateFirstRoom}
+                className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Create First Room
+              </button>
+              <button
+                onClick={handleAddCircularRoom}
+                className="flex-1 px-2 py-1 text-xs bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
+              >
+                Create Circle Room
+              </button>
+            </>
           ) : (
-            <button
-              onClick={handleAddRectSegment}
-              className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Add Wall
-            </button>
+            <>
+              <button
+                onClick={handleAddSeparateRoom}
+                className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Add Room
+              </button>
+              <button
+                onClick={handleAddAttachedSegment}
+                className="flex-1 px-2 py-1 text-xs bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
+              >
+                Add Attached Area
+              </button>
+              <button
+                onClick={handleAddCircularRoom}
+                className="flex-1 px-2 py-1 text-xs bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
+              >
+                Add Circle Room
+              </button>
+            </>
           )}
           {room && (
             <button
@@ -251,6 +392,28 @@ export default function RoomPanel() {
             </button>
           )}
         </div>
+        {roomCount > 0 && (
+          <div className="mt-2 text-xs text-gray-500">
+            Connected rooms: {roomCount}
+          </div>
+        )}
+        {roomZones.length > 0 && (
+          <div className="mt-3 space-y-2">
+            <div className="text-xs font-medium text-gray-600">Room Names</div>
+            {roomZones.map(zone => (
+              <label key={zone.id} className="flex items-center gap-2">
+                <span className="w-12 text-xs text-gray-500">{zone.id}</span>
+                <input
+                  type="text"
+                  value={zone.label}
+                  onChange={e => handleRenameRoom(zone.id, e.target.value)}
+                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
+                  placeholder={zone.id}
+                />
+              </label>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-2">
           <label className="flex items-center gap-1 ml-auto cursor-pointer">
             <input
@@ -270,7 +433,10 @@ export default function RoomPanel() {
           </label>
         </div>
         <div className="text-xs text-gray-400 mt-1">
-          Draw on canvas: <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">B</kbd> rectangle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">F</kbd> freehand. Lock the room to prevent accidental dragging and allow box-select over the room.
+          Draw on canvas: <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">B</kbd> rectangle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">C</kbd> circle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">F</kbd> freehand. Use <span className="font-medium text-gray-500">Add Room</span> for separate spaces, <span className="font-medium text-gray-500">Add Attached Area</span> to extend an existing footprint, and <span className="font-medium text-gray-500">Add Circle Room</span> for round halls or arenas.
+        </div>
+        <div className="text-xs text-gray-400 mt-1">
+          When <span className="font-medium text-gray-500">Lock Layout</span> is off, drag inside a room to move the whole room.
         </div>
       </div>
 
@@ -398,6 +564,97 @@ export default function RoomPanel() {
           </div>
         </div>
       )}
+
+      {room && (room.circles?.length ?? 0) > 0 && (
+        <div>
+          <div className="font-medium text-gray-700 mb-1">Circular Rooms ({room.circles?.length ?? 0})</div>
+          <div className="space-y-1">
+            {(room.circles ?? []).map((circle, idx) => (
+              <div key={circle.id} className="flex items-center justify-between rounded bg-gray-50 px-2 py-1">
+                <div>
+                  <div className="text-xs font-medium">Circle {idx + 1}</div>
+                  <div className="text-xs text-gray-400">
+                    {formatDimension(circle.radiusX * 2)} x {formatDimension(circle.radiusY * 2)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    dispatch({
+                      type: 'SET_ROOM',
+                      prevRoom: room,
+                      nextRoom: {
+                        segments: room.segments,
+                        circles: (room.circles ?? []).filter(entry => entry.id !== circle.id),
+                        freehandVertices: room.freehandVertices,
+                        roomLabels: room.roomLabels,
+                      },
+                      timestamp: Date.now(),
+                    })
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function findSeparateRoomPlacement(
+  room: CompositeRoom | null,
+  canvasWidth: number,
+  canvasHeight: number,
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  if (!room || (room.segments.length === 0 && (room.circles?.length ?? 0) === 0)) {
+    return {
+      x: Math.round((canvasWidth - width) / 2),
+      y: Math.round((canvasHeight - height) / 2),
+    }
+  }
+
+  const gap = 96
+  const padding = 96
+  const maxX = Math.max(canvasWidth + width * 4, width + padding * 2)
+  const maxY = Math.max(canvasHeight + height * 4, height + padding * 2)
+
+  for (let y = padding; y <= maxY; y += height + gap) {
+    for (let x = padding; x <= maxX; x += width + gap) {
+      const candidate = { x, y, width, height }
+      const occupied = [
+        ...room.segments.map(seg => ({ x: seg.x, y: seg.y, width: seg.width, height: seg.height })),
+        ...(room.circles ?? []).map(circle => ({
+          x: circle.x - circle.radiusX,
+          y: circle.y - circle.radiusY,
+          width: circle.radiusX * 2,
+          height: circle.radiusY * 2,
+        })),
+      ]
+      const overlaps = occupied.some(seg => rectsOverlap(candidate, seg, gap))
+      if (!overlaps) return { x, y }
+    }
+  }
+
+  const bounds = computeRoomBounds(room)
+  return bounds
+    ? { x: bounds.x + bounds.width + gap, y: bounds.y }
+    : { x: padding, y: padding }
+}
+
+function rectsOverlap(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+  minGap: number,
+): boolean {
+  return !(
+    a.x + a.width + minGap <= b.x ||
+    b.x + b.width + minGap <= a.x ||
+    a.y + a.height + minGap <= b.y ||
+    b.y + b.height + minGap <= a.y
   )
 }

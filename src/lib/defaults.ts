@@ -9,9 +9,10 @@ export const DEFAULT_SETTINGS: LayoutSettings = {
   snapToObjects: false,
   minAisleWidth: 84,    // 84 in = 7 ft default aisle
   doorClearance: 48,    // 48 in = 4 ft door clearance
+  wallThickness: 6,     // 6 in exterior/interior wall thickness is a sensible default
   wallSetback: 36,      // 36 in = 3 ft from wall to nearest table
   showWallSetback: false,
-  roomLocked: true,
+  roomLocked: false,
   defaultTableWidth: 72,  // 6 ft table length
   defaultTableHeight: 30, // 30 in table width
   defaultTableShape: 'rectangle',
@@ -44,7 +45,7 @@ export const SECTION_COLORS = [
 
 // Vendor color palette — soft pastel fills so table labels remain readable
 export const VENDOR_COLORS = [
-  '#dbeafe', // blue-100
+  '#fed7aa', // orange-200
   '#d1fae5', // emerald-100
   '#fef3c7', // amber-100
   '#fce7f3', // pink-100
@@ -57,8 +58,8 @@ export const VENDOR_COLORS = [
   '#cffafe', // cyan-100
   '#fef9c3', // yellow-100
   '#dcfce7', // green-100
-  '#f1f5f9', // slate-100
-  '#e2e8f0', // slate-200
+  '#fde68a', // amber-200
+  '#fecdd3', // rose-200
 ] as const
 
 /** Deterministic color for a vendor based on vendorId hash. */

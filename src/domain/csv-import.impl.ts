@@ -215,7 +215,7 @@ export const csvImportModule: CSVImportModule = {
     const patterns: Record<Field, RegExp[]> = {
       tableNumber: [
         /^table\s*#$/i, /^table[\s_]?num(ber)?$/i, /^tbl[\s_]?#?$/i,
-        /^table[\s_]?no\.?$/i, /^booth[\s_]?#?$/i, /^table$/i, /^#$/,
+        /^table[\s_]?no\.?$/i, /^booth[\s_]?#?$/i, /^#$/,
       ],
       vendorName: [
         /^vendor[\s_]?name$/i, /^vendor$/i, /^name$/i,

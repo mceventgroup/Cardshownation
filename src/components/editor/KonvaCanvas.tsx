@@ -16,17 +16,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Stage, Layer, Rect, Line } from 'react-konva'
+import { Stage, Layer, Rect, Line, Ellipse } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import type { Point, TableId, DoorId, DoorSide } from '@/domain/types'
-import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectVendorAssignments, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages, selectGridVisible, selectShowMode } from '@/store/index'
+import type { Point, TableId, DoorId, DoorSide, DoorKind } from '@/domain/types'
+import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectHoveredVendorId, selectVendorAssignments, selectVendors, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages, selectGridVisible, selectShowMode, selectActiveRoomId } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
 import { rowModule } from '@/domain/rows.impl'
 import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
-import { createTableId, createRowId, createAssignmentId, createRoomSegmentId, createDoorId } from '@/lib/id'
-import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID, OPEN_TABLE_FILL, ASSIGNED_TABLE_FILL, PREMIUM_TABLE_FILL } from '@/lib/defaults'
+import { createTableId, createRowId, createAssignmentId, createRoomCircleId, createRoomSegmentId, createDoorId } from '@/lib/id'
+import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID, OPEN_TABLE_FILL, vendorColor } from '@/lib/defaults'
 import { registerStage } from '@/lib/stage'
 import GridLayer from './GridLayer'
 import RoomLayer from './RoomLayer'
@@ -39,9 +39,11 @@ import ShortcutsLegend from './ShortcutsLegend'
 import BackgroundImageLayer from './BackgroundImageLayer'
 import TableContextMenu, { type ContextMenuAction } from './TableContextMenu'
 import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds, getRoomBoundaryEdges, findBoundaryEdgeForDoor } from '@/domain/room-contour'
+import { isPointInRoom } from '@/domain/room-contour'
 import { useWarnings } from '@/hooks/useWarnings'
 import { warningsModule } from '@/domain/warnings.impl'
 import type { WarningSeverity } from '@/domain/warnings'
+import { getDefaultRoomId, getRoomIdForPoint, getRoomZones } from '@/domain/room-numbering'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -65,7 +67,7 @@ interface SelectionState {
   currentY: number
 }
 
-import { getNextLabelNumber } from '@/lib/labels'
+import { getNextLabelNumberForRoom } from '@/lib/labels'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
@@ -87,8 +89,11 @@ export default function KonvaCanvas() {
   const duplicateIds    = useEditorStore(selectDuplicateTableIds)
   const assignmentMap   = useEditorStore(selectAssignmentMap)
   const activeVendorId  = useEditorStore(selectActiveVendorId)
+  const hoveredVendorId = useEditorStore(selectHoveredVendorId)
   const vendorAssignments = useEditorStore(selectVendorAssignments)
+  const vendorsRecord     = useEditorStore(selectVendors)
   const room              = useEditorStore(selectRoom)
+  const activeRoomId      = useEditorStore(selectActiveRoomId)
   const doorsRecord       = useEditorStore(selectDoors)
   const selectedDoorId    = useEditorStore(selectSelectedDoorId)
   const setSelectedDoor   = useEditorStore(s => s.setSelectedDoor)
@@ -104,9 +109,9 @@ export default function KonvaCanvas() {
   const setSelected   = useEditorStore(s => s.setSelected)
   const toggleSelected = useEditorStore(s => s.toggleSelected)
   const clearSelected = useEditorStore(s => s.clearSelected)
-  const setActiveTool = useEditorStore(s => s.setActiveTool)
   const setStageTransform = useEditorStore(s => s.setStageTransform)
   const setGridVisible    = useEditorStore(s => s.setGridVisible)
+  const setActiveRoomId   = useEditorStore(s => s.setActiveRoomId)
 
   // Stage size — tracks container element dimensions
   const [stageSize, setStageSize] = useState({ width: 1200, height: 800 })
@@ -125,6 +130,12 @@ export default function KonvaCanvas() {
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tableId: string } | null>(null)
   const [hoveredTableId, setHoveredTableId] = useState<string | null>(null)
+  const [controlsCollapsed, setControlsCollapsed] = useState(false)
+  const [controlsPos, setControlsPos] = useState<Point>({ x: 16, y: 16 })
+  const controlsDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null)
+  const [recentlyAssignedTableIds, setRecentlyAssignedTableIds] = useState<Set<string>>(new Set())
+  const [assignmentHint, setAssignmentHint] = useState<string | null>(null)
+  const placementClickHandledRef = useRef(false)
 
   // Computed warnings (derived, never stored)
   const warningResult = useWarnings()
@@ -178,20 +189,20 @@ export default function KonvaCanvas() {
     setSelectionState(s)
   }
 
-  function updateRoomDrawPreview(r: { x: number; y: number; width: number; height: number } | null) {
+  function updateRoomDrawPreview(r: { x: number; y: number; width: number; height: number; shape: 'rect' | 'circle' } | null) {
     roomDrawPreviewRef.current = r
     setRoomDrawPreview(r)
   }
 
   // Door placement preview (ghost door while in place-door mode)
   const [doorPlacementPreview, setDoorPlacementPreview] = useState<
-    { side: DoorSide; x: number; y: number; width: number } | null
+    { side: DoorSide; x: number; y: number; width: number; kind: DoorKind } | null
   >(null)
 
   // Room drawing state (rectangle segments)
-  const roomDrawRef = useRef<{ startX: number; startY: number } | null>(null)
-  const [roomDrawPreview, setRoomDrawPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
-  const roomDrawPreviewRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null)
+  const roomDrawRef = useRef<{ startX: number; startY: number; shape: 'rect' | 'circle' } | null>(null)
+  const [roomDrawPreview, setRoomDrawPreview] = useState<{ x: number; y: number; width: number; height: number; shape: 'rect' | 'circle' } | null>(null)
+  const roomDrawPreviewRef = useRef<{ x: number; y: number; width: number; height: number; shape: 'rect' | 'circle' } | null>(null)
 
   // Freehand room drawing state
   const freehandPointsRef = useRef<Point[] | null>(null)
@@ -201,6 +212,17 @@ export default function KonvaCanvas() {
   const segmentDragRef = useRef<{ segmentId: string; startPointer: Point; startPos: Point } | null>(null)
   const [segmentDraftPos, setSegmentDraftPos] = useState<{ id: string; x: number; y: number } | null>(null)
   const segmentDraftPosRef = useRef<{ id: string; x: number; y: number } | null>(null)
+  const roomDragRef = useRef<{
+    startPointer: Point
+    startRoom: NonNullable<typeof room>
+    zoneId: string
+    segmentIds: Set<string>
+    circleIds: Set<string>
+    moveFreehand: boolean
+    doorIds: Set<string>
+  } | null>(null)
+  const [roomDraftOffset, setRoomDraftOffset] = useState<Point | null>(null)
+  const roomDraftOffsetRef = useRef<Point | null>(null)
 
   // Space-key pan tracking
   const isPanningRef  = useRef(false)
@@ -267,14 +289,36 @@ export default function KonvaCanvas() {
   // ── Display room — applies live segment drag offset for preview ───────────
 
   const displayRoom = useMemo(() => {
-    if (!room || !segmentDraftPos) return room
+    if (!room) return room
+    if (roomDraftOffset) {
+      return {
+        ...room,
+        segments: room.segments.map(segment => ({
+          ...segment,
+          x: roomDragRef.current?.segmentIds.has(segment.id) ? segment.x + roomDraftOffset.x : segment.x,
+          y: roomDragRef.current?.segmentIds.has(segment.id) ? segment.y + roomDraftOffset.y : segment.y,
+        })),
+        circles: (room.circles ?? []).map(circle => ({
+          ...circle,
+          x: roomDragRef.current?.circleIds.has(circle.id) ? circle.x + roomDraftOffset.x : circle.x,
+          y: roomDragRef.current?.circleIds.has(circle.id) ? circle.y + roomDraftOffset.y : circle.y,
+        })),
+        freehandVertices: roomDragRef.current?.moveFreehand
+          ? room.freehandVertices?.map(vertex => ({
+              x: vertex.x + roomDraftOffset.x,
+              y: vertex.y + roomDraftOffset.y,
+            })) ?? null
+          : room.freehandVertices,
+      }
+    }
+    if (!segmentDraftPos) return room
     return {
       ...room,
       segments: room.segments.map(s =>
         s.id === segmentDraftPos.id ? { ...s, x: segmentDraftPos.x, y: segmentDraftPos.y } : s
       ),
     }
-  }, [room, segmentDraftPos])
+  }, [room, segmentDraftPos, roomDraftOffset])
 
   // ── Coordinate helpers ─────────────────────────────────────────────────────
 
@@ -304,14 +348,22 @@ export default function KonvaCanvas() {
   const placeRowAt = useCallback((canvasPos: Point) => {
     const cfg = useEditorStore.getState().rowBuilderConfig
     if (!cfg) return
+    placementClickHandledRef.current = true
+    dragStateRef.current = null
+    setDraftPositions({})
+    updateSelectionState(null)
+    const currentRoom = useEditorStore.getState().room
+    const roomId = getRoomIdForPoint(currentRoom, canvasPos) ?? activeRoomId ?? getDefaultRoomId(currentRoom) ?? 'R1'
+    if (roomId !== activeRoomId) setActiveRoomId(roomId)
 
     const snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
     const rowId = createRowId()
 
-    const nextStart = getNextLabelNumber(tables)
+    const nextStart = getNextLabelNumberForRoom(tables, roomId)
 
     const { row, tables: rowTables } = rowModule.buildRow(
       {
+        roomId,
         tableCount: cfg.tableCount,
         tableWidth: cfg.tableWidth,
         tableHeight: cfg.tableHeight,
@@ -327,22 +379,24 @@ export default function KonvaCanvas() {
 
     dispatch({ type: 'PLACE_ROW', row, tables: rowTables, timestamp: Date.now() })
     setSelected(rowTables.map(t => t.id))
-    setActiveTool('select')
-  }, [settings, tables, dispatch, setSelected, setActiveTool])
+  }, [activeRoomId, settings, tables, dispatch, setSelected, setActiveRoomId])
 
   // ── Place table helper ─────────────────────────────────────────────────────
   // Defined before handleMouseDown so it can be listed in its dep array.
 
   const placeTableAt = useCallback((canvasPos: Point) => {
     const cfg = useEditorStore.getState().tableBuilderConfig
+    placementClickHandledRef.current = true
+    dragStateRef.current = null
+    setDraftPositions({})
+    updateSelectionState(null)
+    const currentRoom = useEditorStore.getState().room
+    const roomId = getRoomIdForPoint(currentRoom, canvasPos) ?? activeRoomId ?? getDefaultRoomId(currentRoom) ?? 'R1'
+    if (roomId !== activeRoomId) setActiveRoomId(roomId)
     const w = cfg?.tableWidth ?? settings.defaultTableWidth
     const h = cfg?.tableHeight ?? settings.defaultTableHeight
-    let snapped = snapping.snapToGrid(
-      { x: canvasPos.x - w / 2, y: canvasPos.y - h / 2 },
-      settings.gridSize,
-    )
+    let snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
     // Enforce wall setback and door clearance
-    const currentRoom = useEditorStore.getState().room
     if (currentRoom) {
       if (settings.wallSetback > 0) {
         const clamped = clampToWallSetback(currentRoom, { ...snapped, width: w, height: h }, settings.wallSetback)
@@ -357,12 +411,16 @@ export default function KonvaCanvas() {
         }
       }
     }
-    const nextLabel = String(getNextLabelNumber(tables))
+    const nextTableNumber = getNextLabelNumberForRoom(tables, roomId)
+    const nextLabel = `${roomId}-${nextTableNumber}`
     const id = createTableId()
     dispatch({
       type: 'PLACE_TABLE',
       table: {
         id,
+        roomId,
+        tableNumber: nextTableNumber,
+        displayId: nextLabel,
         x:               snapped.x,
         y:               snapped.y,
         width:           w,
@@ -379,8 +437,7 @@ export default function KonvaCanvas() {
       timestamp: Date.now(),
     })
     setSelected([id])
-    setActiveTool('select')
-  }, [settings, tables, dispatch, setSelected, setActiveTool])
+  }, [activeRoomId, settings, tables, dispatch, setSelected, setActiveRoomId])
 
   // ── Door placement helpers ─────────────────────────────────────────────────
 
@@ -443,28 +500,66 @@ export default function KonvaCanvas() {
   const placeDoorAt = useCallback((canvasPos: Point) => {
     const cfg = useEditorStore.getState().doorPlacementConfig
     const widthIn = cfg?.widthIn ?? 72
+    const kind = cfg?.kind ?? 'door'
     const snap = computeDoorSnap(canvasPos, widthIn)
     if (!snap) return
-    const existingCount = Object.keys(useEditorStore.getState().doors).length
+    const existingCount = Object.values(useEditorStore.getState().doors).filter(door => door.kind === kind).length
     dispatch({
       type: 'PLACE_DOOR',
       door: {
         id: createDoorId(),
-        label: `Door ${existingCount + 1}`,
+        label: kind === 'entrance' ? `Entrance ${existingCount + 1}` : `Door ${existingCount + 1}`,
         x: snap.x,
         y: snap.y,
         width: snap.width,
         side: snap.side,
+        kind,
       },
       timestamp: Date.now(),
     })
   }, [computeDoorSnap, dispatch])
 
+  function pulseAssignedTables(tableIds: string[]) {
+    if (tableIds.length === 0) return
+    setRecentlyAssignedTableIds(new Set(tableIds))
+    window.setTimeout(() => {
+      setRecentlyAssignedTableIds(current => {
+        let changed = false
+        const next = new Set(current)
+        for (const tableId of tableIds) {
+          if (next.delete(tableId)) changed = true
+        }
+        return changed ? next : current
+      })
+    }, 450)
+  }
+
   const assignVendorToTableIds = useCallback((vendorId: string, tableIds: string[]) => {
-    const vendor = useEditorStore.getState().vendors[vendorId as import('@/domain/types').VendorId]
+    const state = useEditorStore.getState()
+    const vendor = state.vendors[vendorId as import('@/domain/types').VendorId]
+    const currentActiveRoomId = state.activeRoomId
+    const currentVisibleTableIds = new Set<string>(
+      Object.values(state.tables)
+        .filter(table => !currentActiveRoomId || table.roomId === currentActiveRoomId)
+        .map(table => table.id),
+    )
     if (!vendor || tableIds.length === 0) return
 
-    for (const tableId of tableIds) {
+    const prioritizedTableIds = [...tableIds].sort((a, b) => {
+      const aVisible = currentVisibleTableIds.has(a) ? 1 : 0
+      const bVisible = currentVisibleTableIds.has(b) ? 1 : 0
+      if (aVisible !== bVisible) return bVisible - aVisible
+      const aPremium = tables[a]?.premium ? 1 : 0
+      const bPremium = tables[b]?.premium ? 1 : 0
+      if (aPremium !== bPremium) return bPremium - aPremium
+      return (tables[a]?.displayId ?? tables[a]?.label ?? '').localeCompare(
+        tables[b]?.displayId ?? tables[b]?.label ?? '',
+        undefined,
+        { numeric: true },
+      )
+    }).filter(tableId => currentVisibleTableIds.has(tableId))
+
+    for (const tableId of prioritizedTableIds) {
       const existing = Object.values(useEditorStore.getState().vendorAssignments).find(a => a.tableId === tableId)
       dispatch({
         type: 'ASSIGN_VENDOR',
@@ -484,7 +579,8 @@ export default function KonvaCanvas() {
         timestamp: Date.now(),
       })
     }
-  }, [dispatch])
+    pulseAssignedTables(prioritizedTableIds)
+  }, [dispatch, tables])
 
   // ── Wheel zoom ─────────────────────────────────────────────────────────────
 
@@ -554,6 +650,11 @@ export default function KonvaCanvas() {
     const target    = e.target
     const isTable   = target.hasName('table-rect')
     const tableId   = isTable ? (target.id() as string) : null
+    const currentVisibleTableIds = new Set<string>(
+      Object.values(useEditorStore.getState().tables)
+        .filter(table => !activeRoomId || table.roomId === activeRoomId)
+        .map(table => table.id),
+    )
 
     if (activeTool === 'place-table') {
       if (!isTable) {
@@ -576,8 +677,15 @@ export default function KonvaCanvas() {
 
     if (activeTool === 'draw-room') {
       const snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
-      roomDrawRef.current = { startX: snapped.x, startY: snapped.y }
-      updateRoomDrawPreview({ x: snapped.x, y: snapped.y, width: 0, height: 0 })
+      roomDrawRef.current = { startX: snapped.x, startY: snapped.y, shape: 'rect' }
+      updateRoomDrawPreview({ x: snapped.x, y: snapped.y, width: 0, height: 0, shape: 'rect' })
+      return
+    }
+
+    if (activeTool === 'draw-room-circle') {
+      const snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
+      roomDrawRef.current = { startX: snapped.x, startY: snapped.y, shape: 'circle' }
+      updateRoomDrawPreview({ x: snapped.x, y: snapped.y, width: 0, height: 0, shape: 'circle' })
       return
     }
 
@@ -592,6 +700,7 @@ export default function KonvaCanvas() {
 
     // ── Active vendor assignment: click table to assign ──────────────────
     if (activeVendorRef.current && isTable && tableId) {
+      if (!currentVisibleTableIds.has(tableId)) return
       const vid = activeVendorRef.current
       const vendor = useEditorStore.getState().vendors[vid]
       if (vendor) {
@@ -605,13 +714,14 @@ export default function KonvaCanvas() {
             timestamp: Date.now(),
           })
         } else {
-          // Assign (replace any existing assignment)
+          // Assign (replace any existing assignment). We keep this centralized
+          // here so canvas click assignment stays predictable for the roster.
           const newAssignment = {
             id: createAssignmentId(),
             tableId: tableId as TableId,
             layoutId: DRAFT_LAYOUT_ID,
             vendorId: vid,
-            vendorName: vendor.name,
+            vendorName: vendor.companyName || [vendor.firstName, vendor.lastName].filter(Boolean).join(' ') || vendor.name,
             vendorCategory: vendor.category,
             colorOverride: null,
             notes: null,
@@ -624,9 +734,67 @@ export default function KonvaCanvas() {
             prevAssignment: existing ?? null,
             timestamp: Date.now(),
           })
+          pulseAssignedTables([tableId])
         }
       }
       return
+    }
+
+    if (!activeVendorRef.current && isTable && tableId && currentVisibleTableIds.has(tableId) && !assignmentMap.has(tableId)) {
+      setAssignmentHint(`Select a vendor from the roster, then click open tables in ${activeRoomId ?? 'this room'} to assign.`)
+      window.setTimeout(() => setAssignmentHint(current =>
+        current === `Select a vendor from the roster, then click open tables in ${activeRoomId ?? 'this room'} to assign.` ? null : current,
+      ), 1800)
+    }
+
+    if (
+      activeTool === 'select' &&
+      !isTable &&
+      room &&
+      !settings.roomLocked &&
+      isPointInRoom(room, canvasPos)
+    ) {
+      const zoneId = getRoomIdForPoint(room, canvasPos)
+      if (zoneId) {
+        const segmentIds = new Set(
+          room.segments
+            .filter(segment => getRoomIdForPoint(room, {
+              x: segment.x + segment.width / 2,
+              y: segment.y + segment.height / 2,
+            }) === zoneId)
+            .map(segment => segment.id),
+        )
+        const circleIds = new Set(
+          (room.circles ?? [])
+            .filter(circle => getRoomIdForPoint(room, { x: circle.x, y: circle.y }) === zoneId)
+            .map(circle => circle.id),
+        )
+        const zones = getRoomZones(room)
+        const moveFreehand = Boolean(room.freehandVertices && zones.length === 1 && zones[0]?.id === zoneId)
+        const doorIds = new Set(
+          Object.values(doorsRecord)
+            .filter(door => {
+              const midpoint = door.side === 'top' || door.side === 'bottom'
+                ? { x: door.x + door.width / 2, y: door.y }
+                : { x: door.x, y: door.y + door.width / 2 }
+              return getRoomIdForPoint(room, midpoint) === zoneId
+            })
+            .map(door => door.id),
+        )
+
+        roomDragRef.current = {
+          startPointer: canvasPos,
+          startRoom: room,
+          zoneId,
+          segmentIds,
+          circleIds,
+          moveFreehand,
+          doorIds,
+        }
+        setSelectedSegmentId(null)
+        clearSelected()
+        return
+      }
     }
 
     // Select tool
@@ -689,7 +857,7 @@ export default function KonvaCanvas() {
         currentY: canvasPos.y,
       })
     }
-  }, [activeTool, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, placeDoorAt, dispatch])
+  }, [activeRoomId, activeTool, assignmentMap, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, placeDoorAt, dispatch, room, doorsRecord])
 
   // ── Mouse move ─────────────────────────────────────────────────────────────
 
@@ -720,12 +888,35 @@ export default function KonvaCanvas() {
       const snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
       const startX = roomDrawRef.current.startX
       const startY = roomDrawRef.current.startY
+      if (roomDrawRef.current.shape === 'circle') {
+        const radiusX = Math.abs(snapped.x - startX)
+        const radiusY = Math.abs(snapped.y - startY)
+        updateRoomDrawPreview({
+          x: startX - radiusX,
+          y: startY - radiusY,
+          width: radiusX * 2,
+          height: radiusY * 2,
+          shape: 'circle',
+        })
+        return
+      }
       updateRoomDrawPreview({
         x: Math.min(startX, snapped.x),
         y: Math.min(startY, snapped.y),
         width: Math.abs(snapped.x - startX),
         height: Math.abs(snapped.y - startY),
+        shape: roomDrawRef.current.shape,
       })
+      return
+    }
+
+    if (roomDragRef.current) {
+      const drag = roomDragRef.current
+      const dx = canvasPos.x - drag.startPointer.x
+      const dy = canvasPos.y - drag.startPointer.y
+      const snapped = snapping.snapToGrid({ x: dx, y: dy }, settings.gridSize)
+      roomDraftOffsetRef.current = snapped
+      setRoomDraftOffset(snapped)
       return
     }
 
@@ -822,7 +1013,7 @@ export default function KonvaCanvas() {
       const cfg = useEditorStore.getState().doorPlacementConfig
       const widthIn = cfg?.widthIn ?? 72
       const snap = computeDoorSnap(canvasPos, widthIn)
-      setDoorPlacementPreview(snap)
+      setDoorPlacementPreview(snap ? { ...snap, kind: cfg?.kind ?? 'door' } : null)
       return
     }
 
@@ -835,10 +1026,65 @@ export default function KonvaCanvas() {
   // ── Mouse up ───────────────────────────────────────────────────────────────
 
   const handleMouseUp = useCallback(() => {
+    if (placementClickHandledRef.current) {
+      placementClickHandledRef.current = false
+      dragStateRef.current = null
+      setDraftPositions({})
+      updateSelectionState(null)
+      return
+    }
+
     // End panning
     if (isPanningRef.current) {
       isPanningRef.current = false
       panStartRef.current  = null
+      return
+    }
+
+    if (roomDragRef.current) {
+      const roomDrag = roomDragRef.current
+      const { startRoom } = roomDrag
+      const draftOffset = roomDraftOffsetRef.current
+      roomDragRef.current = null
+      roomDraftOffsetRef.current = null
+      setRoomDraftOffset(null)
+
+      if (draftOffset && (draftOffset.x !== 0 || draftOffset.y !== 0)) {
+        dispatch({
+          type: 'SET_ROOM',
+          prevRoom: startRoom,
+          nextRoom: {
+            ...startRoom,
+            segments: startRoom.segments.map(segment => ({
+              ...segment,
+              x: roomDrag.segmentIds.has(segment.id) ? segment.x + draftOffset.x : segment.x,
+              y: roomDrag.segmentIds.has(segment.id) ? segment.y + draftOffset.y : segment.y,
+            })),
+            circles: (startRoom.circles ?? []).map(circle => ({
+              ...circle,
+              x: roomDrag.circleIds.has(circle.id) ? circle.x + draftOffset.x : circle.x,
+              y: roomDrag.circleIds.has(circle.id) ? circle.y + draftOffset.y : circle.y,
+            })),
+            freehandVertices: roomDrag.moveFreehand
+              ? startRoom.freehandVertices?.map(vertex => ({
+                  x: vertex.x + draftOffset.x,
+                  y: vertex.y + draftOffset.y,
+                })) ?? null
+              : startRoom.freehandVertices,
+          },
+          timestamp: Date.now(),
+        })
+        const movedDoors = Object.values(useEditorStore.getState().doors).filter(door => roomDrag.doorIds.has(door.id))
+        for (const door of movedDoors) {
+          dispatch({
+            type: 'MOVE_DOOR',
+            doorId: door.id as DoorId,
+            prev: { x: door.x, y: door.y, side: door.side },
+            next: { x: door.x + draftOffset.x, y: door.y + draftOffset.y, side: door.side },
+            timestamp: Date.now(),
+          })
+        }
+      }
       return
     }
 
@@ -870,18 +1116,42 @@ export default function KonvaCanvas() {
     if (roomDrawRef.current && drawPreview) {
       roomDrawRef.current = null
       if (drawPreview.width >= 24 && drawPreview.height >= 24) {
-        dispatch({
-          type: 'ADD_ROOM_SEGMENT',
-          segment: {
-            id: createRoomSegmentId(),
-            x: drawPreview.x,
-            y: drawPreview.y,
-            width: drawPreview.width,
-            height: drawPreview.height,
-          },
-          prevRoom: useEditorStore.getState().room,
-          timestamp: Date.now(),
-        })
+        if (drawPreview.shape === 'circle') {
+          const currentRoom = useEditorStore.getState().room
+          dispatch({
+            type: 'SET_ROOM',
+            prevRoom: currentRoom,
+            nextRoom: {
+              segments: currentRoom?.segments ?? [],
+              circles: [
+                ...(currentRoom?.circles ?? []),
+                {
+                  id: createRoomCircleId(),
+                  x: drawPreview.x + drawPreview.width / 2,
+                  y: drawPreview.y + drawPreview.height / 2,
+                  radiusX: drawPreview.width / 2,
+                  radiusY: drawPreview.height / 2,
+                },
+              ],
+              freehandVertices: null,
+              roomLabels: currentRoom?.roomLabels ?? {},
+            },
+            timestamp: Date.now(),
+          })
+        } else {
+          dispatch({
+            type: 'ADD_ROOM_SEGMENT',
+            segment: {
+              id: createRoomSegmentId(),
+              x: drawPreview.x,
+              y: drawPreview.y,
+              width: drawPreview.width,
+              height: drawPreview.height,
+            },
+            prevRoom: useEditorStore.getState().room,
+            timestamp: Date.now(),
+          })
+        }
       }
       updateRoomDrawPreview(null)
       return
@@ -961,7 +1231,7 @@ export default function KonvaCanvas() {
       ? 'canvas-pan'
       : (activeTool === 'place-table' || activeTool === 'place-row' || activeTool === 'place-door')
         ? 'canvas-place'
-        : (activeTool === 'draw-room' || activeTool === 'draw-room-freehand')
+        : (activeTool === 'draw-room' || activeTool === 'draw-room-circle' || activeTool === 'draw-room-freehand')
           ? 'canvas-place'
           : 'canvas-select'
 
@@ -1023,8 +1293,16 @@ export default function KonvaCanvas() {
 
   // ── Door list for rendering ────────────────────────────────────────────────
 
-  const doorList = useMemo(() => Object.values(doorsRecord), [doorsRecord])
-  const roomBoundaryEdges = useMemo(() => (room ? getRoomBoundaryEdges(room) : []), [room])
+  const displayDoorList = useMemo(() => {
+    const doors = Object.values(doorsRecord)
+    if (!roomDraftOffset || !roomDragRef.current) return doors
+    return doors.map(door => (
+      roomDragRef.current?.doorIds.has(door.id)
+        ? { ...door, x: door.x + roomDraftOffset.x, y: door.y + roomDraftOffset.y }
+        : door
+    ))
+  }, [doorsRecord, roomDraftOffset])
+  const displayRoomBoundaryEdges = useMemo(() => (displayRoom ? getRoomBoundaryEdges(displayRoom) : []), [displayRoom])
 
   // ── Door drag handler ───────────────────────────────────────────────────
 
@@ -1043,6 +1321,23 @@ export default function KonvaCanvas() {
   // ── Background image list ──────────────────────────────────────────────────
 
   const bgImageList = useMemo(() => Object.values(bgImagesRecord), [bgImagesRecord])
+  const vendorRemainingMap = useMemo(() => {
+    const currentRoomTableIds = new Set<string>(
+      Object.values(tables)
+        .filter(table => !activeRoomId || table.roomId === activeRoomId)
+        .map(table => table.id),
+    )
+    const assignedCounts = new Map<string, number>()
+    for (const assignment of Object.values(vendorAssignments)) {
+      if (!currentRoomTableIds.has(assignment.tableId)) continue
+      assignedCounts.set(assignment.vendorId, (assignedCounts.get(assignment.vendorId) ?? 0) + 1)
+    }
+    const remaining = new Map<string, number>()
+    for (const vendor of Object.values(vendorsRecord)) {
+      remaining.set(vendor.id, Math.max(vendor.tablesNeeded - (assignedCounts.get(vendor.id) ?? 0), 0))
+    }
+    return remaining
+  }, [activeRoomId, tables, vendorAssignments, vendorsRecord])
 
   const handleBgImageDragEnd = useCallback((id: import('@/domain/types').BackgroundImageId, x: number, y: number) => {
     updateBgImage(id, { x, y })
@@ -1050,7 +1345,15 @@ export default function KonvaCanvas() {
 
   // ── Table list for rendering ───────────────────────────────────────────────
 
-  const tableList = Object.values(tables)
+  const tableList = useMemo(() => Object.values(tables), [tables])
+  const activeRoomTableIds = useMemo(
+    () => new Set<string>(
+      tableList
+        .filter(table => !activeRoomId || table.roomId === activeRoomId)
+        .map(table => table.id),
+    ),
+    [activeRoomId, tableList],
+  )
   const hoveredAssignment = hoveredTableId ? assignmentMap.get(hoveredTableId) ?? null : null
   const hoveredTable = hoveredTableId ? tables[hoveredTableId] ?? null : null
 
@@ -1085,16 +1388,50 @@ export default function KonvaCanvas() {
     if (!vendorId || showMode) return
     const rect = e.currentTarget.getBoundingClientRect()
     const canvasPos = toCanvas({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-    const droppedTable = Object.values(tables).find(table =>
-      canvasPos.x >= table.x &&
-      canvasPos.x <= table.x + table.width &&
-      canvasPos.y >= table.y &&
-      canvasPos.y <= table.y + table.height,
-    )
-    if (!droppedTable) return
-    const targetIds = selectedIds.has(droppedTable.id) && selectedIds.size > 0 ? [...selectedIds] : [droppedTable.id]
-    assignVendorToTableIds(vendorId, targetIds)
-  }, [assignVendorToTableIds, selectedIds, showMode, tables, toCanvas])
+      const droppedTable = tableList.find(table =>
+        canvasPos.x >= table.x &&
+        canvasPos.x <= table.x + table.width &&
+        canvasPos.y >= table.y &&
+        canvasPos.y <= table.y + table.height,
+      )
+      if (!droppedTable) return
+      if (!activeRoomTableIds.has(droppedTable.id)) return
+      const targetIds = selectedIds.has(droppedTable.id) && selectedIds.size > 0
+        ? [...selectedIds].filter(tableId => activeRoomTableIds.has(tableId))
+        : [droppedTable.id]
+      assignVendorToTableIds(vendorId, targetIds)
+  }, [activeRoomTableIds, assignVendorToTableIds, selectedIds, showMode, tableList, toCanvas])
+
+  const handleControlsDragStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('button')) return
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    controlsDragRef.current = {
+      pointerId: e.pointerId,
+      offsetX: e.clientX - rect.left - controlsPos.x,
+      offsetY: e.clientY - rect.top - controlsPos.y,
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }, [controlsPos.x, controlsPos.y])
+
+  const handleControlsDragMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = controlsDragRef.current
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!drag || drag.pointerId !== e.pointerId || !rect) return
+    setControlsPos({
+      x: Math.max(0, e.clientX - rect.left - drag.offsetX),
+      y: Math.max(0, e.clientY - rect.top - drag.offsetY),
+    })
+  }, [])
+
+  const handleControlsDragEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = controlsDragRef.current
+    if (!drag || drag.pointerId !== e.pointerId) return
+    controlsDragRef.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }, [])
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -1140,8 +1477,9 @@ export default function KonvaCanvas() {
         <Layer listening={false}>
           <RoomLayer
             room={displayRoom}
-            doors={doorList}
+            doors={displayDoorList}
             doorClearance={settings.doorClearance}
+            wallThickness={settings.wallThickness}
             wallSetback={settings.wallSetback}
             showWallSetback={settings.showWallSetback}
             selectedSegmentId={selectedSegmentId}
@@ -1153,11 +1491,14 @@ export default function KonvaCanvas() {
           {tableList.map(table => {
             const assignment = assignmentMap.get(table.id)
             const sectionColor = table.sectionId ? sections[table.sectionId]?.color : undefined
-            const fillColor = table.premium
-              ? PREMIUM_TABLE_FILL
-              : assignment
-                ? ASSIGNED_TABLE_FILL
-                : sectionColor ?? OPEN_TABLE_FILL
+            const isHoveredVendorTable = assignment?.vendorId === hoveredVendorId
+            const isActiveVendorTable = assignment?.vendorId === activeVendorId
+            const hoveredVendorNeedsTables = hoveredVendorId ? (vendorRemainingMap.get(hoveredVendorId) ?? 0) > 0 : false
+            const isSuggestedTarget = !assignment && hoveredVendorNeedsTables
+            const isSuggestedPremiumTarget = isSuggestedTarget && table.premium
+            const fillColor = assignment
+              ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
+              : sectionColor ?? OPEN_TABLE_FILL
 
             // Compute highest warning severity for this table
             let warningSeverity: WarningSeverity | null = null
@@ -1181,6 +1522,11 @@ export default function KonvaCanvas() {
                 draftPos={draftPositions[table.id] ?? null}
                 fillColor={fillColor}
                 vendorName={assignmentMap.get(table.id)?.vendorName}
+                isHoveredVendor={isHoveredVendorTable}
+                isActiveVendor={isActiveVendorTable}
+                isRecentlyAssigned={recentlyAssignedTableIds.has(table.id)}
+                isSuggestedTarget={isSuggestedTarget}
+                isSuggestedPremiumTarget={isSuggestedPremiumTarget}
                 onRegister={registerNode}
                 onDoubleClick={handleTableDoubleClick}
                 onHoverStart={setHoveredTableId}
@@ -1197,10 +1543,10 @@ export default function KonvaCanvas() {
         </Layer>
 
         {/* Interactive door layer */}
-        {doorList.length > 0 && (
+        {displayDoorList.length > 0 && (
           <Layer>
-            {doorList.map(door => {
-              const edge = findBoundaryEdgeForDoor(door, roomBoundaryEdges)
+            {displayDoorList.map(door => {
+              const edge = findBoundaryEdgeForDoor(door, displayRoomBoundaryEdges)
               if (!edge) return null
               return (
                 <DoorNode
@@ -1234,7 +1580,7 @@ export default function KonvaCanvas() {
                 y={gy}
                 width={gw}
                 height={gh}
-                fill="#2563eb"
+                fill={p.kind === 'entrance' ? '#7c3aed' : '#2563eb'}
                 opacity={0.55}
                 cornerRadius={1}
               />
@@ -1252,18 +1598,33 @@ export default function KonvaCanvas() {
         {/* Overlay: room draw preview (rectangle segment) */}
         {roomDrawPreview && roomDrawPreview.width > 0 && roomDrawPreview.height > 0 && (
           <Layer listening={false}>
-            <Rect
-              x={roomDrawPreview.x}
-              y={roomDrawPreview.y}
-              width={roomDrawPreview.width}
-              height={roomDrawPreview.height}
-              stroke="#334155"
-              strokeWidth={2}
-              dash={[8, 4]}
-              fill="#334155"
-              opacity={0.05}
-              listening={false}
-            />
+            {roomDrawPreview.shape === 'circle' ? (
+              <Ellipse
+                x={roomDrawPreview.x + roomDrawPreview.width / 2}
+                y={roomDrawPreview.y + roomDrawPreview.height / 2}
+                radiusX={roomDrawPreview.width / 2}
+                radiusY={roomDrawPreview.height / 2}
+                stroke="#334155"
+                strokeWidth={2}
+                dash={[8, 4]}
+                fill="#334155"
+                opacity={0.05}
+                listening={false}
+              />
+            ) : (
+              <Rect
+                x={roomDrawPreview.x}
+                y={roomDrawPreview.y}
+                width={roomDrawPreview.width}
+                height={roomDrawPreview.height}
+                stroke="#334155"
+                strokeWidth={2}
+                dash={[8, 4]}
+                fill="#334155"
+                opacity={0.05}
+                listening={false}
+              />
+            )}
           </Layer>
         )}
 
@@ -1284,19 +1645,51 @@ export default function KonvaCanvas() {
 
       {!showMode && (
         <>
-          <div className="absolute left-4 top-4 z-20 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur-sm">
-            <div className="flex items-center gap-2">
-              <button onClick={() => zoomBy(ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">+</button>
-              <button onClick={() => zoomBy(1 / ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">-</button>
-              <button onClick={resetView} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">Reset</button>
+          <div
+            className="absolute z-20 w-[320px] rounded-2xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur-sm"
+            style={{ left: controlsPos.x, top: controlsPos.y }}
+          >
+            <div
+              className="flex cursor-move items-center gap-2 border-b border-slate-200 px-3 py-2"
+              onPointerDown={handleControlsDragStart}
+              onPointerMove={handleControlsDragMove}
+              onPointerUp={handleControlsDragEnd}
+              onPointerCancel={handleControlsDragEnd}
+            >
+              <div className="flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Canvas Controls
+              </div>
               <button
-                onClick={() => setGridVisible(!gridVisible)}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold ${gridVisible ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                onClick={() => setControlsCollapsed(prev => !prev)}
+                className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
               >
-                Grid
+                {controlsCollapsed ? 'Expand' : 'Collapse'}
               </button>
             </div>
-            <div className="mt-2 text-xs text-slate-500">Pan with space + drag. Drop vendors directly on tables to assign.</div>
+
+            {!controlsCollapsed && (
+              <div className="p-2">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => zoomBy(ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">+</button>
+                  <button onClick={() => zoomBy(1 / ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">-</button>
+                  <button onClick={resetView} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">Reset</button>
+                  <button
+                    onClick={() => setGridVisible(!gridVisible)}
+                    className={`rounded-xl px-3 py-2 text-xs font-semibold ${gridVisible ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  >
+                    Grid
+                  </button>
+                </div>
+                <div className="mt-2 text-xs text-slate-500">
+                  Pan with space + drag. Drag a box to multi-select. Drop vendors directly on tables to assign.
+                </div>
+                {assignmentHint && (
+                  <div className="mt-2 rounded-xl bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700">
+                    {assignmentHint}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="absolute right-4 top-4 z-20 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
@@ -1332,7 +1725,7 @@ export default function KonvaCanvas() {
       {hoveredTable && (
         <div className="pointer-events-none absolute z-20 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg backdrop-blur-sm" style={{ left: hoveredTable.x * stageScale + stagePos.x + 16, top: hoveredTable.y * stageScale + stagePos.y - 12 }}>
           <div className="font-semibold text-slate-900">{hoveredAssignment?.vendorName ?? 'Open table'}</div>
-          <div>Table {hoveredTable.label}</div>
+          <div>Table {hoveredTable.displayId}</div>
           <div>{hoveredTable.shape === 'round' ? 'Round' : 'Rectangle'}{hoveredTable.premium ? ' · Premium' : ''}</div>
         </div>
       )}

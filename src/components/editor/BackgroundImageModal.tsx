@@ -14,7 +14,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import NextImage from 'next/image'
-import { useEditorStore } from '@/store'
+import { useEditorStore } from '@/store/index'
 import { createBackgroundImageId } from '@/lib/id'
 import type { BackgroundImage } from '@/domain/types'
 // pdfjs-dist is loaded dynamically to avoid SSR issues

@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false, // Strict mode causes doubled Konva event fires in dev
+  experimental: {
+    // Next 15.5's segment explorer is unstable here and intermittently breaks
+    // app route rendering in dev with React Client Manifest errors.
+    devtoolSegmentExplorer: false,
+  },
 
   webpack: (config, { isServer }) => {
     if (isServer) {

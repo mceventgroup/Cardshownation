@@ -25,3 +25,5 @@ node_modules
 # local agent logs
 .codex-dev-stdout.log
 .codex-dev-stderr.log
+.codex-*.log
+.codex-logs/

@@ -15,6 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Point, RoomSegment, CompositeRoom, Rect, Door, DoorSide } from './types'
+import { buildEllipseVertices } from './room-shapes'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -49,7 +50,11 @@ export function computeRoomContour(room: CompositeRoom): Point[][] {
   if (room.freehandVertices && room.freehandVertices.length >= 3) {
     return [room.freehandVertices]
   }
-  return computeSegmentContour(room.segments)
+  const contours = computeSegmentContour(room.segments)
+  const circleContours = (room.circles ?? [])
+    .filter(circle => circle.radiusX > 0 && circle.radiusY > 0)
+    .map(circle => buildEllipseVertices(circle))
+  return [...contours, ...circleContours]
 }
 
 /**
@@ -67,7 +72,7 @@ export function computeRoomBounds(room: CompositeRoom): Rect | null {
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
   }
 
-  if (room.segments.length === 0) return null
+  if (room.segments.length === 0 && (room.circles?.length ?? 0) === 0) return null
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (const seg of room.segments) {
@@ -75,6 +80,15 @@ export function computeRoomBounds(room: CompositeRoom): Rect | null {
     if (seg.y < minY) minY = seg.y
     if (seg.x + seg.width > maxX) maxX = seg.x + seg.width
     if (seg.y + seg.height > maxY) maxY = seg.y + seg.height
+  }
+  for (const circle of room.circles ?? []) {
+    if (circle.x - circle.radiusX < minX) minX = circle.x - circle.radiusX
+    if (circle.y - circle.radiusY < minY) minY = circle.y - circle.radiusY
+    if (circle.x + circle.radiusX > maxX) maxX = circle.x + circle.radiusX
+    if (circle.y + circle.radiusY > maxY) maxY = circle.y + circle.radiusY
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null
   }
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 }
@@ -139,6 +153,11 @@ export function findBoundaryEdgeForDoor(
 export function isPointInRoom(room: CompositeRoom, p: Point): boolean {
   if (room.freehandVertices && room.freehandVertices.length >= 3) {
     return pointInPolygon(p, room.freehandVertices)
+  }
+  for (const circle of room.circles ?? []) {
+    const nx = circle.radiusX === 0 ? Infinity : (p.x - circle.x) / circle.radiusX
+    const ny = circle.radiusY === 0 ? Infinity : (p.y - circle.y) / circle.radiusY
+    if (nx * nx + ny * ny <= 1) return true
   }
   return room.segments.some(s =>
     p.x >= s.x && p.x <= s.x + s.width &&

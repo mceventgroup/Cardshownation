@@ -9,10 +9,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useEditorStore, selectShowMode } from '@/store/index'
+import { exportFloorplanImage, exportVendorAssignmentsCsv, exportVendorListImage, printShowModeSheet } from '@/lib/export'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar from './LeftSidebar'
 import KonvaCanvas from './KonvaCanvas'
+import ShowModeVendorList from './ShowModeVendorList'
 import HelpCheatSheetModal from './HelpCheatSheetModal'
 import FirstRunModal from './FirstRunModal'
 
@@ -23,6 +25,13 @@ export default function EditorShell() {
   const hydrateFromStorage = useEditorStore(s => s.hydrateFromStorage)
   const showMode = useEditorStore(selectShowMode)
   const setShowMode = useEditorStore(s => s.setShowMode)
+  const tables = useEditorStore(s => s.tables)
+  const sections = useEditorStore(s => s.sections)
+  const vendors = useEditorStore(s => s.vendors)
+  const assignments = useEditorStore(s => s.vendorAssignments)
+  const room = useEditorStore(s => s.room)
+  const doors = useEditorStore(s => s.doors)
+  const backgroundImages = useEditorStore(s => s.backgroundImages)
   const [showHelp, setShowHelp] = useState(false)
   const [showFirstRun, setShowFirstRun] = useState(false)
 
@@ -66,14 +75,50 @@ export default function EditorShell() {
           <div className="relative flex-1 overflow-hidden">
             <KonvaCanvas />
             {showMode && (
-              <button
-                onClick={() => setShowMode(false)}
-                className="absolute left-4 top-4 z-30 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-              >
-                Exit Show Mode
-              </button>
+              <div className="absolute left-4 top-4 z-30 flex gap-2">
+                <button
+                  onClick={() => printShowModeSheet(tables, sections, vendors, assignments, room, 'Show Sheet', doors, backgroundImages)}
+                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                >
+                  Print / Save PDF
+                </button>
+                <button
+                  onClick={() => exportFloorplanImage(
+                    tables,
+                    sections,
+                    assignments,
+                    room,
+                    doors,
+                    { showVendorNames: false, showPaymentStatus: false, title: 'Floor Plan' },
+                    backgroundImages,
+                    'floorplan.png',
+                  )}
+                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                >
+                  Save Floorplan Image
+                </button>
+                <button
+                  onClick={() => exportVendorListImage(tables, vendors, assignments, 'Vendor List', 'vendor-list.png')}
+                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                >
+                  Save Vendor List Image
+                </button>
+                <button
+                  onClick={() => exportVendorAssignmentsCsv(tables, vendors, assignments, room, 'vendor-list')}
+                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                >
+                  Export Vendor CSV
+                </button>
+                <button
+                  onClick={() => setShowMode(false)}
+                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                >
+                  Exit Show Mode
+                </button>
+              </div>
             )}
           </div>
+          {showMode && <ShowModeVendorList />}
         </div>
       </div>
       {!showMode && <StatusBar />}

@@ -37,7 +37,10 @@ const SECTIONS = [
   {
     title: 'Room, Doors, And Spacing',
     items: [
-      'Use `Add Room` to build the layout boundary, then `Doors` to place openings on actual wall edges.',
+      'Use `Add Room` to create separate rooms and halls, and `Add Attached Area` when you want to extend an existing room footprint.',
+      'Use `Circle Room` or press `C` when the venue has round or oval rooms.',
+      'You can also draw room rectangles repeatedly on the canvas to create multiple disconnected spaces.',
+      'After the room layout is in place, use `Doors` to place openings on actual wall edges.',
       'Wall setback is in `Settings -> Spacing`.',
       'Turn on `Show Wall Setback` to see the setback band on the gray background outside the room.',
       'Grid size is also in `Settings -> Spacing` and affects snapping.',

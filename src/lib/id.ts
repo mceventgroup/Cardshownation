@@ -7,6 +7,7 @@ import type {
   ObstacleId,
   DoorId,
   RoomSegmentId,
+  RoomCircleId,
   LayoutId,
   EventId,
   ImportSessionId,
@@ -28,6 +29,7 @@ export const createAssignmentId    = (): VendorAssignmentId => uuid() as VendorA
 export const createObstacleId      = (): ObstacleId        => uuid() as ObstacleId
 export const createDoorId          = (): DoorId            => uuid() as DoorId
 export const createRoomSegmentId   = (): RoomSegmentId     => uuid() as RoomSegmentId
+export const createRoomCircleId    = (): RoomCircleId      => uuid() as RoomCircleId
 export const createLayoutId        = (): LayoutId          => uuid() as LayoutId
 export const createEventId         = (): EventId           => uuid() as EventId
 export const createImportSessionId = (): ImportSessionId   => uuid() as ImportSessionId

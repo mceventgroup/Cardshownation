@@ -8,7 +8,7 @@ interface Props {
 }
 
 const STEPS = [
-  'Build the room first in `Layout -> Add Room`.',
+  'Build the floor outline first in `Layout -> Room Builder`, using `Add Room` for separate spaces and `Add Attached Area` for connected expansions.',
   'Set grid size and wall setback in `Settings -> Spacing`.',
   'Add tables with `Place Table` or `Place Row`.',
   'Use `Ctrl+A` to select all tables and bulk-resize them from the sidebar.',

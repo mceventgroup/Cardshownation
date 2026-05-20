@@ -1,11 +1,16 @@
 import { csvImportModule } from '@/domain/csv-import.impl'
 import type { TableObject, TableId, RowId, SectionId, LayoutId, UserId, ImportSessionId, VendorAssignment, VendorAssignmentId, VendorId } from '@/domain/types'
+import type { FieldMapping } from '@/domain/document'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeTable(label: string, id = `t-${label}` as TableId): TableObject {
+  const tableNumber = Number(label.replace(/[^0-9]/g, '')) || 1
   return {
     id,
+    roomId: 'R1',
+    tableNumber,
+    displayId: `R1-${tableNumber}`,
     x: 0, y: 0, width: 72, height: 30,
     rotation: 0, shape: 'rectangle',
     label, labelOverridden: false,
@@ -27,6 +32,23 @@ function makeAssignment(tableId: TableId, name: string): VendorAssignment {
     notes: null,
     paymentStatus: 'unknown',
     importSessionId: null,
+  }
+}
+
+function makeMapping(overrides: Partial<FieldMapping>): FieldMapping {
+  return {
+    tableNumber: null,
+    vendorName: null,
+    vendorLastName: null,
+    companyName: null,
+    email: null,
+    vendorCategory: null,
+    quantity: null,
+    color: null,
+    notes: null,
+    paymentStatus: null,
+    section: null,
+    ...overrides,
   }
 }
 
@@ -93,6 +115,12 @@ describe('csvImportModule.detectColumns', () => {
     expect(fieldMapping.paymentStatus).toBe('Payment Status')
   })
 
+  it('treats an exact "Table" header as quantity, not a table label', () => {
+    const { fieldMapping } = csvImportModule.detectColumns(['Table', 'Vendor'])
+    expect(fieldMapping.quantity).toBe('Table')
+    expect(fieldMapping.tableNumber).toBeNull()
+  })
+
   it('reports unmapped headers', () => {
     const { unmappedHeaders } = csvImportModule.detectColumns(['Table', 'Vendor', 'FooBar'])
     expect(unmappedHeaders).toContain('FooBar')
@@ -105,7 +133,7 @@ describe('csvImportModule.validateRow', () => {
   it('passes valid rows', () => {
     const errors = csvImportModule.validateRow(
       { 'Table': '1', 'Vendor': 'Acme' },
-      { tableNumber: 'Table', vendorName: 'Vendor', vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null },
+      makeMapping({ tableNumber: 'Table', vendorName: 'Vendor' }),
     )
     expect(errors).toHaveLength(0)
   })
@@ -113,7 +141,7 @@ describe('csvImportModule.validateRow', () => {
   it('rejects missing table number', () => {
     const errors = csvImportModule.validateRow(
       { 'Table': '', 'Vendor': 'Acme' },
-      { tableNumber: 'Table', vendorName: 'Vendor', vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null },
+      makeMapping({ tableNumber: 'Table', vendorName: 'Vendor' }),
     )
     expect(errors).toHaveLength(1)
     expect(errors[0].field).toBe('tableNumber')
@@ -121,8 +149,8 @@ describe('csvImportModule.validateRow', () => {
 
   it('rejects invalid color', () => {
     const errors = csvImportModule.validateRow(
-      { 'Color': 'notacolor123' },
-      { tableNumber: null, vendorName: null, vendorLastName: null, vendorCategory: null, color: 'Color', notes: null, paymentStatus: null, section: null },
+      { 'Vendor': 'Acme', 'Color': 'notacolor123' },
+      makeMapping({ vendorName: 'Vendor', color: 'Color' }),
     )
     expect(errors).toHaveLength(1)
     expect(errors[0].field).toBe('color')
@@ -130,16 +158,16 @@ describe('csvImportModule.validateRow', () => {
 
   it('accepts valid hex color', () => {
     const errors = csvImportModule.validateRow(
-      { 'Color': '#ff0000' },
-      { tableNumber: null, vendorName: null, vendorLastName: null, vendorCategory: null, color: 'Color', notes: null, paymentStatus: null, section: null },
+      { 'Vendor': 'Acme', 'Color': '#ff0000' },
+      makeMapping({ vendorName: 'Vendor', color: 'Color' }),
     )
     expect(errors).toHaveLength(0)
   })
 
   it('rejects invalid payment status', () => {
     const errors = csvImportModule.validateRow(
-      { 'Pay': 'banana' },
-      { tableNumber: null, vendorName: null, vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: 'Pay', section: null },
+      { 'Vendor': 'Acme', 'Pay': 'banana' },
+      makeMapping({ vendorName: 'Vendor', paymentStatus: 'Pay' }),
     )
     expect(errors).toHaveLength(1)
     expect(errors[0].field).toBe('paymentStatus')
@@ -150,10 +178,7 @@ describe('csvImportModule.validateRow', () => {
 
 describe('csvImportModule.buildSession', () => {
   const tables = [makeTable('1'), makeTable('2'), makeTable('3')]
-  const mapping = {
-    tableNumber: 'Table', vendorName: 'Vendor',
-    vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null,
-  }
+  const mapping = makeMapping({ tableNumber: 'Table', vendorName: 'Vendor' })
 
   it('marks valid rows as valid', () => {
     const parsed = csvImportModule.parseCSV('Table,Vendor\n1,Acme\n2,Beta')
@@ -204,10 +229,7 @@ describe('csvImportModule.buildSession', () => {
 
 describe('csvImportModule.isReadyToApply', () => {
   const tables = [makeTable('1')]
-  const mapping = {
-    tableNumber: 'Table', vendorName: 'Vendor',
-    vendorLastName: null, vendorCategory: null, color: null, notes: null, paymentStatus: null, section: null,
-  }
+  const mapping = makeMapping({ tableNumber: 'Table', vendorName: 'Vendor' })
 
   it('returns true when all rows are valid', () => {
     const parsed = csvImportModule.parseCSV('Table,Vendor\n1,Acme')

@@ -23,10 +23,23 @@ import { DEFAULT_SETTINGS, DRAFT_LAYOUT_ID } from '@/lib/defaults'
 import {
   loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage,
   saveLayoutAs, loadLayout, saveToFile as saveToFileLib, parseFilePayload,
+  type DocumentSlice,
 } from '@/lib/persistence'
 import { csvImportModule, expandTableNumbers } from '@/domain/csv-import.impl'
+import { getDefaultRoomId, syncRoomFieldsForTables } from '@/domain/room-numbering'
 import { createImportSessionId, createAssignmentId, createVendorId } from '@/lib/id'
 import { applyCommand, reverseCommand } from './executor'
+
+const DEFAULT_COLLAPSED_PANELS = new Set<string>([
+  'tools',
+  'room',
+  'doors',
+  'sections',
+  'warnings',
+  'settings-canvas',
+  'settings-spacing',
+  'settings-table-defaults',
+])
 
 // Load persisted document state (client-only — avoids SSR/client hydration mismatch)
 function safeAssignDefined<T extends object>(target: T, updates: Partial<T>): void {
@@ -40,11 +53,32 @@ function safeAssignDefined<T extends object>(target: T, updates: Partial<T>): vo
   }
 }
 
+function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): void {
+  state.tables = syncRoomFieldsForTables(slice.tables, slice.room)
+  state.rows = slice.rows
+  state.sections = slice.sections
+  state.vendors = slice.vendors
+  state.vendorAssignments = slice.vendorAssignments
+  state.room = slice.room
+  state.activeRoomId = getDefaultRoomId(slice.room)
+  state.doors = slice.doors
+  state.backgroundImages = slice.backgroundImages
+  state.settings = slice.settings
+  state.selectedIds = new Set()
+  state.activeTool = 'select'
+  state.activeVendorId = null
+  state.hoveredVendorId = null
+  state.selectedDoorId = null
+  state.selectedSegmentId = null
+  state.showMode = false
+  state.history = { ...EMPTY_HISTORY, past: [], future: [] }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-freehand' | 'place-door' | 'measure'
+export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-circle' | 'draw-room-freehand' | 'place-door' | 'measure'
 
 export interface EditorState {
   // ── Canvas (document) state ─────────────────────────────────────────────
@@ -55,6 +89,7 @@ export interface EditorState {
   vendorAssignments: Record<string, VendorAssignment>
   room: CompositeRoom | null
   selectedSegmentId: RoomSegmentId | null
+  activeRoomId: string | null
   doors: Record<string, Door>
   backgroundImages: Record<string, BackgroundImage>
   settings: LayoutSettings
@@ -66,6 +101,7 @@ export interface EditorState {
   selectedIds: Set<string>
   activeTool: ActiveTool
   activeVendorId: VendorId | null   // vendor being assigned to tables
+  hoveredVendorId: VendorId | null  // vendor hovered in roster for canvas emphasis
   selectedDoorId: string | null     // door selected for editing
   collapsedPanels: Set<string>      // sidebar sections that are collapsed
   gridVisible: boolean
@@ -76,7 +112,7 @@ export interface EditorState {
   // ── Builder configs (read by canvas mouse handlers) ────────────────────
   tableBuilderConfig: { tableWidth: number; tableHeight: number } | null
   rowBuilderConfig: { tableCount: number; tableWidth: number; tableHeight: number; spacing: number; orientation: 'horizontal' | 'vertical'; sectionId: SectionId | null } | null
-  doorPlacementConfig: { widthIn: number } | null
+  doorPlacementConfig: { widthIn: number; kind: 'door' | 'entrance' } | null
 
   // ── Canvas actions ───────────────────────────────────────────────────────
   dispatch: (command: LayoutCommand) => void
@@ -100,7 +136,7 @@ export interface EditorState {
   // ── Builder config actions ─────────────────────────────────────────────
   setTableBuilderConfig: (config: { tableWidth: number; tableHeight: number } | null) => void
   setRowBuilderConfig: (config: { tableCount: number; tableWidth: number; tableHeight: number; spacing: number; orientation: 'horizontal' | 'vertical'; sectionId: SectionId | null } | null) => void
-  setDoorPlacementConfig: (config: { widthIn: number } | null) => void
+  setDoorPlacementConfig: (config: { widthIn: number; kind: 'door' | 'entrance' } | null) => void
 
   // ── Stage transform actions ──────────────────────────────────────────────
   setStageTransform: (scale: number, position: Point) => void
@@ -113,14 +149,20 @@ export interface EditorState {
   updateVendor: (id: VendorId, updates: Partial<Omit<Vendor, 'id'>>) => void
   removeVendor: (id: VendorId) => void
   setActiveVendor: (id: VendorId | null) => void
+  setHoveredVendor: (id: VendorId | null) => void
   setSelectedDoor: (id: string | null) => void
   setSelectedSegmentId: (id: RoomSegmentId | null) => void
+  setActiveRoomId: (id: string | null) => void
   clearVendors: () => void
   clearLayout: () => void
   saveCurrentLayoutAs: (name: string) => string
   switchToLayout: (layoutId: string) => boolean
   saveLayoutToFile: () => void
   loadLayoutFromFile: (file: File) => Promise<string | null>
+  loadDocumentSlice: (slice: DocumentSlice) => void
+  activeCloudLayoutId: string | null
+  activeCloudLayoutName: string | null
+  setActiveCloudLayout: (layout: { id: string; name: string } | null) => void
 
   // ── CSV Import actions ─────────────────────────────────────────────────
   importSession: ImportSession | null
@@ -156,6 +198,7 @@ export const useEditorStore = create<EditorState>()(
     vendorAssignments: {},
     room:          null,
     selectedSegmentId: null,
+    activeRoomId: null,
     doors:         {},
     backgroundImages: {},
     settings:      DEFAULT_SETTINGS,
@@ -163,8 +206,9 @@ export const useEditorStore = create<EditorState>()(
     selectedIds:   new Set<string>(),
     activeTool:    'select',
     activeVendorId: null,
+    hoveredVendorId: null,
     selectedDoorId: null,
-    collapsedPanels: new Set<string>(),
+    collapsedPanels: new Set<string>(DEFAULT_COLLAPSED_PANELS),
     gridVisible: true,
     showMode: false,
     stageScale:    1,
@@ -176,6 +220,8 @@ export const useEditorStore = create<EditorState>()(
     saveStatus: 'idle' as const,
     saveError: null,
     hasHydratedFromStorage: false,
+    activeCloudLayoutId: null,
+    activeCloudLayoutName: null,
 
     // ── Canvas actions ─────────────────────────────────────────────────────
 
@@ -186,15 +232,7 @@ export const useEditorStore = create<EditorState>()(
       set(state => {
         state.hasHydratedFromStorage = true
         if (!slice) return
-        state.tables = slice.tables
-        state.rows = slice.rows
-        state.sections = slice.sections
-        state.vendors = slice.vendors
-        state.vendorAssignments = slice.vendorAssignments
-        state.room = slice.room
-        state.doors = slice.doors
-        state.backgroundImages = slice.backgroundImages
-        state.settings = slice.settings
+        applyDocumentSliceToState(state, slice)
       })
     },
 
@@ -202,6 +240,10 @@ export const useEditorStore = create<EditorState>()(
       set(state => {
         // Apply the command to document state
         applyCommand(state, command)
+        state.tables = syncRoomFieldsForTables(state.tables, state.room)
+        if (!state.activeRoomId || !Object.values(state.tables).some(table => table.roomId === state.activeRoomId)) {
+          state.activeRoomId = getDefaultRoomId(state.room)
+        }
 
         // Mutate history arrays directly — avoids WritableDraft<ReadonlyArray> conflict
         // that arises from immer trying to make readonly command properties writable.
@@ -275,6 +317,16 @@ export const useEditorStore = create<EditorState>()(
       })
     },
 
+    setActiveRoomId(id) {
+      set(state => {
+        state.activeRoomId = id
+        if (!id) return
+        state.selectedIds = new Set(
+          [...state.selectedIds].filter(selectedId => state.tables[selectedId]?.roomId === id),
+        )
+      })
+    },
+
     // ── Tool actions ───────────────────────────────────────────────────────
 
     setActiveTool(tool) {
@@ -307,6 +359,7 @@ export const useEditorStore = create<EditorState>()(
         if (visible) {
           state.activeTool = 'select'
           state.activeVendorId = null
+          state.hoveredVendorId = null
         }
       })
     },
@@ -371,11 +424,16 @@ export const useEditorStore = create<EditorState>()(
           }
         }
         if (state.activeVendorId === id) state.activeVendorId = null
+        if (state.hoveredVendorId === id) state.hoveredVendorId = null
       })
     },
 
     setActiveVendor(id) {
       set(state => { state.activeVendorId = id })
+    },
+
+    setHoveredVendor(id) {
+      set(state => { state.hoveredVendorId = id })
     },
 
     setSelectedDoor(id) {
@@ -594,16 +652,20 @@ export const useEditorStore = create<EditorState>()(
         state.vendors = {}
         state.vendorAssignments = {}
         state.room = null
+        state.activeRoomId = null
         state.doors = {}
         state.backgroundImages = {}
         state.settings = DEFAULT_SETTINGS
         state.selectedIds = new Set()
         state.activeTool = 'select'
         state.activeVendorId = null
+        state.hoveredVendorId = null
         state.selectedDoorId = null
         state.selectedSegmentId = null
         state.showMode = false
         state.history = { ...EMPTY_HISTORY, past: [], future: [] }
+        state.activeCloudLayoutId = null
+        state.activeCloudLayoutName = null
       })
       clearLocalStorage()
     },
@@ -642,45 +704,33 @@ export const useEditorStore = create<EditorState>()(
         return err instanceof Error ? err.message : 'Failed to load file.'
       }
       set(state => {
-        state.tables = slice.tables
-        state.rows = slice.rows
-        state.sections = slice.sections
-        state.vendors = slice.vendors
-        state.vendorAssignments = slice.vendorAssignments
-        state.room = slice.room
-        state.doors = slice.doors
-        state.backgroundImages = slice.backgroundImages
-        state.settings = slice.settings
-        state.selectedIds = new Set()
-        state.activeTool = 'select'
-        state.activeVendorId = null
-        state.selectedDoorId = null
-        state.selectedSegmentId = null
-        state.showMode = false
-        state.history = { ...EMPTY_HISTORY, past: [], future: [] }
+        applyDocumentSliceToState(state, slice)
+        state.activeCloudLayoutId = null
+        state.activeCloudLayoutName = null
       })
       return null
     },
+
+    loadDocumentSlice(slice) {
+      set(state => {
+        applyDocumentSliceToState(state, slice)
+      })
+    },
+
+    setActiveCloudLayout(layout) {
+      set(state => {
+        state.activeCloudLayoutId = layout?.id ?? null
+        state.activeCloudLayoutName = layout?.name ?? null
+      })
+    },
+
     switchToLayout(layoutId) {
       const slice = loadLayout(layoutId)
       if (!slice) return false
       set(state => {
-        state.tables = slice.tables
-        state.rows = slice.rows
-        state.sections = slice.sections
-        state.vendors = slice.vendors
-        state.vendorAssignments = slice.vendorAssignments
-        state.room = slice.room
-        state.doors = slice.doors
-        state.backgroundImages = slice.backgroundImages
-        state.settings = slice.settings
-        state.selectedIds = new Set()
-        state.activeTool = 'select'
-        state.activeVendorId = null
-        state.selectedDoorId = null
-        state.selectedSegmentId = null
-        state.showMode = false
-        state.history = { ...EMPTY_HISTORY, past: [], future: [] }
+        applyDocumentSliceToState(state, slice)
+        state.activeCloudLayoutId = null
+        state.activeCloudLayoutName = null
       })
       return true
     },
@@ -744,8 +794,10 @@ export const selectRows      = (s: EditorState) => s.rows
 export const selectSections  = (s: EditorState) => s.sections
 export const selectVendors  = (s: EditorState) => s.vendors
 export const selectActiveVendorId = (s: EditorState) => s.activeVendorId
+export const selectHoveredVendorId = (s: EditorState) => s.hoveredVendorId
 export const selectVendorAssignments = (s: EditorState) => s.vendorAssignments
 export const selectRoom      = (s: EditorState) => s.room
+export const selectActiveRoomId = (s: EditorState) => s.activeRoomId
 export const selectDoors     = (s: EditorState) => s.doors
 export const selectSelectedDoorId = (s: EditorState) => s.selectedDoorId
 export const selectSelectedSegmentId = (s: EditorState) => s.selectedSegmentId

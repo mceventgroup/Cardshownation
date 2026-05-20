@@ -32,6 +32,7 @@ export type VendorId          = string & { readonly __brand: 'VendorId' }
 export type ObstacleId        = string & { readonly __brand: 'ObstacleId' }
 export type DoorId            = string & { readonly __brand: 'DoorId' }
 export type RoomSegmentId     = string & { readonly __brand: 'RoomSegmentId' }
+export type RoomCircleId      = string & { readonly __brand: 'RoomCircleId' }
 export type LayoutId          = string & { readonly __brand: 'LayoutId' }
 export type EventId           = string & { readonly __brand: 'EventId' }
 export type UserId            = string & { readonly __brand: 'UserId' }
@@ -53,6 +54,9 @@ export type TableShape = 'rectangle' | 'round'
 
 export interface TableObject {
   id: TableId
+  roomId: string
+  tableNumber: number
+  displayId: string
   x: number
   y: number
   width: number
@@ -167,6 +171,7 @@ export interface Obstacle {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type DoorSide = 'top' | 'bottom' | 'left' | 'right'
+export type DoorKind = 'door' | 'entrance'
 
 export interface Door {
   id: DoorId
@@ -175,6 +180,7 @@ export interface Door {
   y: number
   width: number             // opening width in canvas units
   side: DoorSide
+  kind: DoorKind
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -195,9 +201,19 @@ export interface RoomSegment {
   height: number
 }
 
+export interface RoomCircle {
+  id: RoomCircleId
+  x: number
+  y: number
+  radiusX: number
+  radiusY: number
+}
+
 export interface CompositeRoom {
   segments: RoomSegment[]
+  circles?: RoomCircle[]
   freehandVertices: Point[] | null  // null = use segments; non-null = freehand polygon
+  roomLabels?: Record<string, string>
 }
 
 /** @deprecated Use CompositeRoom. Kept as alias for migration convenience. */
@@ -217,6 +233,7 @@ export interface LayoutSettings {
   snapToObjects: boolean
   minAisleWidth: number         // minimum aisle in canvas units; drives warnings
   doorClearance: number         // minimum clearance in front of any door
+  wallThickness: number         // physical wall thickness rendered outside room boundary
   wallSetback: number           // minimum distance from wall to nearest table edge (canvas units)
   showWallSetback: boolean      // render yellow setback zone overlay
   roomLocked: boolean           // when true, room segments cannot be dragged on canvas

@@ -3,12 +3,15 @@ import type { TableObject } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
 
 function makeState(tables: Record<string, TableObject>): MutableCanvasState {
-  return { tables, rows: {}, sections: {}, vendorAssignments: {}, room: null, doors: {}, settings: { canvasWidth: 6000, canvasHeight: 4800, gridSize: 6, snapToGrid: true, snapToObjects: false, minAisleWidth: 36, doorClearance: 48, wallSetback: 36, showWallSetback: false, defaultTableWidth: 72, defaultTableHeight: 30, defaultTableShape: 'rectangle', unitLabel: 'in' } }
+  return { tables, rows: {}, sections: {}, vendors: {}, vendorAssignments: {}, room: null, doors: {}, settings: { canvasWidth: 6000, canvasHeight: 4800, gridSize: 6, snapToGrid: true, snapToObjects: false, minAisleWidth: 36, doorClearance: 48, wallSetback: 36, showWallSetback: false, defaultTableWidth: 72, defaultTableHeight: 30, defaultTableShape: 'rectangle', unitLabel: 'in', roomLocked: false } }
 }
 
 function makeTable(id: string, overrides: Partial<TableObject> = {}): TableObject {
   return {
     id:              id as any,
+    roomId:          'R1',
+    tableNumber:     1,
+    displayId:       'R1-1',
     x:               0,
     y:               0,
     width:           60,

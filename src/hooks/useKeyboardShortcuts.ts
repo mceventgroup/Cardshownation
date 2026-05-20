@@ -3,16 +3,16 @@
 import { useEffect, useRef } from 'react'
 import {
   useEditorStore,
+  selectActiveRoomId,
   selectSelectedIds,
   selectTables,
   selectVendorAssignments,
   selectCanUndo,
   selectCanRedo,
 } from '@/store/index'
-import { numberingModule } from '@/domain/numbering.impl'
-import { DEFAULT_NUMBERING_SCHEME } from '@/domain/numbering'
 import { createTableId } from '@/lib/id'
-import { getNextLabelNumber } from '@/lib/labels'
+import { getNextLabelNumberForRoom } from '@/lib/labels'
+  import { formatDisplayId, getRoomZones, sortTablesForRoom } from '@/domain/room-numbering'
 import type { TableId, TableObject } from '@/domain/types'
 
 /** Clipboard entry — stores the table template for pasting. */
@@ -38,6 +38,7 @@ export function useKeyboardShortcuts() {
   const clearSelected = useEditorStore(s => s.clearSelected)
   const setActiveTool = useEditorStore(s => s.setActiveTool)
   const selectedIds  = useEditorStore(selectSelectedIds)
+  const activeRoomId = useEditorStore(selectActiveRoomId)
   const tables       = useEditorStore(selectTables)
   const vendorAssignments = useEditorStore(selectVendorAssignments)
   const canUndo      = useEditorStore(selectCanUndo)
@@ -102,7 +103,8 @@ export function useKeyboardShortcuts() {
         pasteCountRef.current++
 
         const currentTables = useEditorStore.getState().tables
-        let nextLabel = getNextLabelNumber(currentTables)
+        const roomId = activeRoomId ?? Object.values(currentTables)[0]?.roomId ?? 'R1'
+        let nextTableNumber = getNextLabelNumberForRoom(currentTables, roomId)
         const offset = PASTE_OFFSET * pasteCountRef.current
 
         // Find the origin of the original copy to place relative to it
@@ -119,13 +121,16 @@ export function useKeyboardShortcuts() {
             type: 'PLACE_TABLE',
             table: {
               id,
+              roomId,
+              tableNumber: nextTableNumber,
+              displayId: formatDisplayId(roomId, nextTableNumber),
               x: baseX + entry.dx,
               y: baseY + entry.dy,
               width: entry.width,
               height: entry.height,
               rotation: entry.rotation,
               shape: entry.shape,
-              label: String(nextLabel),
+              label: formatDisplayId(roomId, nextTableNumber),
               labelOverridden: false,
               rowId: null,
               sectionId: entry.sectionId,
@@ -134,7 +139,7 @@ export function useKeyboardShortcuts() {
             },
             timestamp: Date.now(),
           })
-          nextLabel++
+          nextTableNumber++
         }
         useEditorStore.getState().setSelected(newIds)
         return
@@ -163,21 +168,34 @@ export function useKeyboardShortcuts() {
           // Auto-renumber all remaining tables to close gaps
           const remaining = Object.values(useEditorStore.getState().tables)
           if (remaining.length > 0) {
-            const sorted = sortTablesSpatially(remaining)
-            const labelChanges = numberingModule.numberTables(sorted, DEFAULT_NUMBERING_SCHEME, { skipOverrides: true })
-            const changes = labelChanges
-              .filter(lc => {
-                const t = useEditorStore.getState().tables[lc.id]
-                return t && (t.label !== lc.label || t.labelOverridden !== lc.labelOverridden)
-              })
-              .map(lc => ({
-                tableId: lc.id as TableId,
-                prev: {
-                  label: useEditorStore.getState().tables[lc.id].label,
-                  labelOverridden: useEditorStore.getState().tables[lc.id].labelOverridden,
-                },
-                next: { label: lc.label, labelOverridden: lc.labelOverridden },
-              }))
+            const currentRoom = useEditorStore.getState().room
+            const roomZones = getRoomZones(currentRoom)
+            const grouped = new Map<string, TableObject[]>()
+            for (const table of remaining) {
+              const roomKey = table.roomId || 'R1'
+              const tablesInRoom = grouped.get(roomKey) ?? []
+              tablesInRoom.push(table)
+              grouped.set(roomKey, tablesInRoom)
+            }
+            let nextTableNumber = 1
+            const changes = roomZones.flatMap(zone =>
+              sortTablesForRoom(
+                grouped.get(zone.id) ?? [],
+                roomZones.find(candidate => candidate.id === zone.id) ?? null,
+              ).flatMap(table => {
+                const nextLabel = formatDisplayId(zone.label, nextTableNumber++)
+                return table.label !== nextLabel || table.labelOverridden
+                  ? [{
+                      tableId: table.id as TableId,
+                      prev: {
+                        label: table.label,
+                        labelOverridden: table.labelOverridden,
+                      },
+                      next: { label: nextLabel, labelOverridden: false },
+                    }]
+                  : []
+              }),
+            )
             if (changes.length > 0) {
               dispatch({
                 type: 'RENUMBER',
@@ -224,6 +242,11 @@ export function useKeyboardShortcuts() {
         return
       }
 
+      if (e.key === 'c' && !ctrl) {
+        setActiveTool('draw-room-circle')
+        return
+      }
+
       if (e.key === 'f') {
         setActiveTool('draw-room-freehand')
         return
@@ -249,29 +272,5 @@ export function useKeyboardShortcuts() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, dispatch, clearSelected, setActiveTool, selectedIds, tables, vendorAssignments, canUndo, canRedo])
-}
-
-/** Sort tables spatially: group by y-band (row tolerance), then left-to-right. */
-function sortTablesSpatially(tables: TableObject[]): TableObject[] {
-  if (tables.length === 0) return []
-  const sorted = [...tables].sort((a, b) => a.y - b.y || a.x - b.x)
-
-  const tolerance = sorted[0].height * 0.8
-  const bands: TableObject[][] = []
-  let currentBand: TableObject[] = [sorted[0]]
-  let bandY = sorted[0].y
-
-  for (let i = 1; i < sorted.length; i++) {
-    if (Math.abs(sorted[i].y - bandY) <= tolerance) {
-      currentBand.push(sorted[i])
-    } else {
-      bands.push(currentBand)
-      currentBand = [sorted[i]]
-      bandY = sorted[i].y
-    }
-  }
-  bands.push(currentBand)
-
-  return bands.flatMap(band => band.sort((a, b) => a.x - b.x))
+  }, [activeRoomId, undo, redo, dispatch, clearSelected, setActiveTool, selectedIds, tables, vendorAssignments, canUndo, canRedo])
 }

@@ -23,6 +23,7 @@ import type { NumberingScheme } from './numbering'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RowConfig {
+  roomId: string
   tableCount: number
   tableWidth: number
   tableHeight: number

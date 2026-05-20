@@ -4,6 +4,9 @@ import type { TableObject } from '../types'
 function makeTable(overrides: Partial<TableObject> = {}): TableObject {
   return {
     id:              'test-id' as any,
+    roomId:          'R1',
+    tableNumber:     1,
+    displayId:       'R1-1',
     x:               0,
     y:               0,
     width:           60,

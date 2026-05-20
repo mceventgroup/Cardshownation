@@ -18,6 +18,7 @@ function emptyState(): MutableCanvasState {
     tables: {},
     rows: {},
     sections: {},
+    vendors: {},
     vendorAssignments: {},
     room: null,
     doors: {},
@@ -27,7 +28,7 @@ function emptyState(): MutableCanvasState {
 
 function makeTable(id: string, label: string): TableObject {
   return {
-    id: id as TableId, x: 100, y: 200, width: 72, height: 30,
+    id: id as TableId, roomId: 'R1', tableNumber: Number(label.replace(/[^0-9]/g, '')) || 1, displayId: `R1-${Number(label.replace(/[^0-9]/g, '')) || 1}`, x: 100, y: 200, width: 72, height: 30,
     rotation: 0, shape: 'rectangle', label, labelOverridden: false,
     rowId: null as RowId | null, sectionId: null as SectionId | null, order: 0, premium: false,
   }
@@ -185,6 +186,7 @@ describe('APPLY_IMPORT', () => {
     const cmd: ApplyImportCommand = {
       type: 'APPLY_IMPORT', timestamp: ts,
       importSessionId: 'sess-1' as ImportSessionId,
+      createdVendors: [],
       replacedAssignments: [oldAssignment],
       createdAssignments: [newAssignment1, newAssignment2],
     }

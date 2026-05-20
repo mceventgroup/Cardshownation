@@ -14,6 +14,17 @@ function clamp(raw: string, min: number, max: number, def: number): number {
   return Math.max(min, Math.min(max, n))
 }
 
+function normalizeRotation(raw: string, def: number): number {
+  const n = parseFloat(raw)
+  if (!Number.isFinite(n)) return def
+  const normalized = ((n % 360) + 360) % 360
+  return Math.round(normalized * 10) / 10
+}
+
+function stepRotation(value: number, delta: number): number {
+  return Math.round(((((value + delta) % 360) + 360) % 360) * 10) / 10
+}
+
 export default function TablePropertiesPanel() {
   const tables = useEditorStore(selectTables)
   const selectedIds = useEditorStore(selectSelectedIds)
@@ -37,7 +48,8 @@ export default function TablePropertiesPanel() {
       height={table.height}
       x={table.x}
       y={table.y}
-      label={table.label}
+      rotation={table.rotation}
+      label={table.displayId}
       isVertical={table.height > table.width}
       isPremium={table.premium}
       vendorName={assignment?.vendorName ?? null}
@@ -88,6 +100,7 @@ interface FormProps {
   height: number
   x: number
   y: number
+  rotation: number
   label: string
   isVertical: boolean
   isPremium: boolean
@@ -107,6 +120,7 @@ function TablePropertiesForm({
   height,
   x,
   y,
+  rotation,
   label,
   isVertical,
   isPremium,
@@ -124,11 +138,13 @@ function TablePropertiesForm({
 
   const [lengthStr, setLengthStr] = useState(String(length))
   const [widthStr, setWidthStr] = useState(String(tableWidth))
+  const [rotationStr, setRotationStr] = useState(String(rotation))
 
   useEffect(() => {
     setLengthStr(String(Math.max(width, height)))
     setWidthStr(String(Math.min(width, height)))
-  }, [width, height])
+    setRotationStr(String(rotation))
+  }, [width, height, rotation])
 
   const applySize = useCallback((newLength: number, newWidth: number, vertical: boolean) => {
     const nextW = vertical ? newWidth : newLength
@@ -143,6 +159,19 @@ function TablePropertiesForm({
     })
   }, [tableId, x, y, width, height, dispatch])
 
+  const rotateTo = useCallback((nextRotation: number) => {
+    if (nextRotation === rotation) return
+    dispatch({
+      type: 'ROTATE_TABLES',
+      rotations: [{
+        tableId: tableId as TableId,
+        prevRotation: rotation,
+        nextRotation,
+      }],
+      timestamp: Date.now(),
+    })
+  }, [dispatch, rotation, tableId])
+
   const handleLengthBlur = useCallback(() => {
     const val = clamp(lengthStr, 12, 240, length)
     setLengthStr(String(val))
@@ -154,6 +183,19 @@ function TablePropertiesForm({
     setWidthStr(String(val))
     applySize(Math.max(width, height), val, isVertical)
   }, [widthStr, tableWidth, width, height, isVertical, applySize])
+
+  const handleRotationBlur = useCallback(() => {
+    const nextRotation = normalizeRotation(rotationStr, rotation)
+    setRotationStr(String(nextRotation))
+    rotateTo(nextRotation)
+  }, [rotationStr, rotation, rotateTo])
+
+  const nudgeRotation = useCallback((delta: number) => {
+    const currentRotation = normalizeRotation(rotationStr, rotation)
+    const nextRotation = stepRotation(currentRotation, delta)
+    setRotationStr(String(nextRotation))
+    rotateTo(nextRotation)
+  }, [rotationStr, rotation, rotateTo])
 
   return (
     <div className="space-y-4 px-4 py-4 text-sm">
@@ -218,6 +260,35 @@ function TablePropertiesForm({
               onBlur={handleWidthBlur}
               className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
             />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Rotation ({normalizeRotation(rotationStr, rotation)} deg)
+            </span>
+            <div className="mt-1 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => nudgeRotation(-1)}
+                className="rounded-xl border border-slate-300 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                -1
+              </button>
+              <input
+                type="number"
+                step="0.1"
+                value={rotationStr}
+                onChange={e => setRotationStr(e.target.value)}
+                onBlur={handleRotationBlur}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              />
+              <button
+                type="button"
+                onClick={() => nudgeRotation(1)}
+                className="rounded-xl border border-slate-300 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                +1
+              </button>
+            </div>
           </label>
         </div>
       </div>

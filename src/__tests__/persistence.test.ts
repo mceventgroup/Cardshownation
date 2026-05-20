@@ -56,15 +56,15 @@ describe('persistence round-trip', () => {
     const slice = makeSlice({
       tables: {
         't1': {
-          id: 't1' as TableId, x: 100, y: 200, width: 72, height: 30,
-          rotation: 0, shape: 'rectangle', label: '1', labelOverridden: false,
+          id: 't1' as TableId, roomId: 'R1', tableNumber: 1, displayId: 'R1-1', x: 100, y: 200, width: 72, height: 30,
+          rotation: 0, shape: 'rectangle', label: 'R1-1', labelOverridden: false,
           rowId: null as RowId | null, sectionId: null as SectionId | null, order: 0, premium: false,
         },
       },
     })
     saveToLocalStorage(slice)
     const loaded = loadFromLocalStorage()!
-    expect(loaded.tables['t1'].label).toBe('1')
+    expect(loaded.tables['t1'].label).toBe('R1-1')
     expect(loaded.tables['t1'].x).toBe(100)
   })
 

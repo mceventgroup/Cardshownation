@@ -1,0 +1,73 @@
+import { NextRequest, NextResponse } from 'next/server'
+import {
+  authorizeCloudRequest,
+  deleteCloudLayout,
+  ensureCloudLayoutsTable,
+  getCloudLayout,
+  isCloudSaveConfigured,
+} from '@/lib/server/cloud-layout-store'
+
+function unauthorizedResponse(): NextResponse {
+  return NextResponse.json({ error: 'Invalid save key.' }, { status: 401 })
+}
+
+function unavailableResponse(message: string): NextResponse {
+  return NextResponse.json({ error: message }, { status: 503 })
+}
+
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  if (!isCloudSaveConfigured()) {
+    return unavailableResponse('Cloud save is not configured on this deployment.')
+  }
+  if (!authorizeCloudRequest(request.headers.get('x-floorplanner-key'))) {
+    return unauthorizedResponse()
+  }
+
+  try {
+    await ensureCloudLayoutsTable()
+    const { id } = await context.params
+    const layout = await getCloudLayout(id)
+    if (!layout || !layout.data) {
+      return NextResponse.json({ error: 'Cloud layout not found.' }, { status: 404 })
+    }
+
+    return NextResponse.json({
+      layout: {
+        id: layout.id,
+        name: layout.name,
+        savedAt: layout.saved_at,
+        tableCount: layout.table_count,
+        vendorCount: layout.vendor_count,
+        data: layout.data,
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load cloud layout.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  if (!isCloudSaveConfigured()) {
+    return unavailableResponse('Cloud save is not configured on this deployment.')
+  }
+  if (!authorizeCloudRequest(request.headers.get('x-floorplanner-key'))) {
+    return unauthorizedResponse()
+  }
+
+  try {
+    await ensureCloudLayoutsTable()
+    const { id } = await context.params
+    await deleteCloudLayout(id)
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete cloud layout.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}

@@ -12,8 +12,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from 'react'
-import { useEditorStore } from '@/store'
-import { exportPNG, printLayout, printVendorManifest } from '@/lib/export'
+import { useEditorStore } from '@/store/index'
+import { exportFloorplanImage, exportVendorAssignmentsCsv, printLayout, printVendorManifest } from '@/lib/export'
 
 interface Props {
   onClose: () => void
@@ -25,11 +25,17 @@ export default function ExportModal({ onClose }: Props) {
   const vendors     = useEditorStore(s => s.vendors)
   const assignments = useEditorStore(s => s.vendorAssignments)
   const room        = useEditorStore(s => s.room)
+  const doors       = useEditorStore(s => s.doors)
   const bgImages    = useEditorStore(s => s.backgroundImages)
 
   const [view, setView]              = useState<'organizer' | 'public'>('organizer')
   const [showPayment, setShowPayment] = useState(true)
   const [title, setTitle]            = useState('Floor Plan')
+  const [eventName, setEventName]    = useState('Floor Plan')
+  const [venue, setVenue]            = useState('')
+  const [eventDate, setEventDate]    = useState('')
+  const [colorMode, setColorMode]    = useState<'color' | 'bw'>('color')
+  const [includeAssignmentsPage, setIncludeAssignmentsPage] = useState(false)
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -42,16 +48,48 @@ export default function ExportModal({ onClose }: Props) {
   }, [])
 
   function handlePNG() {
-    exportPNG(`${title || 'floorplan'}.png`)
+    exportFloorplanImage(
+      tables,
+      sections,
+      assignments,
+      room,
+      doors,
+      {
+        showVendorNames: view === 'organizer',
+        showPaymentStatus: view === 'organizer' && showPayment,
+        title,
+        colorMode,
+        metadata: {
+          eventName,
+          venue,
+          date: eventDate,
+        },
+        includeVendorAssignmentsPage: includeAssignmentsPage,
+      },
+      bgImages,
+      `${title || 'floorplan'}.png`,
+    )
     onClose()
   }
 
   function handlePrint() {
-    printLayout(tables, sections, assignments, room, {
+    printLayout(tables, sections, assignments, room, doors, {
       showVendorNames:   view === 'organizer',
       showPaymentStatus: view === 'organizer' && showPayment,
       title,
+      colorMode,
+      metadata: {
+        eventName,
+        venue,
+        date: eventDate,
+      },
+      includeVendorAssignmentsPage: includeAssignmentsPage,
     }, bgImages)
+    onClose()
+  }
+
+  function handleVendorCsv() {
+    exportVendorAssignmentsCsv(tables, vendors, assignments, room, title || 'vendor-assignments')
     onClose()
   }
 
@@ -78,6 +116,37 @@ export default function ExportModal({ onClose }: Props) {
               onChange={e => setTitle(e.target.value)}
               className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
               placeholder="Floor Plan"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-gray-400 text-xs">Event Name</label>
+              <input
+                value={eventName}
+                onChange={e => setEventName(e.target.value)}
+                className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                placeholder="Card Show"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-gray-400 text-xs">Venue</label>
+              <input
+                value={venue}
+                onChange={e => setVenue(e.target.value)}
+                className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                placeholder="Convention Center"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-gray-400 text-xs">Event Date</label>
+            <input
+              value={eventDate}
+              onChange={e => setEventDate(e.target.value)}
+              className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+              placeholder="2026-05-01"
             />
           </div>
 
@@ -112,6 +181,41 @@ export default function ExportModal({ onClose }: Props) {
             )}
           </div>
 
+          <div className="flex flex-col gap-2">
+            <label className="text-gray-400 text-xs">Export Mode</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setColorMode('color')}
+                className={`flex-1 py-2 text-sm rounded border transition-colors ${
+                  colorMode === 'color'
+                    ? 'border-blue-500 bg-blue-600/20 text-blue-300'
+                    : 'border-gray-600 text-gray-400 hover:border-gray-500'
+                }`}
+              >
+                Full Color
+              </button>
+              <button
+                onClick={() => setColorMode('bw')}
+                className={`flex-1 py-2 text-sm rounded border transition-colors ${
+                  colorMode === 'bw'
+                    ? 'border-blue-500 bg-blue-600/20 text-blue-300'
+                    : 'border-gray-600 text-gray-400 hover:border-gray-500'
+                }`}
+              >
+                Print Friendly
+              </button>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeAssignmentsPage}
+                onChange={e => setIncludeAssignmentsPage(e.target.checked)}
+                className="accent-blue-500"
+              />
+              Include vendor assignment page in PDF export
+            </label>
+          </div>
+
           {/* Stats */}
           <div className="bg-gray-800 rounded p-3 text-xs text-gray-400 flex gap-4">
             <span><span className="text-white">{tableCount}</span> tables</span>
@@ -137,7 +241,7 @@ export default function ExportModal({ onClose }: Props) {
               <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
-              Download PNG (current view)
+              Save Floorplan Image
             </button>
           </div>
 
@@ -151,9 +255,19 @@ export default function ExportModal({ onClose }: Props) {
               Print Vendor Checklist
             </button>
 
+          <button
+            onClick={handleVendorCsv}
+            className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm3 2v8h8V6H6zm1 1h2v2H7V7zm0 3h2v3H7v-3zm4-3h2v2h-2V7zm0 3h2v3h-2v-3z" />
+            </svg>
+            Export Vendor Assignments CSV
+          </button>
+
           <p className="text-gray-600 text-xs">
-            Print/PDF exports a clean SVG floor plan scaled to fit the page.
-            PNG exports exactly what is currently visible on the canvas.
+            Print/PDF exports rooms as separate labeled sections with global consecutive numbering.
+            Floorplan image export creates a readable multi-room PNG.
             Vendor Checklist prints a sortable list with check-in column.
           </p>
         </div>
