@@ -78,7 +78,7 @@ function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): vo
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-circle' | 'draw-room-freehand' | 'place-door' | 'measure'
+export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-circle' | 'draw-room-freehand' | 'split-room' | 'place-door' | 'measure'
 
 export interface EditorState {
   // ── Canvas (document) state ─────────────────────────────────────────────

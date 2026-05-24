@@ -252,6 +252,11 @@ export function useKeyboardShortcuts() {
         return
       }
 
+      if (e.key === 'x') {
+        setActiveTool('split-room')
+        return
+      }
+
       if (e.key === 'v' && !ctrl) {
         useEditorStore.getState().togglePanelCollapsed('vendors')
         return

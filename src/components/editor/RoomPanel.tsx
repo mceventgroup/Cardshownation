@@ -4,6 +4,7 @@ import {
   selectRoom,
   selectSettings,
   selectSelectedSegmentId,
+  selectActiveTool,
 } from '@/store/index'
 import type { CompositeRoom, RoomCircle, RoomSegment, RoomSegmentId } from '@/domain/types'
 import { createRoomCircleId, createRoomSegmentId } from '@/lib/id'
@@ -16,6 +17,8 @@ export default function RoomPanel() {
   const settings = useEditorStore(selectSettings)
   const dispatch = useEditorStore(s => s.dispatch)
   const selectedSegmentId = useEditorStore(selectSelectedSegmentId)
+  const activeTool = useEditorStore(selectActiveTool)
+  const setActiveTool = useEditorStore(s => s.setActiveTool)
 
   const [roomWidthFt, setRoomWidthFt] = useState(80)
   const [roomHeightFt, setRoomHeightFt] = useState(60)
@@ -435,8 +438,22 @@ export default function RoomPanel() {
         <div className="text-xs text-gray-400 mt-1">
           Draw on canvas: <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">B</kbd> rectangle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">C</kbd> circle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">F</kbd> freehand. Use <span className="font-medium text-gray-500">Add Room</span> for separate spaces, <span className="font-medium text-gray-500">Add Attached Area</span> to extend an existing footprint, and <span className="font-medium text-gray-500">Add Circle Room</span> for round halls or arenas.
         </div>
+        <button
+          onClick={() => setActiveTool(activeTool === 'split-room' ? 'select' : 'split-room')}
+          disabled={!room || room.segments.length === 0}
+          className={`mt-2 w-full rounded px-2 py-1.5 text-xs font-medium ${
+            activeTool === 'split-room'
+              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          } disabled:bg-gray-100 disabled:text-gray-400`}
+        >
+          {activeTool === 'split-room' ? 'Exit Split Mode' : 'Split Room on Canvas'}
+        </button>
         <div className="text-xs text-gray-400 mt-1">
           When <span className="font-medium text-gray-500">Lock Layout</span> is off, drag inside a room to move the whole room.
+        </div>
+        <div className="text-xs text-gray-400 mt-1">
+          In <span className="font-medium text-gray-500">Split Room</span> mode, click inside a rectangular segment where you want the divider and drag vertically or horizontally to connect it to the opposite walls.
         </div>
       </div>
 

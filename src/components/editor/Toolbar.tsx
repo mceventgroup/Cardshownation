@@ -64,6 +64,7 @@ function useMenuItems(
       { label: 'Place Table', shortcut: 'T', action: () => setTool('place-table') },
       { label: 'Place Row', shortcut: 'R', action: () => setTool('place-row') },
       { label: 'Measure', shortcut: 'M', action: () => setTool('measure') },
+      { label: 'Split Room', shortcut: 'X', action: () => setTool('split-room') },
     ],
     Edit: [
       { label: 'Undo', shortcut: 'Ctrl+Z', action: undo, disabled: !canUndo },

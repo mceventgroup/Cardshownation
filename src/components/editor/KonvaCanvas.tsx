@@ -44,6 +44,7 @@ import { useWarnings } from '@/hooks/useWarnings'
 import { warningsModule } from '@/domain/warnings.impl'
 import type { WarningSeverity } from '@/domain/warnings'
 import { getDefaultRoomId, getRoomIdForPoint, getRoomZones } from '@/domain/room-numbering'
+import { applyRoomSplit, buildRoomSplitPreview, findRoomSegmentAtPoint } from '@/domain/room-splitting'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -207,6 +208,17 @@ export default function KonvaCanvas() {
   // Freehand room drawing state
   const freehandPointsRef = useRef<Point[] | null>(null)
   const [freehandPoints, setFreehandPoints] = useState<Point[] | null>(null)
+  const roomSplitRef = useRef<{ segmentId: string; startPoint: Point } | null>(null)
+  const [roomSplitPreview, setRoomSplitPreview] = useState<{
+    lineStart: Point
+    lineEnd: Point
+    segmentId: string
+  } | null>(null)
+  const roomSplitPreviewRef = useRef<{
+    lineStart: Point
+    lineEnd: Point
+    segmentId: string
+  } | null>(null)
 
   // Room segment drag state
   const segmentDragRef = useRef<{ segmentId: string; startPointer: Point; startPos: Point } | null>(null)
@@ -237,6 +249,13 @@ export default function KonvaCanvas() {
       setDoorPlacementPreview(null)
     }
   }, [activeTool, doorPlacementPreview])
+
+  useEffect(() => {
+    if (activeTool === 'split-room') return
+    roomSplitRef.current = null
+    roomSplitPreviewRef.current = null
+    setRoomSplitPreview(null)
+  }, [activeTool])
 
   // ── Container resize observer ──────────────────────────────────────────────
 
@@ -698,6 +717,20 @@ export default function KonvaCanvas() {
       return
     }
 
+    if (activeTool === 'split-room') {
+      const segment = findRoomSegmentAtPoint(room, canvasPos)
+      if (!segment) return
+      roomSplitRef.current = {
+        segmentId: segment.id,
+        startPoint: snapping.snapToGrid(canvasPos, settings.gridSize),
+      }
+      roomSplitPreviewRef.current = null
+      setRoomSplitPreview(null)
+      setSelectedSegmentId(segment.id)
+      clearSelected()
+      return
+    }
+
     // ── Active vendor assignment: click table to assign ──────────────────
     if (activeVendorRef.current && isTable && tableId) {
       if (!currentVisibleTableIds.has(tableId)) return
@@ -910,6 +943,40 @@ export default function KonvaCanvas() {
       return
     }
 
+    if (roomSplitRef.current) {
+      const currentRoom = useEditorStore.getState().room
+      const segment = currentRoom?.segments.find(entry => entry.id === roomSplitRef.current?.segmentId)
+      if (!segment) {
+        roomSplitRef.current = null
+        roomSplitPreviewRef.current = null
+        setRoomSplitPreview(null)
+        return
+      }
+
+      const preview = buildRoomSplitPreview(
+        segment,
+        roomSplitRef.current.startPoint,
+        snapping.snapToGrid(canvasPos, settings.gridSize),
+        settings.gridSize,
+        settings.wallThickness,
+      )
+
+      if (!preview) {
+        roomSplitPreviewRef.current = null
+        setRoomSplitPreview(null)
+        return
+      }
+
+      const nextPreview = {
+        lineStart: preview.lineStart,
+        lineEnd: preview.lineEnd,
+        segmentId: preview.segmentId,
+      }
+      roomSplitPreviewRef.current = nextPreview
+      setRoomSplitPreview(nextPreview)
+      return
+    }
+
     if (roomDragRef.current) {
       const drag = roomDragRef.current
       const dx = canvasPos.x - drag.startPointer.x
@@ -1112,6 +1179,38 @@ export default function KonvaCanvas() {
     }
 
     // Commit room draw — adds a rectangular segment to the composite room
+    if (roomSplitRef.current) {
+      const splitState = roomSplitRef.current
+      const currentRoom = useEditorStore.getState().room
+      const segment = currentRoom?.segments.find(entry => entry.id === splitState.segmentId)
+      const previewLine = roomSplitPreviewRef.current
+
+      roomSplitRef.current = null
+      roomSplitPreviewRef.current = null
+      setRoomSplitPreview(null)
+
+      if (currentRoom && segment && previewLine) {
+        const preview = buildRoomSplitPreview(
+          segment,
+          splitState.startPoint,
+          previewLine.lineEnd,
+          settings.gridSize,
+          settings.wallThickness,
+        )
+
+        if (preview) {
+          dispatch({
+            type: 'SET_ROOM',
+            prevRoom: currentRoom,
+            nextRoom: applyRoomSplit(currentRoom, preview, createRoomSegmentId),
+            timestamp: Date.now(),
+          })
+          setSelectedSegmentId(null)
+        }
+      }
+      return
+    }
+
     const drawPreview = roomDrawPreviewRef.current
     if (roomDrawRef.current && drawPreview) {
       roomDrawRef.current = null
@@ -1221,7 +1320,7 @@ export default function KonvaCanvas() {
 
       updateSelectionState(null)
     }
-  }, [draftPositions, tables, dispatch, setSelected])
+  }, [draftPositions, tables, dispatch, setSelected, setSelectedSegmentId, settings])
 
   // ── Cursor style ───────────────────────────────────────────────────────────
 
@@ -1231,7 +1330,7 @@ export default function KonvaCanvas() {
       ? 'canvas-pan'
       : (activeTool === 'place-table' || activeTool === 'place-row' || activeTool === 'place-door')
         ? 'canvas-place'
-        : (activeTool === 'draw-room' || activeTool === 'draw-room-circle' || activeTool === 'draw-room-freehand')
+        : (activeTool === 'draw-room' || activeTool === 'draw-room-circle' || activeTool === 'draw-room-freehand' || activeTool === 'split-room')
           ? 'canvas-place'
           : 'canvas-select'
 
@@ -1637,6 +1736,24 @@ export default function KonvaCanvas() {
               strokeWidth={2}
               dash={[8, 4]}
               closed={false}
+              listening={false}
+            />
+          </Layer>
+        )}
+
+        {roomSplitPreview && (
+          <Layer listening={false}>
+            <Line
+              points={[
+                roomSplitPreview.lineStart.x,
+                roomSplitPreview.lineStart.y,
+                roomSplitPreview.lineEnd.x,
+                roomSplitPreview.lineEnd.y,
+              ]}
+              stroke="#f59e0b"
+              strokeWidth={3}
+              dash={[10, 6]}
+              lineCap="round"
               listening={false}
             />
           </Layer>
