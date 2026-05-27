@@ -9,6 +9,9 @@ import {
 } from '@/lib/server/cloud-layout-store'
 import type { DocumentSlice } from '@/lib/persistence'
 
+const MAX_REQUEST_BYTES = 10 * 1024 * 1024
+const LAYOUT_ID_PATTERN = /^layout-[a-z0-9]+$/
+
 function unauthorizedResponse(): NextResponse {
   return NextResponse.json({ error: 'Invalid save key.' }, { status: 401 })
 }
@@ -61,6 +64,14 @@ export async function POST(request: NextRequest) {
     return unauthorizedResponse()
   }
 
+  const contentLength = request.headers.get('content-length')
+  if (contentLength) {
+    const size = Number(contentLength)
+    if (Number.isFinite(size) && size > MAX_REQUEST_BYTES) {
+      return NextResponse.json({ error: 'Payload too large.' }, { status: 413 })
+    }
+  }
+
   let body: { id?: string | null; name?: string; data?: DocumentSlice }
   try {
     body = await request.json()
@@ -69,8 +80,15 @@ export async function POST(request: NextRequest) {
   }
 
   const name = body.name?.trim()
+  const layoutId = body.id?.trim() || null
   if (!name) {
     return NextResponse.json({ error: 'Layout name is required.' }, { status: 400 })
+  }
+  if (name.length > 200) {
+    return NextResponse.json({ error: 'Layout name must be 200 characters or fewer.' }, { status: 400 })
+  }
+  if (layoutId && !LAYOUT_ID_PATTERN.test(layoutId)) {
+    return NextResponse.json({ error: 'Invalid layout ID format.' }, { status: 400 })
   }
   if (!body.data) {
     return NextResponse.json({ error: 'Layout data is required.' }, { status: 400 })
@@ -79,7 +97,7 @@ export async function POST(request: NextRequest) {
   try {
     await ensureCloudLayoutsTable()
     const layout = await upsertCloudLayout({
-      id: body.id?.trim() || createLayoutId(),
+      id: layoutId || createLayoutId(),
       name,
       data: body.data,
     })

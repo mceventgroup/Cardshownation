@@ -22,10 +22,6 @@ const TOOLS: { tool: ActiveTool; label: string; shortcut: string }[] = [
   { tool: 'select',      label: 'Select',      shortcut: 'S' },
   { tool: 'place-table', label: 'Place Table',  shortcut: 'T' },
   { tool: 'place-row',   label: 'Place Row',    shortcut: 'R' },
-  { tool: 'measure',     label: 'Measure',      shortcut: 'M' },
-  { tool: 'draw-room',   label: 'Draw Room',    shortcut: 'B' },
-  { tool: 'draw-room-circle', label: 'Circle Room', shortcut: 'C' },
-  { tool: 'draw-room-freehand', label: 'Freehand Room', shortcut: 'F' },
   { tool: 'split-room', label: 'Split Room', shortcut: 'X' },
 ]
 

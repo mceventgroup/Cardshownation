@@ -27,6 +27,11 @@ export default function RoomPanel() {
   const [editH, setEditH] = useState(0)
   const [editX, setEditX] = useState(0)
   const [editY, setEditY] = useState(0)
+  const [editingCircleId, setEditingCircleId] = useState<string | null>(null)
+  const [editCircleW, setEditCircleW] = useState(0)
+  const [editCircleH, setEditCircleH] = useState(0)
+  const [editCircleX, setEditCircleX] = useState(0)
+  const [editCircleY, setEditCircleY] = useState(0)
   const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set())
 
   const bounds = room ? computeRoomBounds(room) : null
@@ -277,6 +282,50 @@ export default function RoomPanel() {
       })
     }
     setEditingSegId(null)
+  }
+
+  function startEditCircle(circle: RoomCircle) {
+    setEditingCircleId(circle.id)
+    setEditCircleW(Math.round(circle.radiusX * 2 / 12))
+    setEditCircleH(Math.round(circle.radiusY * 2 / 12))
+    setEditCircleX(Math.round((circle.x - circle.radiusX) / 12))
+    setEditCircleY(Math.round((circle.y - circle.radiusY) / 12))
+  }
+
+  function commitEditCircle(circle: RoomCircle) {
+    if (!room) return
+    const newWidth = editCircleW * 12
+    const newHeight = editCircleH * 12
+    const newX = editCircleX * 12
+    const newY = editCircleY * 12
+    const nextCircle: RoomCircle = {
+      ...circle,
+      x: newX + newWidth / 2,
+      y: newY + newHeight / 2,
+      radiusX: newWidth / 2,
+      radiusY: newHeight / 2,
+    }
+
+    if (
+      nextCircle.x !== circle.x ||
+      nextCircle.y !== circle.y ||
+      nextCircle.radiusX !== circle.radiusX ||
+      nextCircle.radiusY !== circle.radiusY
+    ) {
+      dispatch({
+        type: 'SET_ROOM',
+        prevRoom: room,
+        nextRoom: {
+          segments: room.segments,
+          circles: (room.circles ?? []).map(entry => entry.id === circle.id ? nextCircle : entry),
+          freehandVertices: room.freehandVertices,
+          roomLabels: room.roomLabels,
+        },
+        timestamp: Date.now(),
+      })
+    }
+
+    setEditingCircleId(null)
   }
 
   function toggleMergeSelection(segId: string) {
@@ -587,31 +636,101 @@ export default function RoomPanel() {
           <div className="font-medium text-gray-700 mb-1">Circular Rooms ({room.circles?.length ?? 0})</div>
           <div className="space-y-1">
             {(room.circles ?? []).map((circle, idx) => (
-              <div key={circle.id} className="flex items-center justify-between rounded bg-gray-50 px-2 py-1">
-                <div>
-                  <div className="text-xs font-medium">Circle {idx + 1}</div>
-                  <div className="text-xs text-gray-400">
-                    {formatDimension(circle.radiusX * 2)} x {formatDimension(circle.radiusY * 2)}
+              <div key={circle.id} className="rounded bg-gray-50 px-2 py-1">
+                {editingCircleId === circle.id ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-400 w-3">W</span>
+                      <input
+                        type="number"
+                        min={5}
+                        max={500}
+                        value={editCircleW}
+                        onChange={e => setEditCircleW(Number(e.target.value))}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                      />
+                      <span className="text-xs text-gray-400 w-3">D</span>
+                      <input
+                        type="number"
+                        min={5}
+                        max={500}
+                        value={editCircleH}
+                        onChange={e => setEditCircleH(Number(e.target.value))}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                      />
+                      <span className="text-xs text-gray-400">ft</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-400 w-3">X</span>
+                      <input
+                        type="number"
+                        value={editCircleX}
+                        onChange={e => setEditCircleX(Number(e.target.value))}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                      />
+                      <span className="text-xs text-gray-400 w-3">Y</span>
+                      <input
+                        type="number"
+                        value={editCircleY}
+                        onChange={e => setEditCircleY(Number(e.target.value))}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                      />
+                      <span className="text-xs text-gray-400">ft</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => commitEditCircle(circle)}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingCircleId(null)}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <button
-                  onClick={() => {
-                    dispatch({
-                      type: 'SET_ROOM',
-                      prevRoom: room,
-                      nextRoom: {
-                        segments: room.segments,
-                        circles: (room.circles ?? []).filter(entry => entry.id !== circle.id),
-                        freehandVertices: room.freehandVertices,
-                        roomLabels: room.roomLabels,
-                      },
-                      timestamp: Date.now(),
-                    })
-                  }}
-                  className="text-xs text-red-500 hover:text-red-700"
-                >
-                  Delete
-                </button>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-medium">Circle {idx + 1}</div>
+                      <div className="text-xs text-gray-400">
+                        {formatDimension(circle.radiusX * 2)} x {formatDimension(circle.radiusY * 2)}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        at ({formatDimension(circle.x - circle.radiusX)}, {formatDimension(circle.y - circle.radiusY)})
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => startEditCircle(circle)}
+                        className="text-xs text-blue-500 hover:text-blue-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => {
+                          dispatch({
+                            type: 'SET_ROOM',
+                            prevRoom: room,
+                            nextRoom: {
+                              segments: room.segments,
+                              circles: (room.circles ?? []).filter(entry => entry.id !== circle.id),
+                              freehandVertices: room.freehandVertices,
+                              roomLabels: room.roomLabels,
+                            },
+                            timestamp: Date.now(),
+                          })
+                        }}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -7,6 +7,8 @@ import {
   isCloudSaveConfigured,
 } from '@/lib/server/cloud-layout-store'
 
+const LAYOUT_ID_PATTERN = /^layout-[a-z0-9]+$/
+
 function unauthorizedResponse(): NextResponse {
   return NextResponse.json({ error: 'Invalid save key.' }, { status: 401 })
 }
@@ -29,6 +31,9 @@ export async function GET(
   try {
     await ensureCloudLayoutsTable()
     const { id } = await context.params
+    if (!LAYOUT_ID_PATTERN.test(id)) {
+      return NextResponse.json({ error: 'Invalid layout ID.' }, { status: 400 })
+    }
     const layout = await getCloudLayout(id)
     if (!layout || !layout.data) {
       return NextResponse.json({ error: 'Cloud layout not found.' }, { status: 404 })
@@ -64,6 +69,9 @@ export async function DELETE(
   try {
     await ensureCloudLayoutsTable()
     const { id } = await context.params
+    if (!LAYOUT_ID_PATTERN.test(id)) {
+      return NextResponse.json({ error: 'Invalid layout ID.' }, { status: 400 })
+    }
     await deleteCloudLayout(id)
     return NextResponse.json({ ok: true })
   } catch (error) {
