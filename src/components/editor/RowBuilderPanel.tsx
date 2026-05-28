@@ -18,7 +18,9 @@ export interface RowBuilderConfig {
   tableWidth: number
   tableHeight: number
   spacing: number
-  orientation: 'horizontal' | 'vertical'
+  orientation: 'horizontal' | 'vertical' | 'curved'
+  curveRadius: number
+  curveDirection: 'clockwise' | 'counterclockwise'
   sectionId: SectionId | null
 }
 
@@ -38,7 +40,9 @@ export default function RowBuilderPanel() {
   const [heightStr, setHeightStr] = useState(String(settings.defaultTableHeight))
   const [spacingStr, setSpacingStr] = useState(String(DEFAULT_ROW_SPACING))
 
-  const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
+  const [orientation, setOrientation] = useState<'horizontal' | 'vertical' | 'curved'>('horizontal')
+  const [curveRadiusStr, setCurveRadiusStr] = useState('144')
+  const [curveDirection, setCurveDirection] = useState<'clockwise' | 'counterclockwise'>('counterclockwise')
   const [sectionId, setSectionId]     = useState<SectionId | null>(null)
 
   const tableCount  = clamp(countStr, 1, 100, DEFAULT_ROW_TABLE_COUNT)
@@ -50,21 +54,25 @@ export default function RowBuilderPanel() {
   const tableWidth  = clamp(widthStr, 10, 500, settings.defaultTableWidth)
   const tableHeight = clamp(heightStr, 10, 500, settings.defaultTableHeight)
   const spacing     = clamp(spacingStr, 0, 200, DEFAULT_ROW_SPACING)
+  const curveRadius = clamp(curveRadiusStr, 24, 1200, 144)
 
   useEffect(() => {
-    setConfig({ tableCount, tableWidth, tableHeight, spacing, orientation, sectionId })
-  }, [tableCount, tableWidth, tableHeight, spacing, orientation, sectionId, setConfig])
+    setConfig({ tableCount, tableWidth, tableHeight, spacing, orientation, curveRadius, curveDirection, sectionId })
+  }, [tableCount, tableWidth, tableHeight, spacing, orientation, curveRadius, curveDirection, sectionId, setConfig])
 
   const blurCount   = useCallback(() => setCountStr(String(tableCount)), [tableCount])
   const blurWidth   = useCallback(() => setWidthStr(String(tableWidth)), [tableWidth])
   const blurHeight  = useCallback(() => setHeightStr(String(tableHeight)), [tableHeight])
   const blurSpacing = useCallback(() => setSpacingStr(String(spacing)), [spacing])
+  const blurCurveRadius = useCallback(() => setCurveRadiusStr(String(curveRadius)), [curveRadius])
 
   const sectionList = Object.values(sections)
 
   return (
     <div className="px-3 py-3 text-sm">
-      <p className="text-xs text-gray-500 mb-3">Click canvas to place row</p>
+      <p className="text-xs text-gray-500 mb-3">
+        {orientation === 'curved' ? 'Click near a curved wall to place the row midpoint' : 'Click canvas to place row'}
+      </p>
 
       <label className="block mb-2">
         <span className="text-gray-600 text-xs">Tables</span>
@@ -119,13 +127,42 @@ export default function RowBuilderPanel() {
         <span className="text-gray-600 text-xs">Orientation</span>
         <select
           value={orientation}
-          onChange={e => setOrientation(e.target.value as 'horizontal' | 'vertical')}
+          onChange={e => setOrientation(e.target.value as 'horizontal' | 'vertical' | 'curved')}
           className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
         >
           <option value="horizontal">Horizontal</option>
           <option value="vertical">Vertical</option>
+          <option value="curved">Curved</option>
         </select>
       </label>
+
+      {orientation === 'curved' && (
+        <>
+          <label className="block mb-2">
+            <span className="text-gray-600 text-xs">Curve Radius <span className="text-gray-400">({formatDimension(curveRadius)})</span></span>
+            <input
+              type="number" min={24} max={1200}
+              value={curveRadiusStr}
+              onChange={e => setCurveRadiusStr(e.target.value)}
+              onBlur={blurCurveRadius}
+              onKeyDown={e => e.stopPropagation()}
+              className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+            />
+          </label>
+
+          <label className="block mb-2">
+            <span className="text-gray-600 text-xs">Curve Direction</span>
+            <select
+              value={curveDirection}
+              onChange={e => setCurveDirection(e.target.value as 'clockwise' | 'counterclockwise')}
+              className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+            >
+              <option value="counterclockwise">Counterclockwise</option>
+              <option value="clockwise">Clockwise</option>
+            </select>
+          </label>
+        </>
+      )}
 
       {sectionList.length > 0 && (
         <label className="block mb-1">

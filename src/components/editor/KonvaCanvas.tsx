@@ -38,7 +38,7 @@ import InlineLabelEditor from './InlineLabelEditor'
 import ShortcutsLegend from './ShortcutsLegend'
 import BackgroundImageLayer from './BackgroundImageLayer'
 import TableContextMenu, { type ContextMenuAction } from './TableContextMenu'
-import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds, getRoomBoundaryEdges, findBoundaryEdgeForDoor } from '@/domain/room-contour'
+import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds, getRoomBoundaryEdges, findBoundaryEdgeForDoor, findNearestBoundarySample, isRectWithinWallSetback } from '@/domain/room-contour'
 import { isPointInRoom } from '@/domain/room-contour'
 import { useWarnings } from '@/hooks/useWarnings'
 import { warningsModule } from '@/domain/warnings.impl'
@@ -380,6 +380,30 @@ export default function KonvaCanvas() {
 
     const nextStart = getNextLabelNumberForRoom(tables, roomId)
 
+    const effectiveWallSetback = settings.wallSetback + settings.wallThickness / 2
+    let origin = snapped
+    let curveCenter: Point | undefined
+    let curveMidAngle: number | undefined
+
+    if (cfg.orientation === 'curved') {
+      const boundary = currentRoom ? findNearestBoundarySample(currentRoom, snapped) : null
+      if (boundary) {
+        const midpoint = {
+          x: boundary.point.x + boundary.inwardNormal.x * (effectiveWallSetback + cfg.tableHeight / 2),
+          y: boundary.point.y + boundary.inwardNormal.y * (effectiveWallSetback + cfg.tableHeight / 2),
+        }
+        origin = snapping.snapToGrid(midpoint, settings.gridSize)
+        curveCenter = {
+          x: origin.x + boundary.inwardNormal.x * cfg.curveRadius,
+          y: origin.y + boundary.inwardNormal.y * cfg.curveRadius,
+        }
+        curveMidAngle = Math.atan2(origin.y - curveCenter.y, origin.x - curveCenter.x)
+      } else {
+        curveCenter = { x: origin.x, y: origin.y + cfg.curveRadius }
+        curveMidAngle = Math.atan2(origin.y - curveCenter.y, origin.x - curveCenter.x)
+      }
+    }
+
     const { row, tables: rowTables } = rowModule.buildRow(
       {
         roomId,
@@ -388,13 +412,31 @@ export default function KonvaCanvas() {
         tableHeight: cfg.tableHeight,
         spacing: cfg.spacing,
         orientation: cfg.orientation,
-        origin: snapped,
+        origin,
+        curveRadius: cfg.orientation === 'curved' ? cfg.curveRadius : undefined,
+        curveCenter,
+        curveMidAngle,
+        curveDirection: cfg.orientation === 'curved' ? cfg.curveDirection : undefined,
         sectionId: cfg.sectionId,
         numberingScheme: { ...DEFAULT_NUMBERING_SCHEME, startNumber: nextStart },
         startLabel: String(nextStart),
       },
       rowId,
     )
+
+    if (
+      currentRoom &&
+      effectiveWallSetback > 0 &&
+      rowTables.some(table =>
+        !isRectWithinWallSetback(
+          currentRoom,
+          { x: table.x, y: table.y, width: table.width, height: table.height },
+          effectiveWallSetback,
+        ),
+      )
+    ) {
+      return
+    }
 
     dispatch({ type: 'PLACE_ROW', row, tables: rowTables, timestamp: Date.now() })
     setSelected(rowTables.map(t => t.id))
@@ -417,8 +459,12 @@ export default function KonvaCanvas() {
     let snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
     // Enforce wall setback and door clearance
     if (currentRoom) {
-      if (settings.wallSetback > 0) {
-        const clamped = clampToWallSetback(currentRoom, { ...snapped, width: w, height: h }, settings.wallSetback)
+      if (settings.wallSetback > 0 || settings.wallThickness > 0) {
+        const clamped = clampToWallSetback(
+          currentRoom,
+          { ...snapped, width: w, height: h },
+          settings.wallSetback + settings.wallThickness / 2,
+        )
         snapped = snapping.snapToGrid(clamped, settings.gridSize)
       }
       const roomBoundsForDoors = computeRoomBounds(currentRoom)
@@ -1042,11 +1088,11 @@ export default function KonvaCanvas() {
       let snappedPos = snapResult.point
       const currentRoom = useEditorStore.getState().room
       if (currentRoom) {
-        if (settings.wallSetback > 0) {
+        if (settings.wallSetback > 0 || settings.wallThickness > 0) {
           const clamped = clampToWallSetback(
             currentRoom,
             { x: snappedPos.x, y: snappedPos.y, width: primaryTable.width, height: primaryTable.height },
-            settings.wallSetback,
+            settings.wallSetback + settings.wallThickness / 2,
           )
           snappedPos = { x: clamped.x, y: clamped.y }
         }

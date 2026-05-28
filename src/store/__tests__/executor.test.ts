@@ -1,9 +1,9 @@
 import { applyCommand, reverseCommand, type MutableCanvasState } from '../executor'
-import type { TableObject } from '@/domain/types'
+import type { CompositeRoom, TableObject } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
 
 function makeState(tables: Record<string, TableObject>): MutableCanvasState {
-  return { tables, rows: {}, sections: {}, vendors: {}, vendorAssignments: {}, room: null, doors: {}, settings: { canvasWidth: 6000, canvasHeight: 4800, gridSize: 6, snapToGrid: true, snapToObjects: false, minAisleWidth: 36, doorClearance: 48, wallSetback: 36, showWallSetback: false, defaultTableWidth: 72, defaultTableHeight: 30, defaultTableShape: 'rectangle', unitLabel: 'in', roomLocked: false } }
+  return { tables, rows: {}, sections: {}, vendors: {}, vendorAssignments: {}, room: null, doors: {}, settings: { canvasWidth: 6000, canvasHeight: 4800, gridSize: 6, snapToGrid: true, snapToObjects: false, minAisleWidth: 36, doorClearance: 48, wallThickness: 6, wallSetback: 36, showWallSetback: false, defaultTableWidth: 72, defaultTableHeight: 30, defaultTableShape: 'rectangle', unitLabel: 'in', roomLocked: false } }
 }
 
 function makeTable(id: string, overrides: Partial<TableObject> = {}): TableObject {
@@ -113,6 +113,30 @@ describe('executor — RESIZE_TABLE', () => {
       timestamp: 0,
     })
     expect(state.tables['t1']).toMatchObject({ x: 0, y: 0, width: 60, height: 30 })
+  })
+})
+
+describe('executor — DELETE_ROOM_SEGMENT', () => {
+  it('keeps circular rooms when deleting the last rectangular segment', () => {
+    const state = makeState({})
+    const segment = { id: 'seg-1' as any, x: 0, y: 0, width: 120, height: 120 }
+    const circle = { id: 'circle-1' as any, x: 240, y: 240, radiusX: 60, radiusY: 60 }
+    state.room = {
+      segments: [{ ...segment }],
+      circles: [{ ...circle }],
+      freehandVertices: null,
+      roomLabels: { R1: 'Circle Hall' },
+    } satisfies CompositeRoom
+
+    applyCommand(state, {
+      type: 'DELETE_ROOM_SEGMENT',
+      segment,
+      timestamp: 0,
+    })
+
+    expect(state.room).not.toBeNull()
+    expect(state.room?.segments).toEqual([])
+    expect(state.room?.circles).toEqual([{ ...circle }])
   })
 })
 

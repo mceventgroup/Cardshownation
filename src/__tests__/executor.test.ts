@@ -207,7 +207,7 @@ describe('APPLY_IMPORT', () => {
 
 describe('Door commands', () => {
   const door: Door = {
-    id: 'd1' as DoorId, label: 'Main', x: 100, y: 0, width: 48, side: 'top',
+    id: 'd1' as DoorId, label: 'Main', x: 100, y: 0, width: 48, side: 'top', kind: 'door',
   }
 
   it('places then removes door', () => {

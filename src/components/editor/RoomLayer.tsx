@@ -61,6 +61,7 @@ const RoomLayer = memo(function RoomLayer({
       {showWallSetback && wallSetback > 0 && (
         <WallSetbackOverlay
           contours={contours}
+          wallThickness={wallThickness}
           wallSetback={wallSetback}
         />
       )}
@@ -124,20 +125,23 @@ function WallStrip({ start, end, wallThickness }: { start: Point; end: Point; wa
 
   const nx = -dy / length
   const ny = dx / length
-  const q1 = { x: start.x + nx * wallThickness, y: start.y + ny * wallThickness }
-  const q2 = { x: end.x + nx * wallThickness, y: end.y + ny * wallThickness }
+  const halfThickness = wallThickness / 2
+  const inner1 = { x: start.x + nx * halfThickness, y: start.y + ny * halfThickness }
+  const inner2 = { x: end.x + nx * halfThickness, y: end.y + ny * halfThickness }
+  const outer1 = { x: start.x - nx * halfThickness, y: start.y - ny * halfThickness }
+  const outer2 = { x: end.x - nx * halfThickness, y: end.y - ny * halfThickness }
 
   return (
     <>
       <Line
-        points={[start.x, start.y, end.x, end.y, q2.x, q2.y, q1.x, q1.y]}
+        points={[outer1.x, outer1.y, outer2.x, outer2.y, inner2.x, inner2.y, inner1.x, inner1.y]}
         closed
         fill="#1e293b"
         opacity={0.94}
         listening={false}
       />
       <Line
-        points={[q1.x, q1.y, q2.x, q2.y]}
+        points={[inner1.x, inner1.y, inner2.x, inner2.y]}
         stroke="#64748b"
         strokeWidth={1}
         opacity={0.45}
@@ -227,10 +231,11 @@ function findDoorGapsOnEdge(
 
 interface WallSetbackOverlayProps {
   contours: Point[][]
+  wallThickness: number
   wallSetback: number
 }
 
-function WallSetbackOverlay({ contours, wallSetback }: WallSetbackOverlayProps) {
+function WallSetbackOverlay({ contours, wallThickness, wallSetback }: WallSetbackOverlayProps) {
   return (
     <>
       {contours.map((polygon, ci) => {
@@ -245,13 +250,20 @@ function WallSetbackOverlay({ contours, wallSetback }: WallSetbackOverlayProps) 
 
           const nx = -dy / len
           const ny = dx / len
-          const q1 = { x: p1.x + nx * wallSetback, y: p1.y + ny * wallSetback }
-          const q2 = { x: p2.x + nx * wallSetback, y: p2.y + ny * wallSetback }
+          const halfThickness = wallThickness / 2
+          const innerWall1 = { x: p1.x + nx * halfThickness, y: p1.y + ny * halfThickness }
+          const innerWall2 = { x: p2.x + nx * halfThickness, y: p2.y + ny * halfThickness }
+          const innerSetback1 = { x: p1.x + nx * (halfThickness + wallSetback), y: p1.y + ny * (halfThickness + wallSetback) }
+          const innerSetback2 = { x: p2.x + nx * (halfThickness + wallSetback), y: p2.y + ny * (halfThickness + wallSetback) }
+          const outerWall1 = { x: p1.x - nx * halfThickness, y: p1.y - ny * halfThickness }
+          const outerWall2 = { x: p2.x - nx * halfThickness, y: p2.y - ny * halfThickness }
+          const outerSetback1 = { x: p1.x - nx * (halfThickness + wallSetback), y: p1.y - ny * (halfThickness + wallSetback) }
+          const outerSetback2 = { x: p2.x - nx * (halfThickness + wallSetback), y: p2.y - ny * (halfThickness + wallSetback) }
 
           strips.push(
             <Line
-              key={`setback-${ci}-${i}`}
-              points={[p1.x, p1.y, p2.x, p2.y, q2.x, q2.y, q1.x, q1.y]}
+              key={`setback-inner-${ci}-${i}`}
+              points={[innerWall1.x, innerWall1.y, innerWall2.x, innerWall2.y, innerSetback2.x, innerSetback2.y, innerSetback1.x, innerSetback1.y]}
               closed
               fill="#fbbf24"
               opacity={0.15}
@@ -261,8 +273,31 @@ function WallSetbackOverlay({ contours, wallSetback }: WallSetbackOverlayProps) 
 
           strips.push(
             <Line
-              key={`setback-line-${ci}-${i}`}
-              points={[q1.x, q1.y, q2.x, q2.y]}
+              key={`setback-outer-${ci}-${i}`}
+              points={[outerSetback1.x, outerSetback1.y, outerSetback2.x, outerSetback2.y, outerWall2.x, outerWall2.y, outerWall1.x, outerWall1.y]}
+              closed
+              fill="#fbbf24"
+              opacity={0.15}
+              listening={false}
+            />,
+          )
+
+          strips.push(
+            <Line
+              key={`setback-line-inner-${ci}-${i}`}
+              points={[innerSetback1.x, innerSetback1.y, innerSetback2.x, innerSetback2.y]}
+              stroke="#f59e0b"
+              strokeWidth={1}
+              dash={[4, 4]}
+              opacity={0.5}
+              listening={false}
+            />,
+          )
+
+          strips.push(
+            <Line
+              key={`setback-line-outer-${ci}-${i}`}
+              points={[outerSetback1.x, outerSetback1.y, outerSetback2.x, outerSetback2.y]}
               stroke="#f59e0b"
               strokeWidth={1}
               dash={[4, 4]}

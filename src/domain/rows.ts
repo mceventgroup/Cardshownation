@@ -14,7 +14,7 @@
 //     position data and never mutate input arrays.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { Point, Rect, TableObject, Row, SectionId, RowId } from './types'
+import type { Point, Rect, TableObject, Row, SectionId, RowCurveDirection, RowId } from './types'
 import type { NumberingScheme } from './numbering'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,8 +28,12 @@ export interface RowConfig {
   tableWidth: number
   tableHeight: number
   spacing: number             // gap between tables in canvas units
-  orientation: 'horizontal' | 'vertical'
-  origin: Point               // top-left corner of the first table
+  orientation: 'horizontal' | 'vertical' | 'curved'
+  origin: Point               // first-table anchor for straight rows; curve midpoint for curved rows
+  curveRadius?: number
+  curveCenter?: Point
+  curveMidAngle?: number
+  curveDirection?: RowCurveDirection
   sectionId: SectionId | null
   numberingScheme: NumberingScheme
   startLabel: string          // the first label in the sequence (e.g. "A-1", "1")

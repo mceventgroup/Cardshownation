@@ -250,7 +250,11 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
     case 'DELETE_ROOM_SEGMENT': {
       if (state.room) {
         state.room.segments = state.room.segments.filter(s => s.id !== command.segment.id)
-        if (state.room.segments.length === 0 && !state.room.freehandVertices) {
+        if (
+          state.room.segments.length === 0 &&
+          (state.room.circles?.length ?? 0) === 0 &&
+          !state.room.freehandVertices
+        ) {
           state.room = null
         }
       }

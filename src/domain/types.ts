@@ -78,7 +78,8 @@ export interface TableObject {
 // resized later without losing intent.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type RowOrientation = 'horizontal' | 'vertical'
+export type RowOrientation = 'horizontal' | 'vertical' | 'curved'
+export type RowCurveDirection = 'clockwise' | 'counterclockwise'
 
 export interface Row {
   id: RowId
@@ -88,6 +89,11 @@ export interface Row {
   tableWidth: number
   tableHeight: number
   spacing: number           // gap between tables in canvas units
+  curveRadius?: number
+  curveCenterX?: number
+  curveCenterY?: number
+  curveMidAngle?: number
+  curveDirection?: RowCurveDirection
   createdAt: string         // ISO 8601
 }
 

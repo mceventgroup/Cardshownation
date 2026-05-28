@@ -80,6 +80,17 @@ function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): vo
 
 export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-circle' | 'draw-room-freehand' | 'split-room' | 'place-door' | 'measure'
 
+type RowBuilderState = {
+  tableCount: number
+  tableWidth: number
+  tableHeight: number
+  spacing: number
+  orientation: 'horizontal' | 'vertical' | 'curved'
+  curveRadius: number
+  curveDirection: 'clockwise' | 'counterclockwise'
+  sectionId: SectionId | null
+}
+
 export interface EditorState {
   // ── Canvas (document) state ─────────────────────────────────────────────
   tables: Record<string, TableObject>
@@ -111,7 +122,7 @@ export interface EditorState {
 
   // ── Builder configs (read by canvas mouse handlers) ────────────────────
   tableBuilderConfig: { tableWidth: number; tableHeight: number } | null
-  rowBuilderConfig: { tableCount: number; tableWidth: number; tableHeight: number; spacing: number; orientation: 'horizontal' | 'vertical'; sectionId: SectionId | null } | null
+  rowBuilderConfig: RowBuilderState | null
   doorPlacementConfig: { widthIn: number; kind: 'door' | 'entrance' } | null
 
   // ── Canvas actions ───────────────────────────────────────────────────────
@@ -135,7 +146,7 @@ export interface EditorState {
 
   // ── Builder config actions ─────────────────────────────────────────────
   setTableBuilderConfig: (config: { tableWidth: number; tableHeight: number } | null) => void
-  setRowBuilderConfig: (config: { tableCount: number; tableWidth: number; tableHeight: number; spacing: number; orientation: 'horizontal' | 'vertical'; sectionId: SectionId | null } | null) => void
+  setRowBuilderConfig: (config: RowBuilderState | null) => void
   setDoorPlacementConfig: (config: { widthIn: number; kind: 'door' | 'entrance' } | null) => void
 
   // ── Stage transform actions ──────────────────────────────────────────────

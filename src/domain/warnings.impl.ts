@@ -19,7 +19,7 @@ import type {
 } from './warnings'
 import { geometry } from './geometry.impl'
 import { spacingModule } from './spacing.impl'
-import { isRectInRoom, computeRoomBounds } from './room-contour'
+import { isRectInRoom, isRectWithinWallSetback } from './room-contour'
 import { formatDimension } from '@/lib/units'
 
 function computeWarnings(
@@ -91,7 +91,7 @@ function computeWarnings(
   }
 
   // 5. Out-of-bounds (only when a room is defined)
-  if (room && (room.segments.length > 0 || room.freehandVertices)) {
+  if (room && (room.segments.length > 0 || (room.circles?.length ?? 0) > 0 || room.freehandVertices)) {
     for (const t of tables) {
       const b = geometry.getBounds(t).bounds
       if (!isRectInRoom(room, b)) {
@@ -107,26 +107,18 @@ function computeWarnings(
   }
 
   // 6. Wall setback violations
-  if (room && settings.wallSetback > 0 && (room.segments.length > 0 || room.freehandVertices)) {
-    const roomBounds = computeRoomBounds(room)
-    if (roomBounds) {
-      const sb = settings.wallSetback
-      for (const t of tables) {
-        const b = geometry.getBounds(t).bounds
-        const tooClose =
-          b.x < roomBounds.x + sb ||
-          b.y < roomBounds.y + sb ||
-          b.x + b.width > roomBounds.x + roomBounds.width - sb ||
-          b.y + b.height > roomBounds.y + roomBounds.height - sb
-        if (tooClose) {
-          warnings.push({
-            type: 'wall-setback',
-            severity: 'warning',
-            tableId: t.id,
-            tableLabel: t.label,
-            message: `Table ${t.label} is within the ${formatDimension(sb)} wall setback zone`,
-          } satisfies WallSetbackWarning)
-        }
+  if (room && (settings.wallSetback > 0 || settings.wallThickness > 0) && (room.segments.length > 0 || (room.circles?.length ?? 0) > 0 || room.freehandVertices)) {
+    const sb = settings.wallSetback + settings.wallThickness / 2
+    for (const t of tables) {
+      const b = geometry.getBounds(t).bounds
+      if (!isRectWithinWallSetback(room, b, sb)) {
+        warnings.push({
+          type: 'wall-setback',
+          severity: 'warning',
+          tableId: t.id,
+          tableLabel: t.label,
+          message: `Table ${t.label} is within the ${formatDimension(sb)} wall setback zone`,
+        } satisfies WallSetbackWarning)
       }
     }
   }

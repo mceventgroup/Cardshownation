@@ -359,12 +359,11 @@ export default function RoomPanel() {
       type: 'SET_ROOM',
       prevRoom: room,
       nextRoom: {
+        ...room,
         segments: [
           ...room.segments.filter(seg => !mergeSelection.has(seg.id)),
           mergedSegment,
         ],
-        freehandVertices: room.freehandVertices,
-        roomLabels: room.roomLabels,
       },
       timestamp: Date.now(),
     })
