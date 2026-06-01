@@ -24,6 +24,7 @@ interface TableNodeProps {
   draftPos: Point | null
   fillColor?: string
   vendorName?: string
+  vendorCategory?: string | null
   isHoveredVendor?: boolean
   isActiveVendor?: boolean
   isRecentlyAssigned?: boolean
@@ -68,6 +69,7 @@ const TableNode = memo(function TableNode({
   draftPos,
   fillColor,
   vendorName,
+  vendorCategory,
   isHoveredVendor,
   isActiveVendor,
   isRecentlyAssigned,
@@ -124,11 +126,22 @@ const TableNode = memo(function TableNode({
     onMouseLeave: () => onHoverEnd?.(),
   }
 
-  const showVendorInitials = Boolean(vendorName) && w >= 52 && h >= 34
-  const topInset = 2
-  const bottomInset = showVendorInitials ? 15 : 2
-  const centerHeight = Math.max(10, h - topInset - bottomInset)
-  const labelFontSize = Math.min(22, Math.max(11, Math.min(w, centerHeight) / 1.9))
+  const hasVendorDetails = Boolean(vendorName)
+  const categoryText = vendorCategory?.trim() || null
+  const showVendorDetails = hasVendorDetails && w >= 72 && h >= 44
+  const showVendorInitials = hasVendorDetails && !showVendorDetails && w >= 52 && h >= 34
+  const topInset = 3
+  const numberBandHeight = showVendorDetails
+    ? Math.max(11, Math.min(18, h * 0.24))
+    : Math.max(10, h - (showVendorInitials ? 15 : 4))
+  const detailsTop = topInset + numberBandHeight
+  const bottomInset = showVendorDetails ? 4 : showVendorInitials ? 15 : 2
+  const detailsHeight = Math.max(0, h - detailsTop - bottomInset)
+  const labelFontSize = showVendorDetails
+    ? Math.min(14, Math.max(9, numberBandHeight * 0.72))
+    : Math.min(22, Math.max(11, Math.min(w, Math.max(10, h - topInset - bottomInset)) / 1.9))
+  const vendorNameFontSize = Math.min(13, Math.max(8, Math.min(w / 7.2, Math.max(10, detailsHeight) / 2.4)))
+  const categoryFontSize = Math.min(10, Math.max(7, vendorNameFontSize - 1))
 
   return (
     <Group x={x} y={y} rotation={table.rotation}>
@@ -154,7 +167,7 @@ const TableNode = memo(function TableNode({
       <Text
         text={String(table.tableNumber)}
         width={w}
-        height={centerHeight}
+        height={numberBandHeight}
         y={topInset}
         align="center"
         verticalAlign="middle"
@@ -164,6 +177,46 @@ const TableNode = memo(function TableNode({
         fontStyle="bold"
         listening={false}
       />
+
+      {showVendorDetails && vendorName && (
+        <>
+          <Text
+            text={vendorName}
+            x={4}
+            y={detailsTop}
+            width={Math.max(0, w - 8)}
+            height={categoryText ? Math.max(10, detailsHeight - 12) : detailsHeight}
+            align="center"
+            verticalAlign="middle"
+            fontSize={vendorNameFontSize}
+            lineHeight={1.05}
+            fontFamily="system-ui, sans-serif"
+            fill={labelColor}
+            fontStyle="bold"
+            wrap="word"
+            ellipsis
+            listening={false}
+          />
+          {categoryText && (
+            <Text
+              text={categoryText}
+              x={4}
+              y={Math.max(detailsTop + detailsHeight - 11, detailsTop)}
+              width={Math.max(0, w - 8)}
+              height={10}
+              align="center"
+              verticalAlign="middle"
+              fontSize={categoryFontSize}
+              fontFamily="system-ui, sans-serif"
+              fill={labelColor}
+              opacity={0.82}
+              wrap="none"
+              ellipsis
+              listening={false}
+            />
+          )}
+        </>
+      )}
 
       {showVendorInitials && vendorName && (
         <>

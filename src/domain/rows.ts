@@ -53,7 +53,9 @@ export interface BuiltRow {
  * Repositioned tables from distributeEvenly or alignToAxis.
  * Only position fields change — labels, IDs, section membership are unchanged.
  */
-export type RepositionedTable = Pick<TableObject, 'id' | 'x' | 'y'>
+export type RepositionedTable = Pick<TableObject, 'id' | 'x' | 'y'> & {
+  rotation?: number
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODULE INTERFACE
@@ -104,6 +106,6 @@ export interface RowModule {
   recalculateRowPositions(
     row: Row,
     tables: ReadonlyArray<TableObject>,
-    updates: Partial<Pick<RowConfig, 'tableWidth' | 'tableHeight' | 'spacing'>>,
+    updates: Partial<Pick<RowConfig, 'tableWidth' | 'tableHeight' | 'spacing' | 'curveRadius'>>,
   ): RepositionedTable[]
 }

@@ -349,6 +349,25 @@ export default function KonvaCanvas() {
     }
   }, [stagePos, stageScale])
 
+  const findContainingCircleId = useCallback((point: Point): string | null => {
+    if (!room?.circles?.length) return null
+
+    let match: { id: string; area: number } | null = null
+    for (const circle of room.circles) {
+      if (circle.radiusX <= 0 || circle.radiusY <= 0) continue
+      const nx = (point.x - circle.x) / circle.radiusX
+      const ny = (point.y - circle.y) / circle.radiusY
+      if (nx * nx + ny * ny > 1) continue
+
+      const area = circle.radiusX * circle.radiusY
+      if (!match || area < match.area) {
+        match = { id: circle.id, area }
+      }
+    }
+
+    return match?.id ?? null
+  }, [room])
+
   // ── Node ref registration (given to each TableNode) ────────────────────────
 
   const registerNode = useCallback((id: string, node: Konva.Node | null) => {
@@ -384,6 +403,8 @@ export default function KonvaCanvas() {
     let origin = snapped
     let curveCenter: Point | undefined
     let curveMidAngle: number | undefined
+    let curveRadius = cfg.curveRadius
+    let autoFitSpacing = false
 
     if (cfg.orientation === 'curved') {
       const boundary = currentRoom ? findNearestBoundarySample(currentRoom, snapped) : null
@@ -393,9 +414,23 @@ export default function KonvaCanvas() {
           y: boundary.point.y + boundary.inwardNormal.y * (effectiveWallSetback + cfg.tableHeight / 2),
         }
         origin = snapping.snapToGrid(midpoint, settings.gridSize)
-        curveCenter = {
-          x: origin.x + boundary.inwardNormal.x * cfg.curveRadius,
-          y: origin.y + boundary.inwardNormal.y * cfg.curveRadius,
+        if (boundary.kind === 'circle' && boundary.center && boundary.radius) {
+          curveCenter = boundary.center
+          autoFitSpacing = true
+          const clearanceRadius = Math.max(0, boundary.radius - effectiveWallSetback)
+          const halfWidth = cfg.tableWidth / 2
+          const halfHeight = cfg.tableHeight / 2
+          const maxCurveRadius = Math.sqrt(Math.max(0, clearanceRadius * clearanceRadius - halfWidth * halfWidth)) - halfHeight
+          curveRadius = Math.max(24, maxCurveRadius - 1)
+          origin = snapping.snapToGrid({
+            x: curveCenter.x - boundary.inwardNormal.x * curveRadius,
+            y: curveCenter.y - boundary.inwardNormal.y * curveRadius,
+          }, settings.gridSize)
+        } else {
+          curveCenter = {
+            x: origin.x + boundary.inwardNormal.x * cfg.curveRadius,
+            y: origin.y + boundary.inwardNormal.y * cfg.curveRadius,
+          }
         }
         curveMidAngle = Math.atan2(origin.y - curveCenter.y, origin.x - curveCenter.x)
       } else {
@@ -404,16 +439,16 @@ export default function KonvaCanvas() {
       }
     }
 
-    const { row, tables: rowTables } = rowModule.buildRow(
+    const buildRowWithSpacing = (spacing: number) => rowModule.buildRow(
       {
         roomId,
         tableCount: cfg.tableCount,
         tableWidth: cfg.tableWidth,
         tableHeight: cfg.tableHeight,
-        spacing: cfg.spacing,
+        spacing,
         orientation: cfg.orientation,
         origin,
-        curveRadius: cfg.orientation === 'curved' ? cfg.curveRadius : undefined,
+        curveRadius: cfg.orientation === 'curved' ? curveRadius : undefined,
         curveCenter,
         curveMidAngle,
         curveDirection: cfg.orientation === 'curved' ? cfg.curveDirection : undefined,
@@ -424,22 +459,33 @@ export default function KonvaCanvas() {
       rowId,
     )
 
-    if (
-      currentRoom &&
-      effectiveWallSetback > 0 &&
-      rowTables.some(table =>
-        !isRectWithinWallSetback(
+    const rowFitsSetback = (rowTables: ReturnType<typeof buildRowWithSpacing>['tables']) => (
+      !currentRoom ||
+      effectiveWallSetback <= 0 ||
+      rowTables.every(table =>
+        isRectWithinWallSetback(
           currentRoom,
-          { x: table.x, y: table.y, width: table.width, height: table.height },
+          { x: table.x, y: table.y, width: table.width, height: table.height, rotation: table.rotation },
           effectiveWallSetback,
         ),
       )
-    ) {
+    )
+
+    let built = buildRowWithSpacing(cfg.spacing)
+    if (!rowFitsSetback(built.tables) && autoFitSpacing && cfg.orientation === 'curved') {
+      const spacingStep = Math.max(1, settings.gridSize)
+      for (let spacing = cfg.spacing - spacingStep; spacing >= 0; spacing -= spacingStep) {
+        built = buildRowWithSpacing(spacing)
+        if (rowFitsSetback(built.tables)) break
+      }
+    }
+
+    if (!rowFitsSetback(built.tables)) {
       return
     }
 
-    dispatch({ type: 'PLACE_ROW', row, tables: rowTables, timestamp: Date.now() })
-    setSelected(rowTables.map(t => t.id))
+    dispatch({ type: 'PLACE_ROW', row: built.row, tables: built.tables, timestamp: Date.now() })
+    setSelected(built.tables.map(t => t.id))
   }, [activeRoomId, settings, tables, dispatch, setSelected, setActiveRoomId])
 
   // ── Place table helper ─────────────────────────────────────────────────────
@@ -460,11 +506,11 @@ export default function KonvaCanvas() {
     // Enforce wall setback and door clearance
     if (currentRoom) {
       if (settings.wallSetback > 0 || settings.wallThickness > 0) {
-        const clamped = clampToWallSetback(
-          currentRoom,
-          { ...snapped, width: w, height: h },
-          settings.wallSetback + settings.wallThickness / 2,
-        )
+          const clamped = clampToWallSetback(
+            currentRoom,
+            { ...snapped, width: w, height: h, rotation: 0 },
+            settings.wallSetback + settings.wallThickness / 2,
+          )
         snapped = snapping.snapToGrid(clamped, settings.gridSize)
       }
       const roomBoundsForDoors = computeRoomBounds(currentRoom)
@@ -833,6 +879,7 @@ export default function KonvaCanvas() {
       !settings.roomLocked &&
       isPointInRoom(room, canvasPos)
     ) {
+      const clickedCircleId = findContainingCircleId(canvasPos)
       const zoneId = getRoomIdForPoint(room, canvasPos)
       if (zoneId) {
         const segmentIds = new Set(
@@ -843,28 +890,34 @@ export default function KonvaCanvas() {
             }) === zoneId)
             .map(segment => segment.id),
         )
-        const circleIds = new Set(
-          (room.circles ?? [])
-            .filter(circle => getRoomIdForPoint(room, { x: circle.x, y: circle.y }) === zoneId)
-            .map(circle => circle.id),
-        )
+        const circleIds = clickedCircleId
+          ? new Set([clickedCircleId])
+          : new Set(
+              (room.circles ?? [])
+                .filter(circle => getRoomIdForPoint(room, { x: circle.x, y: circle.y }) === zoneId)
+                .map(circle => circle.id),
+            )
         const zones = getRoomZones(room)
-        const moveFreehand = Boolean(room.freehandVertices && zones.length === 1 && zones[0]?.id === zoneId)
-        const doorIds = new Set(
-          Object.values(doorsRecord)
-            .filter(door => {
-              const midpoint = door.side === 'top' || door.side === 'bottom'
-                ? { x: door.x + door.width / 2, y: door.y }
-                : { x: door.x, y: door.y + door.width / 2 }
-              return getRoomIdForPoint(room, midpoint) === zoneId
-            })
-            .map(door => door.id),
-        )
+        const moveFreehand = clickedCircleId
+          ? false
+          : Boolean(room.freehandVertices && zones.length === 1 && zones[0]?.id === zoneId)
+        const doorIds = clickedCircleId
+          ? new Set<string>()
+          : new Set(
+              Object.values(doorsRecord)
+                .filter(door => {
+                  const midpoint = door.side === 'top' || door.side === 'bottom'
+                    ? { x: door.x + door.width / 2, y: door.y }
+                    : { x: door.x, y: door.y + door.width / 2 }
+                  return getRoomIdForPoint(room, midpoint) === zoneId
+                })
+                .map(door => door.id),
+            )
 
         roomDragRef.current = {
           startPointer: canvasPos,
           startRoom: room,
-          zoneId,
+          zoneId: clickedCircleId ? `circle:${clickedCircleId}` : zoneId,
           segmentIds,
           circleIds,
           moveFreehand,
@@ -936,7 +989,7 @@ export default function KonvaCanvas() {
         currentY: canvasPos.y,
       })
     }
-  }, [activeRoomId, activeTool, assignmentMap, selectedIds, tables, settings, toCanvas, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, placeDoorAt, dispatch, room, doorsRecord])
+  }, [activeRoomId, activeTool, assignmentMap, selectedIds, tables, settings, toCanvas, findContainingCircleId, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, placeDoorAt, dispatch, room, doorsRecord])
 
   // ── Mouse move ─────────────────────────────────────────────────────────────
 
@@ -1091,7 +1144,7 @@ export default function KonvaCanvas() {
         if (settings.wallSetback > 0 || settings.wallThickness > 0) {
           const clamped = clampToWallSetback(
             currentRoom,
-            { x: snappedPos.x, y: snappedPos.y, width: primaryTable.width, height: primaryTable.height },
+            { x: snappedPos.x, y: snappedPos.y, width: primaryTable.width, height: primaryTable.height, rotation: primaryTable.rotation },
             settings.wallSetback + settings.wallThickness / 2,
           )
           snappedPos = { x: clamped.x, y: clamped.y }
@@ -1667,6 +1720,7 @@ export default function KonvaCanvas() {
                 draftPos={draftPositions[table.id] ?? null}
                 fillColor={fillColor}
                 vendorName={assignmentMap.get(table.id)?.vendorName}
+                vendorCategory={assignmentMap.get(table.id)?.vendorCategory ?? null}
                 isHoveredVendor={isHoveredVendorTable}
                 isActiveVendor={isActiveVendorTable}
                 isRecentlyAssigned={recentlyAssignedTableIds.has(table.id)}

@@ -1,5 +1,5 @@
 import { applyCommand, reverseCommand, type MutableCanvasState } from '../executor'
-import type { CompositeRoom, TableObject } from '@/domain/types'
+import type { CompositeRoom, Row, TableObject } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
 
 function makeState(tables: Record<string, TableObject>): MutableCanvasState {
@@ -85,6 +85,80 @@ describe('executor — DELETE_TABLES', () => {
     const state = makeState({})
     reverseCommand(state, { type: 'DELETE_TABLES', tables: [table], affectedAssignments: [], timestamp: 0 })
     expect(state.tables['t1']).toEqual(table)
+  })
+})
+
+describe('executor — UPDATE_ROW', () => {
+  it('apply updates row metadata and table geometry', () => {
+    const table = makeTable('t1', { x: 0, y: 0, rotation: 10, rowId: 'row-1' as any })
+    const state = makeState({ t1: { ...table } })
+    state.rows['row-1'] = {
+      id: 'row-1' as any,
+      sectionId: null,
+      orientation: 'curved',
+      tableCount: 1,
+      tableWidth: 60,
+      tableHeight: 30,
+      spacing: 12,
+      curveRadius: 120,
+      curveCenterX: 100,
+      curveCenterY: 100,
+      curveMidAngle: 0,
+      curveDirection: 'counterclockwise',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    } satisfies Row
+
+    applyCommand(state, {
+      type: 'UPDATE_ROW',
+      rowId: 'row-1' as any,
+      prev: { spacing: 12, curveRadius: 120 },
+      next: { spacing: 24, curveRadius: 180 },
+      tableChanges: [{
+        tableId: 't1' as any,
+        prev: { x: 0, y: 0, rotation: 10 },
+        next: { x: 40, y: 50, rotation: 25 },
+      }],
+      timestamp: 0,
+    })
+
+    expect(state.rows['row-1']).toMatchObject({ spacing: 24, curveRadius: 180 })
+    expect(state.tables['t1']).toMatchObject({ x: 40, y: 50, rotation: 25 })
+  })
+
+  it('reverse restores row metadata and table geometry', () => {
+    const table = makeTable('t1', { x: 40, y: 50, rotation: 25, rowId: 'row-1' as any })
+    const state = makeState({ t1: { ...table } })
+    state.rows['row-1'] = {
+      id: 'row-1' as any,
+      sectionId: null,
+      orientation: 'curved',
+      tableCount: 1,
+      tableWidth: 60,
+      tableHeight: 30,
+      spacing: 24,
+      curveRadius: 180,
+      curveCenterX: 100,
+      curveCenterY: 100,
+      curveMidAngle: 0,
+      curveDirection: 'counterclockwise',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    } satisfies Row
+
+    reverseCommand(state, {
+      type: 'UPDATE_ROW',
+      rowId: 'row-1' as any,
+      prev: { spacing: 12, curveRadius: 120 },
+      next: { spacing: 24, curveRadius: 180 },
+      tableChanges: [{
+        tableId: 't1' as any,
+        prev: { x: 0, y: 0, rotation: 10 },
+        next: { x: 40, y: 50, rotation: 25 },
+      }],
+      timestamp: 0,
+    })
+
+    expect(state.rows['row-1']).toMatchObject({ spacing: 12, curveRadius: 120 })
+    expect(state.tables['t1']).toMatchObject({ x: 0, y: 0, rotation: 10 })
   })
 })
 

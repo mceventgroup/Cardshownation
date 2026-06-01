@@ -186,13 +186,13 @@ function getRowBounds(tables: ReadonlyArray<TableObject>): Rect {
 function recalculateRowPositions(
   row: Row,
   tables: ReadonlyArray<TableObject>,
-  updates: Partial<Pick<RowConfig, 'tableWidth' | 'tableHeight' | 'spacing'>>,
+  updates: Partial<Pick<RowConfig, 'tableWidth' | 'tableHeight' | 'spacing' | 'curveRadius'>>,
 ): RepositionedTable[] {
   if (tables.length === 0) return []
 
   const sorted = [...tables].sort((a, b) => a.order - b.order)
   if (row.orientation === 'curved') {
-    const radius = row.curveRadius ?? 120
+    const radius = Math.max(24, updates.curveRadius ?? row.curveRadius ?? 120)
     const curveCenter = { x: row.curveCenterX ?? sorted[0].x, y: row.curveCenterY ?? sorted[0].y + radius }
     const midAngle = row.curveMidAngle ?? 0
     const directionSign = row.curveDirection === 'clockwise' ? -1 : 1
@@ -206,17 +206,19 @@ function recalculateRowPositions(
       const angle = midAngle + centeredIndex * angularStep * directionSign
       const centerX = curveCenter.x + Math.cos(angle) * radius
       const centerY = curveCenter.y + Math.sin(angle) * radius
+      const rotation = Math.round((((angle * 180) / Math.PI + 90) % 360 + 360) % 360 * 10) / 10
       const topLeft = getRotatedTopLeft(
         centerX,
         centerY,
         updates.tableWidth ?? table.width,
         updates.tableHeight ?? table.height,
-        table.rotation,
+        rotation,
       )
       return {
         id: table.id,
         x: topLeft.x,
         y: topLeft.y,
+        rotation,
       }
     })
   }

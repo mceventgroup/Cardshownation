@@ -38,7 +38,12 @@ export interface RoomBoundarySample {
   point: Point
   inwardNormal: Point
   distance: number
+  kind: 'contour' | 'circle'
+  center?: Point
+  radius?: number
 }
+
+type RoomRect = Rect & { rotation?: number }
 
 // Direction enum: 0=right, 1=down, 2=left, 3=up
 type Dir = 0 | 1 | 2 | 3
@@ -176,28 +181,18 @@ export function isPointInRoom(room: CompositeRoom, p: Point): boolean {
  * For segments: the rect must be fully inside at least one segment.
  * For freehand: all 4 corners must be inside the polygon.
  */
-export function isRectInRoom(room: CompositeRoom, rect: Rect): boolean {
+export function isRectInRoom(room: CompositeRoom, rect: RoomRect): boolean {
+  const corners = getRectCorners(rect)
   if (room.freehandVertices && room.freehandVertices.length >= 3) {
-    const corners = [
-      { x: rect.x, y: rect.y },
-      { x: rect.x + rect.width, y: rect.y },
-      { x: rect.x + rect.width, y: rect.y + rect.height },
-      { x: rect.x, y: rect.y + rect.height },
-    ]
     return corners.every(c => pointInPolygon(c, room.freehandVertices!))
   }
-  // For segments: every corner must be inside the union of segments
-  const corners = [
-    { x: rect.x, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y + rect.height },
-    { x: rect.x, y: rect.y + rect.height },
-  ]
   return corners.every(c => isPointInRoom(room, c))
 }
 
 export function findNearestBoundarySample(room: CompositeRoom, point: Point): RoomBoundarySample | null {
-  const contours = computeRoomContour(room)
+  const contours = room.freehandVertices && room.freehandVertices.length >= 3
+    ? [room.freehandVertices]
+    : computeSegmentContour(room.segments)
   let nearest: RoomBoundarySample | null = null
 
   for (const polygon of contours) {
@@ -226,7 +221,35 @@ export function findNearestBoundarySample(room: CompositeRoom, point: Point): Ro
           point: sample.point,
           inwardNormal,
           distance: sample.distance,
+          kind: 'contour',
         }
+      }
+    }
+  }
+
+  for (const circle of room.circles ?? []) {
+    if (circle.radiusX <= 0 || circle.radiusY <= 0 || circle.radiusX !== circle.radiusY) continue
+    const dx = point.x - circle.x
+    const dy = point.y - circle.y
+    const length = Math.hypot(dx, dy)
+    if (length === 0) continue
+
+    const outwardNormal = { x: dx / length, y: dy / length }
+    const samplePoint = {
+      x: circle.x + outwardNormal.x * circle.radiusX,
+      y: circle.y + outwardNormal.y * circle.radiusY,
+    }
+    const distance = Math.hypot(point.x - samplePoint.x, point.y - samplePoint.y)
+    const inwardNormal = { x: -outwardNormal.x, y: -outwardNormal.y }
+
+    if (!nearest || distance <= nearest.distance + 0.001) {
+      nearest = {
+        point: samplePoint,
+        inwardNormal,
+        distance,
+        kind: 'circle',
+        center: { x: circle.x, y: circle.y },
+        radius: circle.radiusX,
       }
     }
   }
@@ -236,18 +259,13 @@ export function findNearestBoundarySample(room: CompositeRoom, point: Point): Ro
 
 export function isRectWithinWallSetback(
   room: CompositeRoom,
-  rect: Rect,
+  rect: RoomRect,
   setback: number,
 ): boolean {
   if (!isRectInRoom(room, rect)) return false
   if (setback <= 0) return true
 
-  const corners = [
-    { x: rect.x, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y + rect.height },
-    { x: rect.x, y: rect.y + rect.height },
-  ]
+  const corners = getRectCorners(rect)
 
   return corners.every(corner => {
     const boundary = findNearestBoundarySample(room, corner)
@@ -440,6 +458,38 @@ function projectPointToSegment(point: Point, start: Point, end: Point): { point:
   }
 }
 
+function getRectCorners(rect: RoomRect): Point[] {
+  const rotation = rect.rotation ?? 0
+  if (rotation === 0) {
+    return [
+      { x: rect.x, y: rect.y },
+      { x: rect.x + rect.width, y: rect.y },
+      { x: rect.x + rect.width, y: rect.y + rect.height },
+      { x: rect.x, y: rect.y + rect.height },
+    ]
+  }
+
+  const cx = rect.x + rect.width / 2
+  const cy = rect.y + rect.height / 2
+  const rad = (rotation * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  const hw = rect.width / 2
+  const hh = rect.height / 2
+
+  const rotate = (px: number, py: number): Point => ({
+    x: cx + px * cos - py * sin,
+    y: cy + px * sin + py * cos,
+  })
+
+  return [
+    rotate(-hw, -hh),
+    rotate(hw, -hh),
+    rotate(hw, hh),
+    rotate(-hw, hh),
+  ]
+}
+
 /**
  * Clamp a rectangle so it respects the wall setback distance.
  * For segment-based rooms, ensures every edge of the rect is at least
@@ -448,51 +498,46 @@ function projectPointToSegment(point: Point, start: Point, end: Point): { point:
  */
 export function clampToWallSetback(
   room: CompositeRoom,
-  rect: Rect,
+  rect: RoomRect,
   setback: number,
 ): { x: number; y: number } {
   if (isRectWithinWallSetback(room, rect, setback)) {
     return { x: rect.x, y: rect.y }
   }
   if (setback <= 0) return { x: rect.x, y: rect.y }
-
-  const bounds = computeRoomBounds(room)
-  if (!bounds) return { x: rect.x, y: rect.y }
-
-  const rectCenter = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-  const roomCenter = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-  let dirX = roomCenter.x - rectCenter.x
-  let dirY = roomCenter.y - rectCenter.y
-  if (dirX === 0 && dirY === 0) {
-    dirX = 1
-    dirY = 1
-  }
-  const dirLength = Math.hypot(dirX, dirY) || 1
-  const step = Math.max(6, Math.min(rect.width, rect.height) / 4)
   let candidate = { x: rect.x, y: rect.y }
 
-  for (let iteration = 0; iteration < 240; iteration++) {
-    candidate = {
-      x: candidate.x + (dirX / dirLength) * step,
-      y: candidate.y + (dirY / dirLength) * step,
-    }
-    if (isRectWithinWallSetback(room, { ...rect, x: candidate.x, y: candidate.y }, setback)) {
+  for (let iteration = 0; iteration < 120; iteration++) {
+    const currentRect = { ...rect, x: candidate.x, y: candidate.y }
+    if (isRectWithinWallSetback(room, currentRect, setback)) {
       return candidate
     }
+
+    const corners = getRectCorners(currentRect)
+    let correctionX = 0
+    let correctionY = 0
+    let violations = 0
+
+    for (const corner of corners) {
+      const boundary = findNearestBoundarySample(room, corner)
+      if (!boundary) continue
+      const deficit = setback - boundary.distance
+      if (deficit > 0) {
+        correctionX += boundary.inwardNormal.x * (deficit + 1)
+        correctionY += boundary.inwardNormal.y * (deficit + 1)
+        violations += 1
+      }
+    }
+
+    if (violations === 0) break
+
+    candidate = {
+      x: candidate.x + correctionX / violations,
+      y: candidate.y + correctionY / violations,
+    }
   }
 
-  const centered = {
-    x: Math.max(bounds.x, Math.min(bounds.x + bounds.width - rect.width, roomCenter.x - rect.width / 2)),
-    y: Math.max(bounds.y, Math.min(bounds.y + bounds.height - rect.height, roomCenter.y - rect.height / 2)),
-  }
-  if (isRectWithinWallSetback(room, { ...rect, x: centered.x, y: centered.y }, setback)) {
-    return centered
-  }
-
-  return {
-    x: Math.max(bounds.x, Math.min(bounds.x + bounds.width - rect.width, rect.x)),
-    y: Math.max(bounds.y, Math.min(bounds.y + bounds.height - rect.height, rect.y)),
-  }
+  return candidate
 }
 
 /**

@@ -143,6 +143,19 @@ export interface DeleteRowCommand extends CommandBase {
   readonly affectedAssignments: ReadonlyArray<VendorAssignment>
 }
 
+/** Update row metadata and reposition its tables in one undoable step. */
+export interface UpdateRowCommand extends CommandBase {
+  readonly type: 'UPDATE_ROW'
+  readonly rowId: RowId
+  readonly prev: Partial<Omit<Row, 'id' | 'createdAt'>>
+  readonly next: Partial<Omit<Row, 'id' | 'createdAt'>>
+  readonly tableChanges: ReadonlyArray<{
+    tableId: TableId
+    prev: Pick<TableObject, 'x' | 'y' | 'rotation'>
+    next: Pick<TableObject, 'x' | 'y' | 'rotation'>
+  }>
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION COMMANDS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -338,6 +351,7 @@ export type LayoutCommand =
   | RelabelTableCommand
   | PlaceRowCommand
   | DeleteRowCommand
+  | UpdateRowCommand
   | CreateSectionCommand
   | UpdateSectionCommand
   | DeleteSectionCommand

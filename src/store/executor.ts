@@ -261,6 +261,22 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
       break
     }
 
+    case 'UPDATE_ROW': {
+      const row = state.rows[command.rowId]
+      if (row) {
+        safeAssign(row, command.next)
+      }
+      for (const change of command.tableChanges) {
+        const table = state.tables[change.tableId]
+        if (table) {
+          table.x = change.next.x
+          table.y = change.next.y
+          table.rotation = change.next.rotation
+        }
+      }
+      break
+    }
+
     case 'SET_FREEHAND_ROOM': {
       state.room = {
         segments: [],
@@ -390,6 +406,22 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
       }
       for (const a of command.affectedAssignments) {
         state.vendorAssignments[a.id] = { ...a }
+      }
+      break
+    }
+
+    case 'UPDATE_ROW': {
+      const row = state.rows[command.rowId]
+      if (row) {
+        safeAssign(row, command.prev)
+      }
+      for (const change of command.tableChanges) {
+        const table = state.tables[change.tableId]
+        if (table) {
+          table.x = change.prev.x
+          table.y = change.prev.y
+          table.rotation = change.prev.rotation
+        }
       }
       break
     }
