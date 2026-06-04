@@ -348,6 +348,9 @@ function migrate(payload: PersistedPayload): PersistedPayload {
   if ((payload.data.settings as { roomLocked?: boolean }).roomLocked === undefined) {
     (payload.data.settings as { roomLocked: boolean }).roomLocked = false
   }
+  if ((payload.data.settings as { vendorColorCoding?: boolean }).vendorColorCoding === undefined) {
+    (payload.data.settings as { vendorColorCoding: boolean }).vendorColorCoding = true
+  }
   if ((payload.data.settings as { wallThickness?: number }).wallThickness === undefined) {
     (payload.data.settings as { wallThickness: number }).wallThickness = 6
   }

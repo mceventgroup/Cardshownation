@@ -91,6 +91,8 @@ export default function KonvaCanvas() {
   const assignmentMap   = useEditorStore(selectAssignmentMap)
   const activeVendorId  = useEditorStore(selectActiveVendorId)
   const hoveredVendorId = useEditorStore(selectHoveredVendorId)
+  const setActiveVendor = useEditorStore(s => s.setActiveVendor)
+  const setHoveredVendor = useEditorStore(s => s.setHoveredVendor)
   const vendorAssignments = useEditorStore(selectVendorAssignments)
   const vendorsRecord     = useEditorStore(selectVendors)
   const room              = useEditorStore(selectRoom)
@@ -150,6 +152,12 @@ export default function KonvaCanvas() {
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return
+      if (e.key === 'Escape') {
+        activeVendorRef.current = null
+        setActiveVendor(null)
+        setHoveredVendor(null)
+        return
+      }
       if (e.key === '?') {
         setShowShortcuts(prev => !prev)
       }
@@ -166,7 +174,7 @@ export default function KonvaCanvas() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [setActiveVendor, setHoveredVendor])
 
   useEffect(() => {
     setStageTransform(stageScale, stagePos)
@@ -1695,7 +1703,9 @@ export default function KonvaCanvas() {
             const isSuggestedTarget = !assignment && hoveredVendorNeedsTables
             const isSuggestedPremiumTarget = isSuggestedTarget && table.premium
             const fillColor = assignment
-              ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
+              ? settings.vendorColorCoding
+                ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
+                : sectionColor ?? OPEN_TABLE_FILL
               : sectionColor ?? OPEN_TABLE_FILL
 
             // Compute highest warning severity for this table
@@ -1940,7 +1950,7 @@ export default function KonvaCanvas() {
       )}
 
       {hoveredTable && (
-        <div className="pointer-events-none absolute z-20 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg backdrop-blur-sm" style={{ left: hoveredTable.x * stageScale + stagePos.x + 16, top: hoveredTable.y * stageScale + stagePos.y - 12 }}>
+        <div className="pointer-events-none absolute z-20 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg backdrop-blur-sm" style={{ left: hoveredTable.x * stageScale + stagePos.x + 28, top: hoveredTable.y * stageScale + stagePos.y - 32 }}>
           <div className="font-semibold text-slate-900">{hoveredAssignment?.vendorName ?? 'Open table'}</div>
           <div>Table {hoveredTable.displayId}</div>
           <div>{hoveredTable.shape === 'round' ? 'Round' : 'Rectangle'}{hoveredTable.premium ? ' · Premium' : ''}</div>

@@ -206,8 +206,8 @@ export interface RenumberCommand extends CommandBase {
   readonly scopeId: RowId | SectionId | null  // null for layout scope
   readonly changes: ReadonlyArray<{
     tableId: TableId
-    prev: Pick<TableObject, 'label' | 'labelOverridden'>
-    next: Pick<TableObject, 'label' | 'labelOverridden'>
+    prev: Pick<TableObject, 'label' | 'labelOverridden'> & Partial<Pick<TableObject, 'displayId' | 'tableNumber'>>
+    next: Pick<TableObject, 'label' | 'labelOverridden'> & Partial<Pick<TableObject, 'displayId' | 'tableNumber'>>
   }>
 }
 

@@ -1,5 +1,13 @@
 import { computeRoomContour } from '@/domain/room-contour'
-import type { CompositeRoom, Point, Rect, TableObject } from '@/domain/types'
+import type { CompositeRoom, Point, Rect, Section, TableId, TableObject } from '@/domain/types'
+
+export type TableNumberingDirection = 'ltr' | 'rtl' | 'ttb' | 'btt' | 'cw' | 'ccw'
+
+export interface TableRenumberChange {
+  tableId: TableId
+  prev: Pick<TableObject, 'label' | 'labelOverridden' | 'displayId' | 'tableNumber'>
+  next: Pick<TableObject, 'label' | 'labelOverridden' | 'displayId' | 'tableNumber'>
+}
 
 export interface RoomZone {
   id: string
@@ -97,6 +105,23 @@ export function formatDisplayId(roomId: string, tableNumber: number): string {
   return `${roomId}-${tableNumber}`
 }
 
+export function getSectionPrefix(sectionName: string): string {
+  const tokens = (sectionName.toUpperCase().match(/[A-Z0-9]+/g) ?? []).filter(Boolean)
+  if (tokens.length === 0) return 'T'
+
+  const meaningful = tokens.filter(token => token !== 'SECTION')
+  const singleToken = meaningful.find(token => token.length === 1)
+  if (singleToken) return singleToken
+
+  if (tokens[0] === 'SECTION' && meaningful[0]) return meaningful[0][0]
+  return (meaningful[0] ?? tokens[0])[0]
+}
+
+export function formatScopedDisplayId(prefix: string, tableNumber: number, padToDigits = 2): string {
+  const numberText = String(tableNumber).padStart(Math.max(padToDigits, 1), '0')
+  return prefix ? `${prefix}${numberText}` : numberText
+}
+
 export function getRoomLabel(room: CompositeRoom | null, roomId: string): string {
   return getRoomZones(room).find(zone => zone.id === roomId)?.label ?? roomId
 }
@@ -123,9 +148,9 @@ export function getNextRoomTableNumber(
   tables: Record<string, TableObject>,
   roomId: string,
 ): number {
-  void roomId
   let max = 0
   for (const table of Object.values(tables)) {
+    if (table.roomId !== roomId) continue
     if (table.tableNumber > max) max = table.tableNumber
   }
   return max + 1
@@ -133,6 +158,27 @@ export function getNextRoomTableNumber(
 
 function getDistanceBetweenPoints(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y)
+}
+
+function getTableBounds(tables: Array<Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>): Rect {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+
+  for (const table of tables) {
+    minX = Math.min(minX, table.x)
+    minY = Math.min(minY, table.y)
+    maxX = Math.max(maxX, table.x + table.width)
+    maxY = Math.max(maxY, table.y + table.height)
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  }
 }
 
 function projectPointToSegment(point: Point, a: Point, b: Point): { distance: number; progress: number } {
@@ -239,6 +285,109 @@ export function sortTablesInSnakeOrder<T extends Pick<TableObject, 'x' | 'y' | '
   })
 }
 
+function sortTablesHorizontally<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+  tables: T[],
+  rowDirection: 'asc' | 'desc',
+): T[] {
+  if (tables.length === 0) return []
+
+  const sorted = [...tables].sort((a, b) => a.y - b.y || a.x - b.x)
+  const tolerance = Math.max(24, Math.min(...sorted.map(table => table.height)) * 0.8)
+  const rows: T[][] = []
+  let currentRow: T[] = [sorted[0]]
+  let rowY = sorted[0].y
+
+  for (let i = 1; i < sorted.length; i++) {
+    const table = sorted[i]
+    if (Math.abs(table.y - rowY) <= tolerance) {
+      currentRow.push(table)
+      continue
+    }
+    rows.push(currentRow)
+    currentRow = [table]
+    rowY = table.y
+  }
+  rows.push(currentRow)
+
+  return rows.flatMap(row => [...row].sort((a, b) => (
+    rowDirection === 'asc' ? a.x - b.x || a.y - b.y : b.x - a.x || a.y - b.y
+  )))
+}
+
+function sortTablesVertically<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+  tables: T[],
+  columnDirection: 'asc' | 'desc',
+): T[] {
+  if (tables.length === 0) return []
+
+  const sorted = [...tables].sort((a, b) => a.x - b.x || a.y - b.y)
+  const tolerance = Math.max(24, Math.min(...sorted.map(table => table.width)) * 0.8)
+  const columns: T[][] = []
+  let currentColumn: T[] = [sorted[0]]
+  let columnX = sorted[0].x
+
+  for (let i = 1; i < sorted.length; i++) {
+    const table = sorted[i]
+    if (Math.abs(table.x - columnX) <= tolerance) {
+      currentColumn.push(table)
+      continue
+    }
+    columns.push(currentColumn)
+    currentColumn = [table]
+    columnX = table.x
+  }
+  columns.push(currentColumn)
+
+  return columns.flatMap(column => [...column].sort((a, b) => (
+    columnDirection === 'asc' ? a.y - b.y || a.x - b.x : b.y - a.y || a.x - b.x
+  )))
+}
+
+function normalizeAngleFromTop(angle: number): number {
+  let normalized = angle + Math.PI / 2
+  while (normalized < 0) normalized += Math.PI * 2
+  while (normalized >= Math.PI * 2) normalized -= Math.PI * 2
+  return normalized
+}
+
+export function sortTablesByDirection<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+  tables: T[],
+  direction: TableNumberingDirection,
+): T[] {
+  if (tables.length === 0) return []
+
+  switch (direction) {
+    case 'rtl':
+      return sortTablesHorizontally(tables, 'desc')
+    case 'ttb':
+      return sortTablesVertically(tables, 'asc')
+    case 'btt':
+      return sortTablesVertically(tables, 'desc')
+    case 'cw':
+    case 'ccw': {
+      const bounds = getTableBounds(tables)
+      const center = {
+        x: bounds.x + bounds.width / 2,
+        y: bounds.y + bounds.height / 2,
+      }
+      return [...tables].sort((a, b) => {
+        const angleA = normalizeAngleFromTop(Math.atan2(a.y + a.height / 2 - center.y, a.x + a.width / 2 - center.x))
+        const angleB = normalizeAngleFromTop(Math.atan2(b.y + b.height / 2 - center.y, b.x + b.width / 2 - center.x))
+        const metricA = direction === 'cw' ? angleA : (Math.PI * 2 - angleA) % (Math.PI * 2)
+        const metricB = direction === 'cw' ? angleB : (Math.PI * 2 - angleB) % (Math.PI * 2)
+        if (metricA !== metricB) return metricA - metricB
+
+        const distA = Math.hypot(a.x + a.width / 2 - center.x, a.y + a.height / 2 - center.y)
+        const distB = Math.hypot(b.x + b.width / 2 - center.x, b.y + b.height / 2 - center.y)
+        return distA - distB
+      })
+    }
+    case 'ltr':
+    default:
+      return sortTablesHorizontally(tables, 'asc')
+  }
+}
+
 export function sortTablesForRoom<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
   tables: T[],
   zone?: Pick<RoomZone, 'bounds' | 'polygon'> | null,
@@ -284,9 +433,112 @@ export function sortTablesForRoom<T extends Pick<TableObject, 'x' | 'y' | 'width
   return [...clockwisePerimeter, ...clockwiseInterior]
 }
 
+function createRenumberChange(
+  table: TableObject,
+  nextDisplayId: string,
+  nextTableNumber: number,
+  preserveLabelOverride: boolean,
+): TableRenumberChange {
+  return {
+    tableId: table.id as TableId,
+    prev: {
+      label: table.label,
+      labelOverridden: table.labelOverridden,
+      displayId: table.displayId,
+      tableNumber: table.tableNumber,
+    },
+    next: {
+      label: preserveLabelOverride && table.labelOverridden ? table.label : nextDisplayId,
+      labelOverridden: preserveLabelOverride ? table.labelOverridden : false,
+      displayId: nextDisplayId,
+      tableNumber: nextTableNumber,
+    },
+  }
+}
+
+function getRoomBuckets(
+  tables: TableObject[],
+  room: CompositeRoom | null,
+): Array<{ id: string; prefix: string; tables: TableObject[] }> {
+  const roomZones = getRoomZones(room)
+  const roomIds = roomZones.map(zone => zone.id)
+  const firstRoomId = roomIds[0] ?? 'R1'
+  const grouped = new Map<string, TableObject[]>()
+
+  for (const roomId of roomIds) grouped.set(roomId, [])
+  if (grouped.size === 0) grouped.set(firstRoomId, [])
+
+  for (const table of tables) {
+    const resolvedRoomId =
+      (table.roomId && grouped.has(table.roomId) ? table.roomId : null) ??
+      getRoomIdForTable(table, room) ??
+      firstRoomId
+    const bucket = grouped.get(resolvedRoomId) ?? []
+    bucket.push(table)
+    grouped.set(resolvedRoomId, bucket)
+  }
+
+  return Array.from(grouped.entries()).map(([id, roomTables]) => ({
+    id,
+    prefix: getRoomLabel(room, id),
+    tables: roomTables,
+  }))
+}
+
+export function buildSectionRenumberChanges(
+  tables: Record<string, TableObject>,
+  sections: Record<string, Section>,
+  sectionId: string,
+  direction: TableNumberingDirection,
+): TableRenumberChange[] {
+  const section = sections[sectionId]
+  if (!section) return []
+
+  const sectionTables = Object.values(tables).filter(table => table.sectionId === sectionId)
+  const ordered = sortTablesByDirection(sectionTables, direction)
+  const prefix = getSectionPrefix(section.name)
+
+  return ordered.map((table, index) =>
+    createRenumberChange(table, formatScopedDisplayId(prefix, index + 1), index + 1, false),
+  )
+}
+
+export function buildAllSectionRenumberChanges(
+  tables: Record<string, TableObject>,
+  sections: Record<string, Section>,
+  room: CompositeRoom | null,
+  direction: TableNumberingDirection,
+  preserveLabelOverride = false,
+): TableRenumberChange[] {
+  const changes: TableRenumberChange[] = []
+  const allTables = Object.values(tables)
+  const sectionList = Object.values(sections).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+  const sectionIds = new Set(sectionList.map(section => section.id))
+
+  for (const section of sectionList) {
+    const sectionTables = allTables.filter(table => table.sectionId === section.id)
+    const ordered = sortTablesByDirection(sectionTables, direction)
+    const prefix = getSectionPrefix(section.name)
+    ordered.forEach((table, index) => {
+      changes.push(createRenumberChange(table, formatScopedDisplayId(prefix, index + 1), index + 1, preserveLabelOverride))
+    })
+  }
+
+  const unsectioned = allTables.filter(table => !table.sectionId || !sectionIds.has(table.sectionId))
+  for (const bucket of getRoomBuckets(unsectioned, room)) {
+    const ordered = sortTablesByDirection(bucket.tables, direction)
+    ordered.forEach((table, index) => {
+      changes.push(createRenumberChange(table, formatScopedDisplayId(bucket.prefix, index + 1), index + 1, preserveLabelOverride))
+    })
+  }
+
+  return changes
+}
+
 export function syncRoomFieldsForTables(
   tables: Record<string, TableObject>,
   room: CompositeRoom | null,
+  sections: Record<string, Section> = {},
 ): Record<string, TableObject> {
   const next: Record<string, TableObject> = {}
   const roomZones = getRoomZones(room)
@@ -298,16 +550,14 @@ export function syncRoomFieldsForTables(
   }
 
   if (roomZones.length === 0) {
-    const ordered = sortTablesInSnakeOrder(Object.values(next))
-    ordered.forEach((table, index) => {
-      const roomId = table.roomId || firstRoomId
-      const tableNumber = index + 1
-      const displayId = formatDisplayId(getRoomLabel(room, roomId), tableNumber)
-      table.roomId = roomId
-      table.tableNumber = tableNumber
-      table.displayId = displayId
-      if (!table.labelOverridden) table.label = displayId
-    })
+    const changes = buildAllSectionRenumberChanges(next, sections, room, 'cw', true)
+    for (const change of changes) {
+      const table = next[change.tableId]
+      if (!table) continue
+      table.tableNumber = change.next.tableNumber
+      table.displayId = change.next.displayId
+      if (!table.labelOverridden) table.label = change.next.displayId
+    }
     return next
   }
 
@@ -327,20 +577,13 @@ export function syncRoomFieldsForTables(
     tablesByResolvedRoom.get(resolvedRoomId)?.push(table)
   }
 
-  let globalTableNumber = 1
-
-  for (const roomId of roomIds) {
-    const roomTables = tablesByResolvedRoom.get(roomId) ?? []
-    const zone = roomZones.find(candidate => candidate.id === roomId) ?? null
-
-    sortTablesForRoom(roomTables, zone).forEach(table => {
-      const tableNumber = globalTableNumber++
-      const displayId = formatDisplayId(zone?.label ?? roomId, tableNumber)
-      table.roomId = roomId
-      table.tableNumber = tableNumber
-      table.displayId = displayId
-      if (!table.labelOverridden) table.label = displayId
-    })
+  const changes = buildAllSectionRenumberChanges(next, sections, room, 'cw', true)
+  for (const change of changes) {
+    const table = next[change.tableId]
+    if (!table) continue
+    table.tableNumber = change.next.tableNumber
+    table.displayId = change.next.displayId
+    if (!table.labelOverridden) table.label = change.next.displayId
   }
 
   return next

@@ -12,8 +12,8 @@ import {
 } from '@/store/index'
 import { createTableId } from '@/lib/id'
 import { getNextLabelNumberForRoom } from '@/lib/labels'
-  import { formatDisplayId, getRoomZones, sortTablesForRoom } from '@/domain/room-numbering'
-import type { TableId, TableObject } from '@/domain/types'
+import { buildAllSectionRenumberChanges, formatDisplayId } from '@/domain/room-numbering'
+import type { TableObject } from '@/domain/types'
 
 /** Clipboard entry — stores the table template for pasting. */
 interface ClipboardEntry {
@@ -166,36 +166,20 @@ export function useKeyboardShortcuts() {
           clearSelected()
 
           // Auto-renumber all remaining tables to close gaps
-          const remaining = Object.values(useEditorStore.getState().tables)
+          const currentState = useEditorStore.getState()
+          const remaining = Object.values(currentState.tables)
           if (remaining.length > 0) {
-            const currentRoom = useEditorStore.getState().room
-            const roomZones = getRoomZones(currentRoom)
-            const grouped = new Map<string, TableObject[]>()
-            for (const table of remaining) {
-              const roomKey = table.roomId || 'R1'
-              const tablesInRoom = grouped.get(roomKey) ?? []
-              tablesInRoom.push(table)
-              grouped.set(roomKey, tablesInRoom)
-            }
-            let nextTableNumber = 1
-            const changes = roomZones.flatMap(zone =>
-              sortTablesForRoom(
-                grouped.get(zone.id) ?? [],
-                roomZones.find(candidate => candidate.id === zone.id) ?? null,
-              ).flatMap(table => {
-                const nextLabel = formatDisplayId(zone.label, nextTableNumber++)
-                return table.label !== nextLabel || table.labelOverridden
-                  ? [{
-                      tableId: table.id as TableId,
-                      prev: {
-                        label: table.label,
-                        labelOverridden: table.labelOverridden,
-                      },
-                      next: { label: nextLabel, labelOverridden: false },
-                    }]
-                  : []
-              }),
-            )
+            const changes = buildAllSectionRenumberChanges(
+              currentState.tables,
+              currentState.sections,
+              currentState.room,
+              'cw',
+            ).filter(change => (
+              change.prev.label !== change.next.label ||
+              change.prev.labelOverridden !== change.next.labelOverridden ||
+              change.prev.displayId !== change.next.displayId ||
+              change.prev.tableNumber !== change.next.tableNumber
+            ))
             if (changes.length > 0) {
               dispatch({
                 type: 'RENUMBER',

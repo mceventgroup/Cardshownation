@@ -14,6 +14,7 @@ import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar from './LeftSidebar'
 import KonvaCanvas from './KonvaCanvas'
+import VendorDrawer from './VendorDrawer'
 import ShowModeVendorList from './ShowModeVendorList'
 import HelpCheatSheetModal from './HelpCheatSheetModal'
 import FirstRunModal from './FirstRunModal'
@@ -34,6 +35,7 @@ export default function EditorShell() {
   const backgroundImages = useEditorStore(s => s.backgroundImages)
   const [showHelp, setShowHelp] = useState(false)
   const [showFirstRun, setShowFirstRun] = useState(false)
+  const [activeTab, setActiveTab] = useState<'layout' | 'vendors' | 'settings'>('layout')
 
   useEffect(() => {
     hydrateFromStorage()
@@ -66,57 +68,64 @@ export default function EditorShell() {
     setShowHelp(true)
   }, [persistBypass])
 
+  const handleTabChange = useCallback((nextTab: 'layout' | 'vendors' | 'settings') => {
+    setActiveTab(nextTab)
+  }, [])
+
   return (
     <div className="flex h-screen w-screen flex-col bg-slate-100">
       {!showMode && <Toolbar />}
       <div className="flex-1 overflow-hidden">
         <div className="flex h-full flex-row overflow-hidden">
-          {!showMode && <LeftSidebar />}
-          <div className="relative flex-1 overflow-hidden">
-            <KonvaCanvas />
-            {showMode && (
-              <div className="absolute left-4 top-4 z-30 flex gap-2">
-                <button
-                  onClick={() => printShowModeSheet(tables, sections, vendors, assignments, room, 'Show Sheet', doors, backgroundImages)}
-                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                >
-                  Print / Save PDF
-                </button>
-                <button
-                  onClick={() => exportFloorplanImage(
-                    tables,
-                    sections,
-                    assignments,
-                    room,
-                    doors,
-                    { showVendorNames: false, showPaymentStatus: false, title: 'Floor Plan' },
-                    backgroundImages,
-                    'floorplan.png',
-                  )}
-                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                >
-                  Save Floorplan Image
-                </button>
-                <button
-                  onClick={() => exportVendorListImage(tables, vendors, assignments, 'Vendor List', 'vendor-list.png')}
-                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                >
-                  Save Vendor List Image
-                </button>
-                <button
-                  onClick={() => exportVendorAssignmentsCsv(tables, vendors, assignments, room, 'vendor-list')}
-                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                >
-                  Export Vendor CSV
-                </button>
-                <button
-                  onClick={() => setShowMode(false)}
-                  className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                >
-                  Exit Show Mode
-                </button>
-              </div>
-            )}
+          {!showMode && <LeftSidebar activeTab={activeTab} onTabChange={handleTabChange} />}
+          <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
+            <div className="relative min-h-0 flex-1 overflow-hidden">
+              <KonvaCanvas />
+              {showMode && (
+                <div className="absolute left-4 top-4 z-30 flex gap-2">
+                  <button
+                    onClick={() => printShowModeSheet(tables, sections, vendors, assignments, room, 'Show Sheet', doors, backgroundImages)}
+                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                  >
+                    Print / Save PDF
+                  </button>
+                  <button
+                    onClick={() => exportFloorplanImage(
+                      tables,
+                      sections,
+                      assignments,
+                      room,
+                      doors,
+                      { showVendorNames: false, showPaymentStatus: false, title: 'Floor Plan' },
+                      backgroundImages,
+                      'floorplan.png',
+                    )}
+                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                  >
+                    Save Floorplan Image
+                  </button>
+                  <button
+                    onClick={() => exportVendorListImage(tables, vendors, assignments, 'Vendor List', 'vendor-list.png')}
+                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                  >
+                    Save Vendor List Image
+                  </button>
+                  <button
+                    onClick={() => exportVendorAssignmentsCsv(tables, vendors, assignments, room, 'vendor-list')}
+                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                  >
+                    Export Vendor CSV
+                  </button>
+                  <button
+                    onClick={() => setShowMode(false)}
+                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                  >
+                    Exit Show Mode
+                  </button>
+                </div>
+              )}
+            </div>
+            {!showMode && <VendorDrawer active={activeTab === 'vendors'} />}
           </div>
           {showMode && <ShowModeVendorList />}
         </div>

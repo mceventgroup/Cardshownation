@@ -239,6 +239,10 @@ export const csvImportModule: CSVImportModule = {
         /^quantity$/i, /^qty$/i, /^tables?$/i, /^table[\s_]?count$/i,
         /^count$/i, /^booths?$/i,
       ],
+      tableSize: [
+        /^table[\s_]?size$/i, /^size$/i, /^booth[\s_]?size$/i, /^space[\s_]?size$/i,
+        /^length$/i,
+      ],
       color: [/^color$/i, /^colour$/i, /^table[\s_]?color$/i],
       notes: [/^notes?$/i, /^comments?$/i, /^remarks?$/i, /^memo$/i],
       paymentStatus: [
@@ -250,11 +254,13 @@ export const csvImportModule: CSVImportModule = {
     const fieldMapping: FieldMapping = {
       tableNumber: null, vendorName: null, vendorLastName: null, companyName: null, email: null, vendorCategory: null,
       quantity: null,
+      tableSize: null,
       color: null, notes: null, paymentStatus: null, section: null,
     }
     const confidence: Record<Field, number> = {
       tableNumber: 0, vendorName: 0, vendorLastName: 0, companyName: 0, email: 0, vendorCategory: 0,
       quantity: 0,
+      tableSize: 0,
       color: 0, notes: 0, paymentStatus: 0, section: 0,
     }
     const unmappedHeaders: string[] = []
@@ -358,6 +364,9 @@ export const csvImportModule: CSVImportModule = {
       const quantity = mapping.quantity
         ? Math.max(1, parseInt(rawData[mapping.quantity] ?? '', 10) || 1)
         : Math.max(1, expandedTables.length || 1)
+      const tableSize = mapping.tableSize
+        ? (rawData[mapping.tableSize] ?? '').trim() || null
+        : null
 
       const rawPayStatus = mapping.paymentStatus ? rawData[mapping.paymentStatus] ?? '' : ''
       const normStatus   = normalizePaymentStatus(rawPayStatus)
@@ -369,6 +378,7 @@ export const csvImportModule: CSVImportModule = {
         email,
         vendorCategory: mapping.vendorCategory ? (rawData[mapping.vendorCategory] ?? '').trim() || null : null,
         quantity,
+        tableSize,
         color:          mapping.color          ? (rawData[mapping.color]          ?? '').trim() || null : null,
         notes:          mapping.notes          ? (rawData[mapping.notes]          ?? '').trim() || null : null,
         paymentStatus:  normStatus,

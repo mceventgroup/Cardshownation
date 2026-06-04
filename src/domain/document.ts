@@ -181,6 +181,7 @@ export interface FieldMapping {
   email: string | null
   vendorCategory: string | null
   quantity: string | null
+  tableSize: string | null
   color: string | null
   notes: string | null
   paymentStatus: string | null
@@ -214,6 +215,7 @@ export interface MappedImportRow {
   email: string | null
   vendorCategory: string | null
   quantity: number
+  tableSize: string | null
   color: string | null
   notes: string | null
   paymentStatus: string | null

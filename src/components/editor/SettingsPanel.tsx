@@ -84,6 +84,18 @@ export default function SettingsPanel() {
               className="h-4 w-4 rounded border-slate-300"
             />
           </label>
+          <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-3 py-2">
+            <span>
+              <span className="block font-medium text-slate-800">Vendor Color Coding</span>
+              <span className="block text-xs text-slate-500">Use status colors and premium markers in the vendor grid.</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={settings.vendorColorCoding}
+              onChange={e => updateSetting('vendorColorCoding', e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+          </label>
         </div>
       </CollapsibleSection>
 

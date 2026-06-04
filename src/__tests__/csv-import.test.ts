@@ -44,6 +44,7 @@ function makeMapping(overrides: Partial<FieldMapping>): FieldMapping {
     email: null,
     vendorCategory: null,
     quantity: null,
+    tableSize: null,
     color: null,
     notes: null,
     paymentStatus: null,

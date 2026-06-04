@@ -15,6 +15,43 @@ import { vendorColor } from './defaults'
 import { resolveVendorBuckets } from './vendor-resolution'
 import { compressTableLabels } from './table-ranges'
 
+function abbreviateAssignedTablePrefix(value: string): string {
+  return value
+    .replace(/Main Room-/gi, 'MR-')
+    .replace(/Main Room /gi, 'MR-')
+    .replace(/Room /gi, 'R-')
+}
+
+function formatAssignedTableList(labels: string[]): string {
+  if (labels.length === 0) return ''
+
+  const normalized = [...new Set(labels.map(label => label.trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+
+  const grouped = new Map<string, string[]>()
+  const passthrough: string[] = []
+
+  for (const label of normalized) {
+    const match = label.match(/^(.*?)(\d+)$/)
+    if (!match) {
+      passthrough.push(abbreviateAssignedTablePrefix(label))
+      continue
+    }
+
+    const prefix = abbreviateAssignedTablePrefix(match[1])
+    const number = match[2]
+    const existing = grouped.get(prefix)
+    if (existing) existing.push(number)
+    else grouped.set(prefix, [number])
+  }
+
+  const groupedLabels = Array.from(grouped.entries())
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+    .map(([prefix, numbers]) => `${prefix}${numbers.join(',')}`)
+
+  return [...groupedLabels, ...passthrough].join(', ')
+}
+
 export interface ExportMetadata {
   eventName?: string
   venue?: string
@@ -42,6 +79,8 @@ const EXPORT_MIN_TABLE_HEIGHT = 28
 const ROOM_LABEL_HEIGHT = 28
 const ROOM_LABEL_OFFSET = 10
 const PNG_EXPORT_MAX_AREA_FOR_3X = 18_000_000
+const PNG_EXPORT_MAX_CANVAS_DIMENSION = 16_384
+const PNG_EXPORT_MAX_CANVAS_AREA = 268_000_000
 const PRINT_PAGE_LANDSCAPE_WIDTH = 1100
 const PRINT_PAGE_LANDSCAPE_HEIGHT = 760
 const PRINT_PAGE_PORTRAIT_WIDTH = 820
@@ -539,7 +578,7 @@ export function printShowModeSheet(
     : rows.map(row => `
       <div class="vendor-row">
         <div class="vendor-name">${esc(row.name)}</div>
-        <div class="vendor-tables">${esc(compressTableLabels(row.labels))}</div>
+        <div class="vendor-tables">${esc(formatAssignedTableList(row.labels))}</div>
       </div>
     `).join('')
 
@@ -588,7 +627,7 @@ export function printShowModeSheet(
     .list-wrap { max-height: 920px; overflow: hidden; }
     .vendor-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 110px;
+      grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
       gap: 12px;
       padding: 8px 14px;
       border-bottom: 1px solid #e2e8f0;
@@ -596,7 +635,7 @@ export function printShowModeSheet(
     }
     .vendor-row:last-child { border-bottom: none; }
     .vendor-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .vendor-tables { text-align: right; font-weight: 600; color: #334155; }
+    .vendor-tables { text-align: right; font-weight: 600; color: #334155; overflow-wrap: anywhere; }
     .empty { padding: 18px 14px; font-size: 13px; color: #64748b; }
     @media print {
       .no-print { display: none !important; }
@@ -781,9 +820,6 @@ function buildSVG(
     const titleY = Math.max(HEADER_HEIGHT - 2, roomBounds.y - ROOM_LABEL_OFFSET - ROOM_LABEL_HEIGHT)
 
     parts.push(`<rect x="${roomBounds.x.toFixed(2)}" y="${roomBounds.y.toFixed(2)}" width="${roomBounds.width.toFixed(2)}" height="${roomBounds.height.toFixed(2)}" rx="12" fill="none" stroke="#cbd5e1" stroke-width="1.5" />`)
-    parts.push(`<rect x="${titleX.toFixed(2)}" y="${titleY.toFixed(2)}" width="${titleWidth.toFixed(2)}" height="${ROOM_LABEL_HEIGHT}" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" />`)
-    parts.push(`<text x="${(titleX + 14).toFixed(2)}" y="${(titleY + 19).toFixed(2)}" font-size="15" font-family="system-ui, sans-serif" font-weight="700" fill="#0f172a">${esc(section.roomLabel)}</text>`)
-
     const boundary = section.polygon.length > 2 ? section.polygon : buildRectPolygon(section.bounds)
     parts.push(`<path d="${polygonToPath(boundary, context)}" fill="#f1f5f9" stroke="#1e293b" stroke-width="3" />`)
 
@@ -793,7 +829,19 @@ function buildSVG(
         parts.push(`<image href="${image.dataUrl}" x="${imageRect.x.toFixed(2)}" y="${imageRect.y.toFixed(2)}" width="${imageRect.width.toFixed(2)}" height="${imageRect.height.toFixed(2)}" opacity="${Math.min(image.opacity, 0.5)}" />`)
       }
     }
+  }
 
+  for (const section of roomSections) {
+    const roomBounds = transformRect(context, section.bounds)
+    const titleWidth = Math.max(120, Math.min(260, section.roomLabel.length * 10 + 36))
+    const titleX = roomBounds.x + 12
+    const titleY = Math.max(HEADER_HEIGHT - 2, roomBounds.y - ROOM_LABEL_OFFSET - ROOM_LABEL_HEIGHT)
+
+    parts.push(`<rect x="${titleX.toFixed(2)}" y="${titleY.toFixed(2)}" width="${titleWidth.toFixed(2)}" height="${ROOM_LABEL_HEIGHT}" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" />`)
+    parts.push(`<text x="${(titleX + 14).toFixed(2)}" y="${(titleY + 19).toFixed(2)}" font-size="15" font-family="system-ui, sans-serif" font-weight="700" fill="#0f172a">${esc(section.roomLabel)}</text>`)
+  }
+
+  for (const section of roomSections) {
     for (const table of section.tables) {
       const assignment = byTable.get(table.id)
       const sectionColor = table.sectionId ? sections[table.sectionId]?.color : null
@@ -826,7 +874,7 @@ function buildSVG(
         parts.push(`<rect width="${width.toFixed(2)}" height="${height.toFixed(2)}" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="${table.premium ? 2.4 : 1.4}" />`)
       }
 
-      parts.push(`<text x="${(width / 2).toFixed(2)}" y="${(topInset + centerHeight / 2 + fontSize * 0.32).toFixed(2)}" text-anchor="middle" font-size="${fontSize.toFixed(1)}" font-family="system-ui, sans-serif" fill="${textColor}" font-weight="800">${esc(String(table.tableNumber))}</text>`)
+      parts.push(`<text x="${(width / 2).toFixed(2)}" y="${(topInset + centerHeight / 2 + fontSize * 0.32).toFixed(2)}" text-anchor="middle" font-size="${fontSize.toFixed(1)}" font-family="system-ui, sans-serif" fill="${textColor}" font-weight="800">${esc(table.displayId || table.label || String(table.tableNumber))}</text>`)
 
       if (showVendorInitials && assignment) {
         const badgeFill = textColor === '#ffffff' ? 'rgba(255,255,255,0.2)' : 'rgba(15,23,42,0.08)'
@@ -891,7 +939,7 @@ function buildVendorListSVG(
     const y = headerHeight + index * rowHeight
     parts.push(`<line x1="48" y1="${y + rowHeight}" x2="${width - 48}" y2="${y + rowHeight}" stroke="#e2e8f0" stroke-width="1" />`)
     parts.push(`<text x="48" y="${y + 22}" font-size="18" font-family="system-ui, sans-serif" font-weight="600" fill="#0f172a">${esc(row.name)}</text>`)
-    parts.push(`<text x="${width - 48}" y="${y + 22}" text-anchor="end" font-size="18" font-family="system-ui, sans-serif" font-weight="600" fill="#334155">${esc(compressTableLabels(row.tables))}</text>`)
+    parts.push(`<text x="${width - 48}" y="${y + 22}" text-anchor="end" font-size="18" font-family="system-ui, sans-serif" font-weight="600" fill="#334155">${esc(formatAssignedTableList(row.tables))}</text>`)
   })
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`
@@ -1082,7 +1130,13 @@ async function downloadSvgAsPng(svg: string, width: number, height: number, file
 
   try {
     const image = await loadImage(url)
-    const pixelRatio = width * height <= PNG_EXPORT_MAX_AREA_FOR_3X ? 3 : 2
+    const preferredPixelRatio = width * height <= PNG_EXPORT_MAX_AREA_FOR_3X ? 3 : 2
+    const dimensionRatioLimit = Math.min(
+      PNG_EXPORT_MAX_CANVAS_DIMENSION / Math.max(width, 1),
+      PNG_EXPORT_MAX_CANVAS_DIMENSION / Math.max(height, 1),
+    )
+    const areaRatioLimit = Math.sqrt(PNG_EXPORT_MAX_CANVAS_AREA / Math.max(width * height, 1))
+    const pixelRatio = Math.max(1, Math.min(preferredPixelRatio, dimensionRatioLimit, areaRatioLimit))
     const canvas = document.createElement('canvas')
     canvas.width = Math.ceil(width * pixelRatio)
     canvas.height = Math.ceil(height * pixelRatio)

@@ -165,7 +165,7 @@ const TableNode = memo(function TableNode({
       )}
 
       <Text
-        text={String(table.tableNumber)}
+        text={table.displayId || String(table.tableNumber)}
         width={w}
         height={numberBandHeight}
         y={topInset}

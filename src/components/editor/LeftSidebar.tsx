@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { useWarnings } from '@/hooks/useWarnings'
 import { useEditorStore, selectActiveTool, selectSelectedIds, selectSelectedRowId } from '@/store/index'
 import type { ActiveTool } from '@/store/index'
@@ -15,8 +14,12 @@ import RoomPanel from './RoomPanel'
 import DoorsPanel from './DoorsPanel'
 import SectionsPanel from './SectionsPanel'
 import WarningsPanel from './WarningsPanel'
-import VendorRosterPanel from './VendorRosterPanel'
 import SettingsPanel from './SettingsPanel'
+
+interface LeftSidebarProps {
+  activeTab: 'layout' | 'vendors' | 'settings'
+  onTabChange: (tab: 'layout' | 'vendors' | 'settings') => void
+}
 
 const TOOLS: { tool: ActiveTool; label: string; shortcut: string }[] = [
   { tool: 'select',      label: 'Select',      shortcut: 'S' },
@@ -96,11 +99,9 @@ function WarningsBadge() {
   )
 }
 
-export default function LeftSidebar() {
-  const [activeTab, setActiveTab] = useState<'layout' | 'vendors' | 'settings'>('layout')
-
+export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps) {
   return (
-    <aside className="w-[300px] shrink-0 border-r border-slate-200 bg-slate-50/95 backdrop-blur-sm">
+    <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-slate-200 bg-slate-50/95 backdrop-blur-sm">
       <div className="border-b border-slate-200 bg-white/90 px-3 py-3 shadow-sm">
         <div className="rounded-2xl bg-slate-100 p-1">
           <div className="grid grid-cols-3 gap-1">
@@ -111,7 +112,7 @@ export default function LeftSidebar() {
             ].map(([value, label]) => (
               <button
                 key={value}
-                onClick={() => setActiveTab(value as typeof activeTab)}
+                onClick={() => onTabChange(value as typeof activeTab)}
                 className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                   activeTab === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 }`}
@@ -123,7 +124,7 @@ export default function LeftSidebar() {
         </div>
       </div>
 
-      <div className="h-[calc(100vh-65px)] overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {activeTab === 'layout' && (
           <div className="space-y-0">
             <CollapsibleSection title="Tables" panelId="tools">
@@ -149,7 +150,13 @@ export default function LeftSidebar() {
           </div>
         )}
 
-        {activeTab === 'vendors' && <VendorRosterPanel />}
+        {activeTab === 'vendors' && (
+          <div className="flex h-full items-start justify-center p-3">
+            <div className="writing-mode-vertical rounded border border-slate-300 bg-white px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 [writing-mode:vertical-rl] [text-orientation:mixed]">
+              Vendors
+            </div>
+          </div>
+        )}
 
         {activeTab === 'settings' && <SettingsPanel />}
       </div>

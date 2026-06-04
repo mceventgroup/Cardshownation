@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: LayoutSettings = {
   wallThickness: 6,     // 6 in exterior/interior wall thickness is a sensible default
   wallSetback: 36,      // 36 in = 3 ft from wall to nearest table
   showWallSetback: false,
+  vendorColorCoding: true,
   roomLocked: false,
   defaultTableWidth: 72,  // 6 ft table length
   defaultTableHeight: 30, // 30 in table width

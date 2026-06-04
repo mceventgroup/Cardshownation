@@ -176,6 +176,8 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
         if (t) {
           t.label = c.next.label
           t.labelOverridden = c.next.labelOverridden
+          if (typeof c.next.displayId === 'string') t.displayId = c.next.displayId
+          if (typeof c.next.tableNumber === 'number') t.tableNumber = c.next.tableNumber
         }
       }
       break
@@ -466,6 +468,8 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
         if (t) {
           t.label = c.prev.label
           t.labelOverridden = c.prev.labelOverridden
+          if (typeof c.prev.displayId === 'string') t.displayId = c.prev.displayId
+          if (typeof c.prev.tableNumber === 'number') t.tableNumber = c.prev.tableNumber
         }
       }
       break

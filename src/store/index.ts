@@ -54,7 +54,7 @@ function safeAssignDefined<T extends object>(target: T, updates: Partial<T>): vo
 }
 
 function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): void {
-  state.tables = syncRoomFieldsForTables(slice.tables, slice.room)
+  state.tables = syncRoomFieldsForTables(slice.tables, slice.room, slice.sections)
   state.rows = slice.rows
   state.sections = slice.sections
   state.vendors = slice.vendors
@@ -251,7 +251,7 @@ export const useEditorStore = create<EditorState>()(
       set(state => {
         // Apply the command to document state
         applyCommand(state, command)
-        state.tables = syncRoomFieldsForTables(state.tables, state.room)
+        state.tables = syncRoomFieldsForTables(state.tables, state.room, state.sections)
         if (!state.activeRoomId || !Object.values(state.tables).some(table => table.roomId === state.activeRoomId)) {
           state.activeRoomId = getDefaultRoomId(state.room)
         }
@@ -308,23 +308,22 @@ export const useEditorStore = create<EditorState>()(
 
     addSelected(id) {
       set(state => {
-        state.selectedIds.add(id)
+        state.selectedIds = new Set([...state.selectedIds, id])
       })
     },
 
     toggleSelected(id) {
       set(state => {
-        if (state.selectedIds.has(id)) {
-          state.selectedIds.delete(id)
-        } else {
-          state.selectedIds.add(id)
-        }
+        const next = new Set(state.selectedIds)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        state.selectedIds = next
       })
     },
 
     clearSelected() {
       set(state => {
-        state.selectedIds.clear()
+        state.selectedIds = new Set()
       })
     },
 
@@ -571,6 +570,7 @@ export const useEditorStore = create<EditorState>()(
           createdVendor.tablesNeeded += importedTableCount
           if (!createdVendor.notes && row.mapped.notes) createdVendor.notes = row.mapped.notes
           if (!createdVendor.category && row.mapped.vendorCategory) createdVendor.category = row.mapped.vendorCategory
+          if (!createdVendor.tableSize && row.mapped.tableSize) createdVendor.tableSize = row.mapped.tableSize
           if (createdVendor.paymentStatus === 'unknown' && row.mapped.paymentStatus) {
             createdVendor.paymentStatus = row.mapped.paymentStatus as Vendor['paymentStatus']
           }
@@ -589,6 +589,7 @@ export const useEditorStore = create<EditorState>()(
             companyName: row.mapped.companyName ?? null,
             email: normalizedEmail,
             tablesNeeded: importedTableCount,
+            tableSize: row.mapped.tableSize ?? null,
             category: row.mapped.vendorCategory,
             paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as Vendor['paymentStatus'],
             notes: row.mapped.notes,

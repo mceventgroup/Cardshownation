@@ -148,6 +148,7 @@ export interface Vendor {
   companyName?: string | null
   email?: string | null
   tablesNeeded: number          // how many tables this vendor purchased
+  tableSize?: string | null
   category: string | null
   paymentStatus: PaymentStatus
   notes: string | null
@@ -242,6 +243,7 @@ export interface LayoutSettings {
   wallThickness: number         // physical wall thickness rendered outside room boundary
   wallSetback: number           // minimum distance from wall to nearest table edge (canvas units)
   showWallSetback: boolean      // render yellow setback zone overlay
+  vendorColorCoding: boolean    // color-code vendor grid status and premium markers
   roomLocked: boolean           // when true, room segments cannot be dragged on canvas
   defaultTableWidth: number
   defaultTableHeight: number

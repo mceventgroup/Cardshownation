@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { useEditorStore, selectSections, selectSelectedIds } from '@/store/index'
 import { SECTION_COLORS } from '@/lib/defaults'
 import { createSectionId } from '@/lib/id'
+import { buildAllSectionRenumberChanges, buildSectionRenumberChanges, type TableNumberingDirection } from '@/domain/room-numbering'
 import type { Section, SectionId, TableId } from '@/domain/types'
 
 export default function SectionsPanel() {
@@ -21,9 +22,11 @@ export default function SectionsPanel() {
   const dispatch     = useEditorStore(s => s.dispatch)
   const selectBySec  = useEditorStore(s => s.selectBySection)
   const tables       = useEditorStore(s => s.tables)
+  const room         = useEditorStore(s => s.room)
 
   const [editingId, setEditingId]    = useState<string | null>(null)
   const [editName, setEditName]      = useState('')
+  const [numberingDirection, setNumberingDirection] = useState<TableNumberingDirection>('cw')
 
   const sectionList = Object.values(sections).sort((a, b) => a.order - b.order)
   const hasSelection = selectedIds.size > 0
@@ -86,8 +89,66 @@ export default function SectionsPanel() {
     return count
   }
 
+  function dispatchRenumberChanges(scope: 'section' | 'layout', scopeId: SectionId | null, changes: ReturnType<typeof buildSectionRenumberChanges>) {
+    const filtered = changes.filter(change => (
+      change.prev.label !== change.next.label ||
+      change.prev.labelOverridden !== change.next.labelOverridden ||
+      change.prev.displayId !== change.next.displayId ||
+      change.prev.tableNumber !== change.next.tableNumber
+    ))
+    if (filtered.length === 0) return
+
+    dispatch({
+      type: 'RENUMBER',
+      scope,
+      scopeId,
+      changes: filtered,
+      timestamp: Date.now(),
+    })
+  }
+
+  function handleRenumberSection(sectionId: SectionId) {
+    dispatchRenumberChanges(
+      'section',
+      sectionId,
+      buildSectionRenumberChanges(tables, sections, sectionId, numberingDirection),
+    )
+  }
+
+  function handleRenumberAll() {
+    dispatchRenumberChanges(
+      'layout',
+      null,
+      buildAllSectionRenumberChanges(tables, sections, room, numberingDirection),
+    )
+  }
+
   return (
     <div className="text-sm">
+      <div className="px-3 py-3 border-b border-gray-100 bg-white">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-gray-600">Numbering Direction</span>
+          <select
+            value={numberingDirection}
+            onChange={e => setNumberingDirection(e.target.value as TableNumberingDirection)}
+            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs"
+          >
+            <option value="ltr">Left to Right</option>
+            <option value="rtl">Right to Left</option>
+            <option value="ttb">Top to Bottom</option>
+            <option value="btt">Bottom to Top</option>
+            <option value="cw">Clockwise</option>
+            <option value="ccw">Counter Clockwise</option>
+          </select>
+        </label>
+        <button
+          onClick={handleRenumberAll}
+          className="mt-2 w-full rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200"
+        >
+          Renumber All Sections
+        </button>
+      </div>
+
       {/* ── Assign buttons — shown when tables are selected ────────────── */}
       {hasSelection && sectionList.length > 0 && (
         <div className="px-3 py-3 border-b border-gray-100 bg-blue-50/50">
@@ -152,18 +213,27 @@ export default function SectionsPanel() {
                     className="flex-1 min-w-0 px-1.5 py-0.5 border border-blue-400 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
                   />
                 ) : (
-                  <button
-                    className="flex-1 min-w-0 text-left text-xs text-gray-700 truncate hover:text-blue-600"
-                    onClick={() => selectBySec(s.id)}
-                    onDoubleClick={() => {
-                      setEditingId(s.id)
-                      setEditName(s.name)
-                    }}
-                    title="Click: select all · Double-click: rename"
-                  >
-                    {s.name}
-                    <span className="text-gray-400 ml-1">({tableCount})</span>
-                  </button>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <button
+                      className="min-w-0 flex-1 text-left text-xs text-gray-700 truncate hover:text-blue-600"
+                      onClick={() => selectBySec(s.id)}
+                      onDoubleClick={() => {
+                        setEditingId(s.id)
+                        setEditName(s.name)
+                      }}
+                      title="Click: select all · Double-click: rename"
+                    >
+                      {s.name}
+                      <span className="text-gray-400 ml-1">({tableCount})</span>
+                    </button>
+                    <button
+                      onClick={() => handleRenumberSection(s.id)}
+                      className="shrink-0 rounded border border-slate-300 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
+                      title={`Renumber ${s.name}`}
+                    >
+                      Renumber
+                    </button>
+                  </div>
                 )}
 
                 {/* Delete */}
