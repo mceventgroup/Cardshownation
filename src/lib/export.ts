@@ -501,7 +501,7 @@ export function exportVendorAssignmentsCsv(
   ]
 
   const csv = csvRows
-    .map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
+    .map(row => row.map(value => `"${sanitizeCsvCell(String(value ?? '')).replace(/"/g, '""')}"`).join(','))
     .join('\r\n')
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -815,9 +815,6 @@ function buildSVG(
 
   for (const section of roomSections) {
     const roomBounds = transformRect(context, section.bounds)
-    const titleWidth = Math.max(120, Math.min(260, section.roomLabel.length * 10 + 36))
-    const titleX = roomBounds.x + 12
-    const titleY = Math.max(HEADER_HEIGHT - 2, roomBounds.y - ROOM_LABEL_OFFSET - ROOM_LABEL_HEIGHT)
 
     parts.push(`<rect x="${roomBounds.x.toFixed(2)}" y="${roomBounds.y.toFixed(2)}" width="${roomBounds.width.toFixed(2)}" height="${roomBounds.height.toFixed(2)}" rx="12" fill="none" stroke="#cbd5e1" stroke-width="1.5" />`)
     const boundary = section.polygon.length > 2 ? section.polygon : buildRectPolygon(section.bounds)
@@ -826,7 +823,7 @@ function buildSVG(
     if (colorMode === 'color') {
       for (const image of section.backgroundImages) {
         const imageRect = transformRect(context, boundsFromImage(image))
-        parts.push(`<image href="${image.dataUrl}" x="${imageRect.x.toFixed(2)}" y="${imageRect.y.toFixed(2)}" width="${imageRect.width.toFixed(2)}" height="${imageRect.height.toFixed(2)}" opacity="${Math.min(image.opacity, 0.5)}" />`)
+        parts.push(`<image href="${esc(image.dataUrl)}" x="${imageRect.x.toFixed(2)}" y="${imageRect.y.toFixed(2)}" width="${imageRect.width.toFixed(2)}" height="${imageRect.height.toFixed(2)}" opacity="${Math.min(image.opacity, 0.5)}" />`)
       }
     }
   }
@@ -1096,6 +1093,10 @@ function esc(value: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+function sanitizeCsvCell(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
 }
 
 function sanitizeColor(color: string): string {

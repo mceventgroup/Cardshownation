@@ -197,7 +197,6 @@ function recalculateRowPositions(
     const midAngle = row.curveMidAngle ?? 0
     const directionSign = row.curveDirection === 'clockwise' ? -1 : 1
     const width = updates.tableWidth ?? row.tableWidth
-    const height = updates.tableHeight ?? row.tableHeight
     const spacing = updates.spacing ?? row.spacing
     const angularStep = (width + spacing) / radius
 
