@@ -8,8 +8,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
-import { useEditorStore, selectShowMode } from '@/store/index'
-import { exportFloorplanImage, exportVendorAssignmentsCsv, exportVendorListImage, printShowModeSheet } from '@/lib/export'
+import { useEditorStore, selectShowCaseHighlights, selectShowMode, selectShowSectionColors } from '@/store/index'
+import { exportFloorplanImage, exportVendorAssignmentsCsv, exportVendorListImage, printShowModeSheet, printVendorManifest } from '@/lib/export'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar from './LeftSidebar'
@@ -25,7 +25,11 @@ export default function EditorShell() {
   useKeyboardShortcuts()
   const hydrateFromStorage = useEditorStore(s => s.hydrateFromStorage)
   const showMode = useEditorStore(selectShowMode)
+  const showCaseHighlights = useEditorStore(selectShowCaseHighlights)
+  const showSectionColors = useEditorStore(selectShowSectionColors)
   const setShowMode = useEditorStore(s => s.setShowMode)
+  const setShowCaseHighlights = useEditorStore(s => s.setShowCaseHighlights)
+  const setShowSectionColors = useEditorStore(s => s.setShowSectionColors)
   const tables = useEditorStore(s => s.tables)
   const sections = useEditorStore(s => s.sections)
   const vendors = useEditorStore(s => s.vendors)
@@ -93,6 +97,7 @@ export default function EditorShell() {
                     onClick={() => exportFloorplanImage(
                       tables,
                       sections,
+                      vendors,
                       assignments,
                       room,
                       doors,
@@ -117,7 +122,40 @@ export default function EditorShell() {
                     Export Vendor CSV
                   </button>
                   <button
-                    onClick={() => setShowMode(false)}
+                    onClick={() => printVendorManifest(tables, vendors, assignments, 'Vendor Checklist')}
+                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                  >
+                    Print Vendor Checklist
+                  </button>
+                  <button
+                    onClick={() => printVendorManifest(tables, vendors, assignments, 'Case Rental Checklist', { casesOnly: true })}
+                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
+                  >
+                    Print Case Rentals
+                  </button>
+                  <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white">
+                    <input
+                      type="checkbox"
+                      checked={showCaseHighlights}
+                      onChange={e => setShowCaseHighlights(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span>Highlight Cases</span>
+                    <span className="text-xs font-normal text-slate-500">Blue ring + count</span>
+                  </label>
+                  <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white">
+                    <input
+                      type="checkbox"
+                      checked={showSectionColors}
+                      onChange={e => setShowSectionColors(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span>Section Colors</span>
+                  </label>
+                  <button
+                    onClick={() => {
+                      setShowMode(false)
+                    }}
                     className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
                   >
                     Exit Show Mode

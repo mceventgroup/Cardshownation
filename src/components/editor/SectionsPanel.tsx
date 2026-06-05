@@ -68,6 +68,18 @@ export default function SectionsPanel() {
     setEditingId(null)
   }
 
+  function handleColorChange(sectionId: SectionId, nextColor: string) {
+    const current = sections[sectionId]
+    if (!current || current.color === nextColor) return
+    dispatch({
+      type: 'UPDATE_SECTION',
+      sectionId,
+      prev: { color: current.color },
+      next: { color: nextColor },
+      timestamp: Date.now(),
+    })
+  }
+
   function handleAssign(sectionId: SectionId | null) {
     if (selectedIds.size === 0) return
     const tableIds = [...selectedIds] as TableId[]
@@ -194,10 +206,19 @@ export default function SectionsPanel() {
                 className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 group"
               >
                 {/* Color swatch */}
-                <div
-                  className="w-4 h-4 rounded shrink-0 border border-black/10"
-                  style={{ backgroundColor: s.color }}
-                />
+                <label className="shrink-0 cursor-pointer" title={`Change color for ${s.name}`}>
+                  <input
+                    type="color"
+                    value={s.color}
+                    onChange={e => handleColorChange(s.id, e.target.value)}
+                    className="sr-only"
+                    aria-label={`Change color for ${s.name}`}
+                  />
+                  <span
+                    className="block h-4 w-4 rounded border border-black/10"
+                    style={{ backgroundColor: s.color }}
+                  />
+                </label>
 
                 {/* Name (editable on double-click) */}
                 {editingId === s.id ? (

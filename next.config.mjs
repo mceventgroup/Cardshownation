@@ -21,7 +21,12 @@ const nextConfig = {
     ]
   },
 
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
+    if (dev && process.platform === 'win32') {
+      // Webpack's filesystem cache is noisy and unreliable here on Windows.
+      // Disabling it avoids repeated PackFileCacheStrategy snapshot failures.
+      config.cache = false
+    }
     if (isServer) {
       // react-konva/konva may reference the Node-only `canvas` package while
       // bundling server output. The editor canvas is client-only, so keep that

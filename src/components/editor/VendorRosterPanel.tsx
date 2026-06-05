@@ -13,14 +13,15 @@ import type { Vendor } from '@/domain/types'
 import { resolveVendorBuckets, vendorDisplayName } from '@/lib/vendor-resolution'
 
 type VendorFilter = 'all' | 'open' | 'complete' | 'premium'
-type VendorSortKey = 'company' | 'need' | 'assigned' | 'open' | 'tables' | 'tableSize'
+type VendorSortKey = 'company' | 'premium' | 'cases' | 'need' | 'assigned' | 'open' | 'tables' | 'tableSize'
 type SortDirection = 'asc' | 'desc'
-type ColumnKey = VendorSortKey
+type ColumnKey = VendorSortKey | 'delete'
 
 interface VendorSummary {
   key: string
   vendor: Vendor | null
   company: string
+  cases: number
   need: number
   assigned: number
   open: number
@@ -38,29 +39,38 @@ interface VendorRosterPanelProps {
 
 const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
   company: 220,
+  premium: 72,
+  cases: 72,
   need: 64,
   assigned: 72,
   open: 64,
   tables: 180,
   tableSize: 120,
+  delete: 72,
 }
 
 const MIN_COLUMN_WIDTHS: Record<ColumnKey, number> = {
   company: 120,
+  premium: 60,
+  cases: 60,
   need: 44,
   assigned: 52,
   open: 44,
   tables: 90,
   tableSize: 84,
+  delete: 64,
 }
 
-const COLUMN_DEFS: Array<{ key: ColumnKey; label: string; align: 'text-left' | 'text-right' }> = [
+const COLUMN_DEFS: Array<{ key: ColumnKey; label: string; align: 'text-left' | 'text-right'; sortable?: boolean }> = [
   { key: 'company', label: 'Company', align: 'text-left' },
+  { key: 'premium', label: 'Premium', align: 'text-left' },
+  { key: 'cases', label: 'Cases', align: 'text-left' },
   { key: 'need', label: 'Need', align: 'text-right' },
   { key: 'assigned', label: 'Assigned', align: 'text-right' },
   { key: 'open', label: 'Open', align: 'text-right' },
   { key: 'tables', label: 'Assigned Tables', align: 'text-left' },
   { key: 'tableSize', label: 'Table Size', align: 'text-left' },
+  { key: 'delete', label: 'Delete', align: 'text-left', sortable: false },
 ]
 
 export const VENDOR_FILTERS: Array<{ id: VendorFilter; label: string }> = [
@@ -151,6 +161,12 @@ function compareSummaries(a: VendorSummary, b: VendorSummary, sortKey: VendorSor
     case 'company':
       result = a.company.localeCompare(b.company, undefined, { sensitivity: 'base' })
       break
+    case 'premium':
+      result = Number(a.isPremium) - Number(b.isPremium)
+      break
+    case 'cases':
+      result = a.cases - b.cases
+      break
     case 'need':
       result = a.need - b.need
       break
@@ -201,17 +217,18 @@ export function useVendorGridData(
       const need = bucket.vendor?.tablesNeeded ?? assignedLabels.length
       const assigned = assignedLabels.length
 
-        return {
-          key: bucket.key,
-          vendor: bucket.vendor,
-          company: bucket.vendor?.companyName?.trim() || bucket.displayName,
-          need,
-          assigned,
-          open: need - assigned,
-          tables: assignedLabels,
-          tableSize: summarizeTableSizes(
-            [bucket.vendor?.tableSize?.trim() ?? ''].filter(Boolean),
-          ),
+      return {
+        key: bucket.key,
+        vendor: bucket.vendor,
+        company: bucket.vendor?.companyName?.trim() || bucket.displayName,
+        cases: bucket.vendor?.cases ?? 0,
+        need,
+        assigned,
+        open: need - assigned,
+        tables: assignedLabels,
+        tableSize: summarizeTableSizes(
+          [bucket.vendor?.tableSize?.trim() ?? ''].filter(Boolean),
+        ),
         isPremium: bucket.vendor?.premium ?? false,
       } satisfies VendorSummary
     })
@@ -253,6 +270,8 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
   const settings = useEditorStore(selectSettings)
   const setActiveVendor = useEditorStore(s => s.setActiveVendor)
   const setHoveredVendor = useEditorStore(s => s.setHoveredVendor)
+  const updateVendor = useEditorStore(s => s.updateVendor)
+  const removeVendor = useEditorStore(s => s.removeVendor)
   const [sortKey, setSortKey] = useState<VendorSortKey>('open')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS)
@@ -284,6 +303,28 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
     }
     setSortKey(nextKey)
     setSortDirection(nextKey === 'company' || nextKey === 'tables' || nextKey === 'tableSize' ? 'asc' : 'desc')
+  }
+
+  function handleNeedChange(vendorId: Vendor['id'], rawValue: string) {
+    const parsed = Number.parseInt(rawValue, 10)
+    if (!Number.isFinite(parsed)) return
+    updateVendor(vendorId, { tablesNeeded: Math.max(0, parsed) })
+  }
+
+  function handleVendorFlagChange(vendorId: Vendor['id'], checked: boolean) {
+    updateVendor(vendorId, { premium: checked })
+  }
+
+  function handleCasesChange(vendorId: Vendor['id'], rawValue: string) {
+    const parsed = Number.parseInt(rawValue, 10)
+    if (!Number.isFinite(parsed)) return
+    updateVendor(vendorId, { cases: Math.max(0, parsed) })
+  }
+
+  function handleDeleteVendor(vendor: Vendor) {
+    const confirmed = window.confirm(`Delete vendor "${vendorDisplayName(vendor)}"? This also clears any assigned tables.`)
+    if (!confirmed) return
+    removeVendor(vendor.id)
   }
 
   function handleKeyboard(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -351,20 +392,24 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
   }
 
   const keyboardVendor = filteredSummaries[keyboardIndex] ?? null
+  const keyboardVendorKey = keyboardVendor?.key ?? null
   const gridTemplateColumns = [
     `minmax(${columnWidths.company}px, 1fr)`,
+    `${columnWidths.premium}px`,
+    `${columnWidths.cases}px`,
     `${columnWidths.need}px`,
     `${columnWidths.assigned}px`,
     `${columnWidths.open}px`,
     `${columnWidths.tables}px`,
     `${columnWidths.tableSize}px`,
+    `${columnWidths.delete}px`,
   ].join(' ')
   const minGridWidth = Object.values(columnWidths).reduce((sum, width) => sum + width, 0) + 32
 
   useEffect(() => {
-    if (!keyboardVendor) return
-    rowRefs.current[keyboardVendor.key]?.scrollIntoView({ block: 'nearest' })
-  }, [keyboardVendor])
+    if (!keyboardVendorKey) return
+    rowRefs.current[keyboardVendorKey]?.scrollIntoView({ block: 'nearest' })
+  }, [keyboardIndex, keyboardVendorKey])
 
   return (
     <div
@@ -407,17 +452,21 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
               className="sticky top-0 z-10 grid border-b border-slate-300 bg-slate-100 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
               style={{ gridTemplateColumns }}
             >
-              {COLUMN_DEFS.map(({ key, label, align }, index) => {
+              {COLUMN_DEFS.map(({ key, label, align, sortable = true }, index) => {
                 const isLast = index === COLUMN_DEFS.length - 1
                 return (
                   <div key={key} className={`${cellClass(align, isLast)} relative py-2`}>
+                    {sortable ? (
                     <button
-                      onClick={() => toggleSort(key)}
+                      onClick={() => toggleSort(key as VendorSortKey)}
                       className={`${align} w-full truncate pr-3 hover:text-slate-900`}
                     >
                       {label}
                       {sortKey === key ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
                     </button>
+                    ) : (
+                      <div className={`${align} w-full truncate pr-3`}>{label}</div>
+                    )}
                     <div
                       role="separator"
                       aria-label={`Resize ${label} column`}
@@ -470,11 +519,73 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
                     {settings.vendorColorCoding && summary.isPremium && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
                     <div className="truncate font-medium text-slate-900">{summary.company}</div>
                   </div>
-                  <div className={`${cellClass('text-right')} py-1 tabular-nums text-slate-700`}>{summary.need}</div>
+                  <div className={`${cellClass('text-left')} py-1 text-slate-700`}>
+                    {summary.vendor ? (
+                      <label className="flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={summary.isPremium}
+                          onChange={e => handleVendorFlagChange(summary.vendor!.id, e.target.checked)}
+                          onClick={e => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-slate-300"
+                          aria-label={`Premium vendor ${summary.company}`}
+                        />
+                      </label>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </div>
+                  <div className={`${cellClass('text-left')} py-1 text-slate-700`}>
+                    {summary.vendor ? (
+                      <input
+                        type="number"
+                        min={0}
+                        value={summary.cases}
+                        onChange={e => handleCasesChange(summary.vendor!.id, e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        onFocus={() => setActiveVendor(summary.vendor!.id)}
+                        className="w-14 border border-slate-300 bg-white px-1 py-0.5 text-right tabular-nums text-slate-900"
+                        aria-label={`Cases for ${summary.company}`}
+                      />
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </div>
+                  <div className={`${cellClass('text-right')} py-1 tabular-nums text-slate-700`}>
+                    {summary.vendor ? (
+                      <input
+                        type="number"
+                        min={0}
+                        value={summary.need}
+                        onChange={e => handleNeedChange(summary.vendor!.id, e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        onFocus={() => setActiveVendor(summary.vendor!.id)}
+                        className="w-14 border border-slate-300 bg-white px-1 py-0.5 text-right tabular-nums text-slate-900"
+                        aria-label={`Tables needed for ${summary.company}`}
+                      />
+                    ) : (
+                      summary.need
+                    )}
+                  </div>
                   <div className={`${cellClass('text-right')} py-1 tabular-nums text-slate-700`}>{summary.assigned}</div>
                   <div className={`${cellClass('text-right')} py-1 tabular-nums font-semibold ${openColorClass}`}>{summary.open}</div>
                   <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{compressedTables || '—'}</div>
-                  <div className={`${cellClass('text-left', true)} py-1 text-slate-600`}>{summary.tableSize || '—'}</div>
+                  <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{summary.tableSize || '—'}</div>
+                  <div className={`${cellClass('text-left', true)} py-1`}>
+                    {summary.vendor ? (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          handleDeleteVendor(summary.vendor!)
+                        }}
+                        className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                      >
+                        Delete
+                      </button>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </div>
                 </div>
               )
             })}

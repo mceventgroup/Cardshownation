@@ -36,6 +36,7 @@ export default function ExportModal({ onClose }: Props) {
   const [eventDate, setEventDate]    = useState('')
   const [colorMode, setColorMode]    = useState<'color' | 'bw'>('color')
   const [includeAssignmentsPage, setIncludeAssignmentsPage] = useState(false)
+  const [caseRentalsOnly, setCaseRentalsOnly] = useState(false)
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -51,6 +52,7 @@ export default function ExportModal({ onClose }: Props) {
     exportFloorplanImage(
       tables,
       sections,
+      vendors,
       assignments,
       room,
       doors,
@@ -246,7 +248,7 @@ export default function ExportModal({ onClose }: Props) {
           </div>
 
           <button
-              onClick={() => { printVendorManifest(tables, vendors, assignments, title); onClose() }}
+              onClick={() => { printVendorManifest(tables, vendors, assignments, title, { casesOnly: caseRentalsOnly }); onClose() }}
               className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
@@ -254,6 +256,15 @@ export default function ExportModal({ onClose }: Props) {
               </svg>
               Print Vendor Checklist
             </button>
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={caseRentalsOnly}
+              onChange={e => setCaseRentalsOnly(e.target.checked)}
+              className="accent-blue-500"
+            />
+            Print only vendors with case rentals
+          </label>
 
           <button
             onClick={handleVendorCsv}

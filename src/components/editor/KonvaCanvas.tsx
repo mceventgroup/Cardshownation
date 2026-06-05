@@ -20,7 +20,7 @@ import { Stage, Layer, Rect, Line, Ellipse } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Point, TableId, DoorId, DoorSide, DoorKind } from '@/domain/types'
-import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectHoveredVendorId, selectVendorAssignments, selectVendors, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages, selectGridVisible, selectShowMode, selectActiveRoomId } from '@/store/index'
+import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectHoveredVendorId, selectVendorAssignments, selectVendors, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages, selectGridVisible, selectShowMode, selectShowCaseHighlights, selectShowSectionColors, selectActiveRoomId } from '@/store/index'
 import { snapping } from '@/domain/snapping.impl'
 import { geometry } from '@/domain/geometry.impl'
 import { rowModule } from '@/domain/rows.impl'
@@ -106,6 +106,8 @@ export default function KonvaCanvas() {
   const updateBgImage     = useEditorStore(s => s.updateBackgroundImage)
   const gridVisible       = useEditorStore(selectGridVisible)
   const showMode          = useEditorStore(selectShowMode)
+  const showCaseHighlights = useEditorStore(selectShowCaseHighlights)
+  const showSectionColors = useEditorStore(selectShowSectionColors)
 
   // Store actions
   const dispatch      = useEditorStore(s => s.dispatch)
@@ -1702,11 +1704,23 @@ export default function KonvaCanvas() {
             const hoveredVendorNeedsTables = hoveredVendorId ? (vendorRemainingMap.get(hoveredVendorId) ?? 0) > 0 : false
             const isSuggestedTarget = !assignment && hoveredVendorNeedsTables
             const isSuggestedPremiumTarget = isSuggestedTarget && table.premium
-            const fillColor = assignment
-              ? settings.vendorColorCoding
-                ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
+            const assignedVendor = assignment ? vendorsRecord[assignment.vendorId] : null
+            const isCaseHighlighted = Boolean(showMode && showCaseHighlights && (assignedVendor?.cases ?? 0) > 0)
+            const caseCount = assignedVendor?.cases ?? 0
+            const caseHighlightColor = showMode && showSectionColors ? '#ea580c' : '#2563eb'
+            const fillColor = showMode
+              ? assignment
+                ? showSectionColors
+                  ? sectionColor ?? OPEN_TABLE_FILL
+                  : settings.vendorColorCoding
+                    ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
+                    : sectionColor ?? OPEN_TABLE_FILL
+                : '#fca5a5'
+              : assignment
+                ? settings.vendorColorCoding
+                  ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
+                  : sectionColor ?? OPEN_TABLE_FILL
                 : sectionColor ?? OPEN_TABLE_FILL
-              : sectionColor ?? OPEN_TABLE_FILL
 
             // Compute highest warning severity for this table
             let warningSeverity: WarningSeverity | null = null
@@ -1736,6 +1750,9 @@ export default function KonvaCanvas() {
                 isRecentlyAssigned={recentlyAssignedTableIds.has(table.id)}
                 isSuggestedTarget={isSuggestedTarget}
                 isSuggestedPremiumTarget={isSuggestedPremiumTarget}
+                isCaseHighlighted={isCaseHighlighted}
+                caseCount={caseCount}
+                caseHighlightColor={caseHighlightColor}
                 onRegister={registerNode}
                 onDoubleClick={handleTableDoubleClick}
                 onHoverStart={setHoveredTableId}

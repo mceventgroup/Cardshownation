@@ -15,6 +15,7 @@ import DoorsPanel from './DoorsPanel'
 import SectionsPanel from './SectionsPanel'
 import WarningsPanel from './WarningsPanel'
 import SettingsPanel from './SettingsPanel'
+import VendorQuickAdd from './VendorQuickAdd'
 
 interface LeftSidebarProps {
   activeTab: 'layout' | 'vendors' | 'settings'
@@ -151,9 +152,10 @@ export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps
         )}
 
         {activeTab === 'vendors' && (
-          <div className="flex h-full items-start justify-center p-3">
-            <div className="writing-mode-vertical rounded border border-slate-300 bg-white px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 [writing-mode:vertical-rl] [text-orientation:mixed]">
-              Vendors
+          <div className="flex h-full flex-col">
+            <VendorQuickAdd />
+            <div className="px-3 py-3 text-xs text-slate-500">
+              Full vendor roster stays in the bottom drawer for search, assignment status, and inline table-count edits.
             </div>
           </div>
         )}

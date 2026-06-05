@@ -32,16 +32,24 @@ export const DRAG_THRESHOLD = 4
 export const DEFAULT_ROW_SPACING = 0        // no gap between tables by default
 export const DEFAULT_ROW_TABLE_COUNT = 10
 
-// Section color palette — 8 distinct colors for visual grouping
+// Section color palette — broader spread for large events and show-mode clarity
 export const SECTION_COLORS = [
-  '#3B82F6', // blue
-  '#10B981', // emerald
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#8B5CF6', // violet
-  '#EC4899', // pink
+  '#2563EB', // royal blue
+  '#0EA5E9', // sky
   '#06B6D4', // cyan
+  '#14B8A6', // teal
+  '#10B981', // emerald
+  '#84CC16', // lime
+  '#EAB308', // yellow
+  '#F59E0B', // amber
   '#F97316', // orange
+  '#EF4444', // red
+  '#F43F5E', // rose
+  '#EC4899', // pink
+  '#D946EF', // fuchsia
+  '#A855F7', // purple
+  '#8B5CF6', // violet
+  '#6366F1', // indigo
 ] as const
 
 // Vendor color palette — soft pastel fills so table labels remain readable

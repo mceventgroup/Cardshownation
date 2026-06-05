@@ -15,6 +15,7 @@ export default function ShowModeVendorList() {
       .map(bucket => ({
         id: bucket.key,
         name: bucket.displayName,
+        cases: bucket.vendor?.cases ?? 0,
         labels: bucket.assignments
           .map(assignment => tables[assignment.tableId]?.displayId ?? tables[assignment.tableId]?.label ?? assignment.tableId)
           .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
@@ -41,7 +42,10 @@ export default function ShowModeVendorList() {
           <div className="divide-y divide-slate-200">
             {rows.map(row => (
               <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_96px] gap-3 px-4 py-2 text-sm">
-                <div className="truncate text-slate-900">{row.name}</div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="truncate text-slate-900">{row.name}</div>
+                  {row.cases > 0 && <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">Cases {row.cases}</span>}
+                </div>
                 <div className="text-right font-medium text-slate-600">{compressTableLabels(row.labels)}</div>
               </div>
             ))}

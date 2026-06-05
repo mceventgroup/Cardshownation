@@ -14,6 +14,7 @@ function makeVendor(id: string, overrides: Partial<Vendor> = {}): Vendor {
     paymentStatus: 'unknown',
     notes: null,
     premium: false,
+    cases: 0,
     ...overrides,
   }
 }

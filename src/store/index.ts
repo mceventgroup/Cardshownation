@@ -71,6 +71,8 @@ function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): vo
   state.selectedDoorId = null
   state.selectedSegmentId = null
   state.showMode = false
+  state.showCaseHighlights = false
+  state.showSectionColors = false
   state.history = { ...EMPTY_HISTORY, past: [], future: [] }
 }
 
@@ -117,6 +119,8 @@ export interface EditorState {
   collapsedPanels: Set<string>      // sidebar sections that are collapsed
   gridVisible: boolean
   showMode: boolean
+  showCaseHighlights: boolean
+  showSectionColors: boolean
   stageScale: number
   stagePosition: Point
 
@@ -143,6 +147,8 @@ export interface EditorState {
   togglePanelCollapsed: (panelId: string) => void
   setGridVisible: (visible: boolean) => void
   setShowMode: (visible: boolean) => void
+  setShowCaseHighlights: (visible: boolean) => void
+  setShowSectionColors: (visible: boolean) => void
 
   // ── Builder config actions ─────────────────────────────────────────────
   setTableBuilderConfig: (config: { tableWidth: number; tableHeight: number } | null) => void
@@ -222,6 +228,8 @@ export const useEditorStore = create<EditorState>()(
     collapsedPanels: new Set<string>(DEFAULT_COLLAPSED_PANELS),
     gridVisible: true,
     showMode: false,
+    showCaseHighlights: false,
+    showSectionColors: false,
     stageScale:    1,
     stagePosition: { x: 0, y: 0 },
     tableBuilderConfig: null,
@@ -370,7 +378,22 @@ export const useEditorStore = create<EditorState>()(
           state.activeTool = 'select'
           state.activeVendorId = null
           state.hoveredVendorId = null
+        } else {
+          state.showCaseHighlights = false
+          state.showSectionColors = false
         }
+      })
+    },
+
+    setShowCaseHighlights(visible) {
+      set(state => {
+        state.showCaseHighlights = visible
+      })
+    },
+
+    setShowSectionColors(visible) {
+      set(state => {
+        state.showSectionColors = visible
       })
     },
 
@@ -594,6 +617,7 @@ export const useEditorStore = create<EditorState>()(
             paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as Vendor['paymentStatus'],
             notes: row.mapped.notes,
             premium: (row.mapped.vendorCategory ?? '').toLowerCase() === 'premium',
+            cases: 0,
           }
           createdVendors.push(createdVendor)
           createdVendorByKey.set(vendorKey, createdVendor)
@@ -675,6 +699,8 @@ export const useEditorStore = create<EditorState>()(
         state.selectedDoorId = null
         state.selectedSegmentId = null
         state.showMode = false
+        state.showCaseHighlights = false
+        state.showSectionColors = false
         state.history = { ...EMPTY_HISTORY, past: [], future: [] }
         state.activeCloudLayoutId = null
         state.activeCloudLayoutName = null
@@ -824,6 +850,8 @@ export const selectCanRedo = (s: EditorState) => s.history.future.length > 0
 export const selectCollapsedPanels = (s: EditorState) => s.collapsedPanels
 export const selectGridVisible = (s: EditorState) => s.gridVisible
 export const selectShowMode = (s: EditorState) => s.showMode
+export const selectShowCaseHighlights = (s: EditorState) => s.showCaseHighlights
+export const selectShowSectionColors = (s: EditorState) => s.showSectionColors
 
 /** Derives the RowId when all selected tables share the same row, else null. */
 export const selectSelectedRowId = (s: EditorState): RowId | null => {

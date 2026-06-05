@@ -30,6 +30,9 @@ interface TableNodeProps {
   isRecentlyAssigned?: boolean
   isSuggestedTarget?: boolean
   isSuggestedPremiumTarget?: boolean
+  isCaseHighlighted?: boolean
+  caseCount?: number
+  caseHighlightColor?: string
   onRegister: (id: string, node: Konva.Node | null) => void
   onDoubleClick: (tableId: string) => void
   onHoverStart?: (tableId: string) => void
@@ -75,6 +78,9 @@ const TableNode = memo(function TableNode({
   isRecentlyAssigned,
   isSuggestedTarget,
   isSuggestedPremiumTarget,
+  isCaseHighlighted,
+  caseCount,
+  caseHighlightColor,
   onRegister,
   onDoubleClick,
   onHoverStart,
@@ -96,14 +102,19 @@ const TableNode = memo(function TableNode({
   const hasWarning = warningSeverity === 'error' || warningSeverity === 'warning' || isDuplicate
   const candidateHighlight = isSuggestedPremiumTarget ? '#f59e0b' : isSuggestedTarget ? '#94a3b8' : null
   const vendorHighlight = isActiveVendor ? '#0f766e' : isHoveredVendor ? '#14b8a6' : candidateHighlight
+  const resolvedCaseHighlightColor = caseHighlightColor ?? '#2563eb'
+  const caseHighlight = isCaseHighlighted ? resolvedCaseHighlightColor : null
+  const caseBadgeText = caseCount && caseCount > 0 ? `C${caseCount}` : 'C'
   const strokeColor = hasWarning
     ? (warningSeverity === 'warning' ? CAUTION_TABLE_STROKE : WARNING_TABLE_STROKE)
-    : vendorHighlight ?? (isSelected ? SELECTED_TABLE_STROKE : DEFAULT_TABLE_STROKE)
+    : vendorHighlight ?? caseHighlight ?? (isSelected ? SELECTED_TABLE_STROKE : DEFAULT_TABLE_STROKE)
   const strokeWidth = hasWarning
     ? SELECTED_STROKE_WIDTH
     : isActiveVendor
       ? 3
       : isSuggestedPremiumTarget
+        ? 2.5
+        : isCaseHighlighted
         ? 2.5
         : isHoveredVendor || isSelected || isSuggestedTarget
         ? SELECTED_STROKE_WIDTH
@@ -117,10 +128,10 @@ const TableNode = memo(function TableNode({
     fill: effectiveFill,
     stroke: strokeColor,
     strokeWidth,
-    shadowEnabled: isSelected || isHoveredVendor || isActiveVendor || isRecentlyAssigned || isSuggestedTarget || isSuggestedPremiumTarget,
-    shadowColor: isRecentlyAssigned ? '#22c55e' : isActiveVendor ? '#0f766e' : isHoveredVendor ? '#14b8a6' : isSuggestedPremiumTarget ? '#f59e0b' : '#64748b',
-    shadowBlur: isRecentlyAssigned ? 12 : isActiveVendor ? 10 : isHoveredVendor ? 7 : isSuggestedPremiumTarget ? 8 : isSuggestedTarget ? 5 : 4,
-    shadowOpacity: isRecentlyAssigned ? 0.55 : isActiveVendor ? 0.4 : isHoveredVendor ? 0.3 : isSuggestedPremiumTarget ? 0.35 : isSuggestedTarget ? 0.2 : 0.25,
+    shadowEnabled: isSelected || isHoveredVendor || isActiveVendor || isRecentlyAssigned || isSuggestedTarget || isSuggestedPremiumTarget || isCaseHighlighted,
+    shadowColor: isRecentlyAssigned ? '#22c55e' : isActiveVendor ? '#0f766e' : isHoveredVendor ? '#14b8a6' : isSuggestedPremiumTarget ? '#f59e0b' : isCaseHighlighted ? '#2563eb' : '#64748b',
+    shadowBlur: isRecentlyAssigned ? 12 : isActiveVendor ? 10 : isHoveredVendor ? 7 : isSuggestedPremiumTarget ? 8 : isCaseHighlighted ? 8 : isSuggestedTarget ? 5 : 4,
+    shadowOpacity: isRecentlyAssigned ? 0.55 : isActiveVendor ? 0.4 : isHoveredVendor ? 0.3 : isSuggestedPremiumTarget ? 0.35 : isCaseHighlighted ? 0.35 : isSuggestedTarget ? 0.2 : 0.25,
     onDblClick: () => onDoubleClick(table.id),
     onMouseEnter: () => onHoverStart?.(table.id),
     onMouseLeave: () => onHoverEnd?.(),
@@ -162,6 +173,35 @@ const TableNode = memo(function TableNode({
           cornerRadius={2}
           {...shapeProps}
         />
+      )}
+
+      {isCaseHighlighted && (
+        table.shape === 'round' ? (
+          <Ellipse
+            radiusX={Math.max(0, w / 2 - 2)}
+            radiusY={Math.max(0, h / 2 - 2)}
+            offsetX={-w / 2}
+            offsetY={-h / 2}
+            fill={resolvedCaseHighlightColor === '#ea580c' ? 'rgba(234,88,12,0.14)' : 'rgba(37,99,235,0.12)'}
+            stroke={resolvedCaseHighlightColor}
+            strokeWidth={2}
+            dash={[6, 4]}
+            listening={false}
+          />
+        ) : (
+          <Rect
+            x={2}
+            y={2}
+            width={Math.max(0, w - 4)}
+            height={Math.max(0, h - 4)}
+            cornerRadius={4}
+            fill={resolvedCaseHighlightColor === '#ea580c' ? 'rgba(234,88,12,0.14)' : 'rgba(37,99,235,0.12)'}
+            stroke={resolvedCaseHighlightColor}
+            strokeWidth={2}
+            dash={[6, 4]}
+            listening={false}
+          />
+        )
       )}
 
       <Text
@@ -263,6 +303,34 @@ const TableNode = memo(function TableNode({
             align="center"
             verticalAlign="middle"
             fontSize={7}
+            fontFamily="system-ui, sans-serif"
+            fill="#ffffff"
+            fontStyle="bold"
+            listening={false}
+          />
+        </>
+      )}
+
+      {isCaseHighlighted && (
+        <>
+          <Rect
+            x={4}
+            y={4}
+            width={Math.min(Math.max(18, caseBadgeText.length * 7 + 6), Math.max(18, w - 8))}
+            height={14}
+            cornerRadius={7}
+            fill={resolvedCaseHighlightColor}
+            listening={false}
+          />
+          <Text
+            text={caseBadgeText}
+            x={4}
+            y={4}
+            width={Math.min(Math.max(18, caseBadgeText.length * 7 + 6), Math.max(18, w - 8))}
+            height={14}
+            align="center"
+            verticalAlign="middle"
+            fontSize={8}
             fontFamily="system-ui, sans-serif"
             fill="#ffffff"
             fontStyle="bold"

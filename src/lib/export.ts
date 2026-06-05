@@ -428,6 +428,7 @@ export function exportPNG(filename = 'floorplan.png'): void {
 export function exportFloorplanImage(
   tables: Record<string, TableObject>,
   sections: Record<string, Section>,
+  vendors: Record<string, Vendor>,
   assignments: Record<string, VendorAssignment>,
   room: CompositeRoom | null,
   doors: Record<string, Door>,
@@ -441,7 +442,7 @@ export function exportFloorplanImage(
     return
   }
 
-  const document = buildSVG(tableList, sections, assignments, room, Object.values(doors), options, backgroundImages)
+  const document = buildSVG(tableList, sections, vendors, assignments, room, Object.values(doors), options, backgroundImages)
   void downloadSvgAsPng(document.svg, document.width, document.height, filename)
 }
 
@@ -528,7 +529,7 @@ export function printLayout(
     return
   }
 
-  const document = buildSVG(tableList, sections, assignments, room, Object.values(doors), options, backgroundImages)
+  const document = buildSVG(tableList, sections, {}, assignments, room, Object.values(doors), options, backgroundImages)
   openPrintWindow(
     buildPrintHTML(document, tables, assignments, room, options),
     document.orientation === 'landscape' ? 1200 : 900,
@@ -556,6 +557,7 @@ export function printShowModeSheet(
   const document = buildSVG(
     tableList,
     sections,
+    vendors,
     assignments,
     room,
     Object.values(doors),
@@ -678,8 +680,9 @@ export function printVendorManifest(
   vendors: Record<string, Vendor>,
   assignments: Record<string, VendorAssignment>,
   title: string,
+  options?: { casesOnly?: boolean },
 ): void {
-  const vendorTableMap = new Map<string, { name: string; tables: string[]; payment: string; category: string }>()
+  const vendorTableMap = new Map<string, { name: string; tables: string[]; payment: string; category: string; cases: number }>()
 
   for (const assignment of Object.values(assignments)) {
     const table = tables[assignment.tableId]
@@ -693,6 +696,7 @@ export function printVendorManifest(
         tables: [label],
         payment: assignment.paymentStatus,
         category: assignment.vendorCategory ?? '',
+        cases: vendors[assignment.vendorId]?.cases ?? 0,
       })
     }
   }
@@ -704,17 +708,21 @@ export function printVendorManifest(
         tables: [],
         payment: vendor.paymentStatus,
         category: vendor.category ?? '',
+        cases: vendor.cases,
       })
     }
   }
 
-  const rows = [...vendorTableMap.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const rows = [...vendorTableMap.values()]
+    .filter(row => !options?.casesOnly || row.cases > 0)
+    .sort((a, b) => a.name.localeCompare(b.name))
   const tableRows = rows.map((row, index) => {
     const sortedTables = row.tables.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     return `<tr style="border-bottom:1px solid #e2e8f0">
       <td style="padding:8px 12px;font-size:13px;color:#374151">${index + 1}</td>
       <td style="padding:8px 12px;font-size:13px;font-weight:600;color:#1e293b">${esc(row.name)}</td>
       <td style="padding:8px 12px;font-size:13px;color:#374151">${esc(row.category)}</td>
+      <td style="padding:8px 12px;font-size:13px;color:#374151;text-align:center;font-weight:700">${row.cases}</td>
       <td style="padding:8px 12px;font-size:13px;color:#374151">${sortedTables.length > 0 ? esc(compressTableLabels(sortedTables)) : '<span style="color:#9ca3af">-</span>'}</td>
       <td style="padding:8px 12px;font-size:12px;text-align:center"><span style="background:${paymentBackground(row.payment)};padding:2px 8px;border-radius:4px">${paymentBadge(row.payment)}</span></td>
       <td style="padding:8px 24px;width:80px;border-left:1px solid #e2e8f0"></td>
@@ -726,7 +734,7 @@ export function printVendorManifest(
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
-  <title>${esc(title)} - Vendor Checklist</title>
+  <title>${esc(title)} - ${options?.casesOnly ? 'Case Rental Checklist' : 'Vendor Checklist'}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #fff; }
@@ -740,7 +748,7 @@ export function printVendorManifest(
 <body>
   <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:2px solid #1e293b">
     <div>
-      <div style="font-size:20px;font-weight:700;color:#1e293b">${esc(title || 'Floor Plan')} - Vendor Checklist</div>
+      <div style="font-size:20px;font-weight:700;color:#1e293b">${esc(title || 'Floor Plan')} - ${options?.casesOnly ? 'Case Rental Checklist' : 'Vendor Checklist'}</div>
       <div style="font-size:12px;color:#94a3b8;margin-top:2px">${new Date().toLocaleDateString()}</div>
     </div>
     <button class="no-print" onclick="window.print()" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Print / Save PDF</button>
@@ -751,6 +759,7 @@ export function printVendorManifest(
         <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">#</th>
         <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Vendor</th>
         <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Category</th>
+        <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Cases</th>
         <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Tables</th>
         <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Payment</th>
         <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;border-left:1px solid #e2e8f0">Check-in</th>
@@ -767,6 +776,7 @@ export function printVendorManifest(
 function buildSVG(
   tables: TableObject[],
   sections: Record<string, Section>,
+  vendors: Record<string, Vendor>,
   assignments: Record<string, VendorAssignment>,
   room: CompositeRoom | null,
   doors: Door[],
@@ -841,6 +851,9 @@ function buildSVG(
   for (const section of roomSections) {
     for (const table of section.tables) {
       const assignment = byTable.get(table.id)
+      const vendor = assignment ? vendors[assignment.vendorId] : null
+      const caseCount = vendor?.cases ?? 0
+      const isCaseHighlighted = caseCount > 0
       const sectionColor = table.sectionId ? sections[table.sectionId]?.color : null
       const baseFill = assignment?.colorOverride ?? sectionColor ?? (assignment ? vendorColor(assignment.vendorId) : '#e5e7eb')
       const fill = colorMode === 'bw'
@@ -871,6 +884,14 @@ function buildSVG(
         parts.push(`<rect width="${width.toFixed(2)}" height="${height.toFixed(2)}" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="${table.premium ? 2.4 : 1.4}" />`)
       }
 
+      if (isCaseHighlighted && colorMode !== 'bw') {
+        if (table.shape === 'round') {
+          parts.push(`<ellipse cx="${(width / 2).toFixed(2)}" cy="${(height / 2).toFixed(2)}" rx="${Math.max(0, width / 2 - 2).toFixed(2)}" ry="${Math.max(0, height / 2 - 2).toFixed(2)}" fill="rgba(234,88,12,0.14)" stroke="#ea580c" stroke-width="2" stroke-dasharray="6 4" />`)
+        } else {
+          parts.push(`<rect x="2" y="2" width="${Math.max(0, width - 4).toFixed(2)}" height="${Math.max(0, height - 4).toFixed(2)}" rx="4" fill="rgba(234,88,12,0.14)" stroke="#ea580c" stroke-width="2" stroke-dasharray="6 4" />`)
+        }
+      }
+
       parts.push(`<text x="${(width / 2).toFixed(2)}" y="${(topInset + centerHeight / 2 + fontSize * 0.32).toFixed(2)}" text-anchor="middle" font-size="${fontSize.toFixed(1)}" font-family="system-ui, sans-serif" fill="${textColor}" font-weight="800">${esc(table.displayId || table.label || String(table.tableNumber))}</text>`)
 
       if (showVendorInitials && assignment) {
@@ -882,6 +903,13 @@ function buildSVG(
       if (table.premium) {
         parts.push(`<path d="M ${(width - premiumFold).toFixed(2)} 0 L ${width.toFixed(2)} 0 L ${width.toFixed(2)} ${premiumFold.toFixed(2)} Z" fill="${colorMode === 'bw' ? '#ffffff' : '#f59e0b'}" />`)
         parts.push(`<text x="${(width - premiumFold * 0.55).toFixed(2)}" y="${(premiumFold * 0.58).toFixed(2)}" text-anchor="middle" font-size="7" font-family="system-ui, sans-serif" fill="${colorMode === 'bw' ? '#111827' : '#ffffff'}" font-weight="800">P</text>`)
+      }
+
+      if (isCaseHighlighted && colorMode !== 'bw') {
+        const caseBadgeText = `C${caseCount}`
+        const caseBadgeWidth = Math.min(Math.max(18, caseBadgeText.length * 7 + 6), Math.max(18, width - 8))
+        parts.push(`<rect x="4" y="4" width="${caseBadgeWidth.toFixed(2)}" height="14" rx="7" fill="#ea580c" />`)
+        parts.push(`<text x="${(4 + caseBadgeWidth / 2).toFixed(2)}" y="14.2" text-anchor="middle" font-size="8" font-family="system-ui, sans-serif" fill="#ffffff" font-weight="800">${esc(caseBadgeText)}</text>`)
       }
 
       parts.push(`</g>`)

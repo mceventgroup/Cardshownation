@@ -29,43 +29,62 @@ export default function VendorDrawer({ active }: VendorDrawerProps) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<VendorFilter>('all')
   const [drawerHeight, setDrawerHeight] = useState(COLLAPSED_HEIGHT)
+  const [viewportHeight, setViewportHeight] = useState(0)
   const dragStateRef = useRef<{ startY: number; startHeight: number } | null>(null)
   const { totals } = useVendorGridData(search, filter)
 
-  const mediumHeight = useMemo(() => Math.round(window.innerHeight * MEDIUM_RATIO), [])
-  const expandedHeight = useMemo(() => Math.round(window.innerHeight * EXPANDED_RATIO), [])
+  const mediumHeight = useMemo(
+    () => Math.max(COLLAPSED_HEIGHT, Math.round(viewportHeight * MEDIUM_RATIO)),
+    [viewportHeight],
+  )
+  const expandedHeight = useMemo(
+    () => Math.max(COLLAPSED_HEIGHT, Math.round(viewportHeight * EXPANDED_RATIO)),
+    [viewportHeight],
+  )
+
+  useEffect(() => {
+    function syncViewportHeight() {
+      setViewportHeight(window.innerHeight)
+    }
+
+    syncViewportHeight()
+    window.addEventListener('resize', syncViewportHeight)
+    return () => window.removeEventListener('resize', syncViewportHeight)
+  }, [])
 
   useEffect(() => {
     if (!active) {
       setDrawerHeight(COLLAPSED_HEIGHT)
       return
     }
-    setDrawerHeight(Math.round(window.innerHeight * MEDIUM_RATIO))
-  }, [active])
+    setDrawerHeight(mediumHeight)
+  }, [active, mediumHeight])
 
   useEffect(() => {
     function handleResize() {
       if (!active) return
       setDrawerHeight(current => {
         if (current <= COLLAPSED_HEIGHT + 4) return COLLAPSED_HEIGHT
-        const next = Math.min(Math.round(window.innerHeight * MAX_RATIO), Math.max(Math.round(window.innerHeight * MIN_RATIO), current))
+        const next = Math.min(
+          Math.round(viewportHeight * MAX_RATIO),
+          Math.max(Math.round(viewportHeight * MIN_RATIO), current),
+        )
         return next
       })
     }
 
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [active])
+    handleResize()
+  }, [active, viewportHeight])
 
   const drawerState: DrawerState = drawerHeight <= COLLAPSED_HEIGHT + 4
     ? 'collapsed'
-    : drawerHeight >= Math.round(window.innerHeight * 0.5)
+    : drawerHeight >= Math.round(viewportHeight * 0.5)
       ? 'expanded'
       : 'medium'
 
   function clampHeight(height: number) {
-    const maxHeight = Math.round(window.innerHeight * MAX_RATIO)
-    const minHeight = Math.round(window.innerHeight * MIN_RATIO)
+    const maxHeight = Math.round(viewportHeight * MAX_RATIO)
+    const minHeight = Math.round(viewportHeight * MIN_RATIO)
     if (height <= COLLAPSED_HEIGHT + 8) return COLLAPSED_HEIGHT
     return Math.max(minHeight, Math.min(maxHeight, height))
   }

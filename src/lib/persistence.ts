@@ -344,6 +344,12 @@ function migrate(payload: PersistedPayload): PersistedPayload {
     if ((v as { premium?: boolean }).premium === undefined) {
       (v as { premium: boolean }).premium = false
     }
+    const vendorWithCases = v as { cases?: boolean | number }
+    if (vendorWithCases.cases === undefined) {
+      ;(v as { cases: number }).cases = 0
+    } else if (typeof vendorWithCases.cases === 'boolean') {
+      ;(v as { cases: number }).cases = vendorWithCases.cases ? 1 : 0
+    }
   }
   if ((payload.data.settings as { roomLocked?: boolean }).roomLocked === undefined) {
     (payload.data.settings as { roomLocked: boolean }).roomLocked = false

@@ -153,6 +153,7 @@ export interface Vendor {
   paymentStatus: PaymentStatus
   notes: string | null
   premium: boolean              // true = preferred for premium table spots
+  cases: number                 // number of cases; values > 0 can be highlighted in show mode
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
