@@ -189,6 +189,7 @@ describe('APPLY_IMPORT', () => {
       createdVendors: [],
       replacedAssignments: [oldAssignment],
       createdAssignments: [newAssignment1, newAssignment2],
+      vendorTableCountDeltas: [],
     }
 
     applyCommand(state, cmd)
@@ -200,6 +201,41 @@ describe('APPLY_IMPORT', () => {
     expect(state.vendorAssignments['a-new1']).toBeUndefined()
     expect(state.vendorAssignments['a-new2']).toBeUndefined()
     expect(state.vendorAssignments['a-old'].vendorName).toBe('OldVendor')
+  })
+
+  it('applies and reverses vendor table-count deltas for existing vendors', () => {
+    const state = emptyState()
+    state.vendors['v-acme' as VendorId] = {
+      id: 'v-acme' as VendorId,
+      name: 'Acme',
+      firstName: null,
+      lastName: null,
+      companyName: null,
+      email: 'acme@example.com',
+      tablesNeeded: 2,
+      tableSize: null,
+      category: null,
+      paymentStatus: 'unknown',
+      notes: null,
+      premium: false,
+      cases: 0,
+    }
+
+    const cmd: ApplyImportCommand = {
+      type: 'APPLY_IMPORT',
+      timestamp: ts,
+      importSessionId: 'sess-1' as ImportSessionId,
+      createdVendors: [],
+      replacedAssignments: [],
+      createdAssignments: [],
+      vendorTableCountDeltas: [{ vendorId: 'v-acme' as VendorId, delta: 3 }],
+    }
+
+    applyCommand(state, cmd)
+    expect(state.vendors['v-acme'].tablesNeeded).toBe(5)
+
+    reverseCommand(state, cmd)
+    expect(state.vendors['v-acme'].tablesNeeded).toBe(2)
   })
 })
 

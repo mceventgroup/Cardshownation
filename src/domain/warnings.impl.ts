@@ -43,7 +43,20 @@ function computeWarnings(
     } satisfies OverlapWarning)
   }
 
-  // 2. Door violations
+  // 2. Narrow aisles
+  const narrowAisles = spacingModule.findNarrowAisles(tables, settings.minAisleWidth)
+  for (const violation of narrowAisles) {
+    warnings.push({
+      type: 'narrow-aisle',
+      severity: violation.severity,
+      tableIds: [violation.tableA.id, violation.tableB.id],
+      measuredWidth: violation.measuredWidth,
+      minimumWidth: violation.minimumWidth,
+      message: `Aisle between ${violation.tableA.label} and ${violation.tableB.label} is ${formatDimension(violation.measuredWidth)}; minimum is ${formatDimension(violation.minimumWidth)}`,
+    })
+  }
+
+  // 3. Door violations
   const doorViolations = spacingModule.findDoorViolations(tables, doors, settings.doorClearance)
   for (const v of doorViolations) {
     warnings.push({
@@ -55,7 +68,7 @@ function computeWarnings(
     } satisfies DoorBlockedWarning)
   }
 
-  // 3. Duplicate labels
+  // 4. Duplicate labels
   const labelMap = new Map<string, TableObject[]>()
   for (const t of tables) {
     const existing = labelMap.get(t.label)
@@ -74,7 +87,7 @@ function computeWarnings(
     }
   }
 
-  // 4. Unassigned tables (only when requested)
+  // 5. Unassigned tables (only when requested)
   if (checkUnassigned) {
     const assignedTableIds = new Set(vendorAssignments.map(a => a.tableId))
     for (const t of tables) {
@@ -90,7 +103,7 @@ function computeWarnings(
     }
   }
 
-  // 5. Out-of-bounds (only when a room is defined)
+  // 6. Out-of-bounds (only when a room is defined)
   if (room && (room.segments.length > 0 || (room.circles?.length ?? 0) > 0 || room.freehandVertices)) {
     for (const t of tables) {
       const b = geometry.getBounds(t).bounds
@@ -106,7 +119,7 @@ function computeWarnings(
     }
   }
 
-  // 6. Wall setback violations
+  // 7. Wall setback violations
   if (room && (settings.wallSetback > 0 || settings.wallThickness > 0) && (room.segments.length > 0 || (room.circles?.length ?? 0) > 0 || room.freehandVertices)) {
     const sb = settings.wallSetback + settings.wallThickness / 2
     for (const t of tables) {
@@ -139,6 +152,7 @@ function computeWarnings(
     // Collect affected table IDs
     switch (w.type) {
       case 'overlap':
+      case 'narrow-aisle':
         for (const id of w.tableIds) affectedTableIds.add(id)
         break
       case 'door-blocked':
@@ -166,6 +180,7 @@ function warningsForTable(result: WarningResult, tableId: string): LayoutWarning
   return result.warnings.filter(w => {
     switch (w.type) {
       case 'overlap':
+      case 'narrow-aisle':
         return w.tableIds.includes(tableId)
       case 'door-blocked':
         return w.blockingTableIds.includes(tableId)

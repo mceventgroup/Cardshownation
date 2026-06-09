@@ -13,9 +13,13 @@ import {
   type LayoutEntry,
 } from '@/lib/persistence'
 import {
+  CloudRevisionConflictError,
   deleteCloudLayout,
+  getCloudSession,
+  loginCloudSession,
   listCloudLayouts,
   loadCloudLayout,
+  logoutCloudSession,
   saveCloudLayout,
   type CloudLayoutSummary,
 } from '@/lib/cloud-layouts'
@@ -23,8 +27,6 @@ import {
 interface Props {
   onClose: () => void
 }
-
-const CLOUD_SAVE_KEY = 'floorplanner:cloud-save-key'
 
 function formatSavedAt(savedAt: string): string {
   const d = new Date(savedAt)
@@ -39,6 +41,7 @@ export default function LayoutManagerModal({ onClose }: Props) {
   const setActiveCloudLayout = useEditorStore(s => s.setActiveCloudLayout)
   const activeCloudLayoutId = useEditorStore(s => s.activeCloudLayoutId)
   const activeCloudLayoutName = useEditorStore(s => s.activeCloudLayoutName)
+  const activeCloudLayoutRevision = useEditorStore(s => s.activeCloudLayoutRevision)
 
   const [layouts, setLayouts] = useState<LayoutEntry[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -47,20 +50,22 @@ export default function LayoutManagerModal({ onClose }: Props) {
   const [renameText, setRenameText] = useState('')
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null)
 
-  const [cloudSaveKey, setCloudSaveKey] = useState('')
+  const [cloudPassword, setCloudPassword] = useState('')
   const [cloudLayouts, setCloudLayouts] = useState<CloudLayoutSummary[]>([])
   const [cloudName, setCloudName] = useState('')
   const [cloudStatus, setCloudStatus] = useState<string | null>(null)
   const [cloudError, setCloudError] = useState<string | null>(null)
   const [cloudLoading, setCloudLoading] = useState(false)
+  const [cloudAvailable, setCloudAvailable] = useState(false)
+  const [cloudAuthenticated, setCloudAuthenticated] = useState(false)
 
   function refresh() {
     setLayouts(listLayouts())
     setActiveId(getActiveLayoutId())
   }
 
-  async function refreshCloudLayouts(saveKey = cloudSaveKey) {
-    if (!saveKey.trim()) {
+  async function refreshCloudLayouts(authenticated = cloudAuthenticated) {
+    if (!authenticated) {
       setCloudLayouts([])
       return
     }
@@ -68,7 +73,7 @@ export default function LayoutManagerModal({ onClose }: Props) {
     setCloudLoading(true)
     setCloudError(null)
     try {
-      setCloudLayouts(await listCloudLayouts(saveKey.trim()))
+      setCloudLayouts(await listCloudLayouts())
     } catch (error) {
       setCloudError(error instanceof Error ? error.message : 'Failed to list cloud layouts.')
     } finally {
@@ -78,15 +83,17 @@ export default function LayoutManagerModal({ onClose }: Props) {
 
   useEffect(() => {
     refresh()
-    try {
-      const storedKey = window.localStorage.getItem(CLOUD_SAVE_KEY) ?? ''
-      setCloudSaveKey(storedKey)
-      if (storedKey) {
-        void refreshCloudLayouts(storedKey)
-      }
-    } catch {
-      // Ignore localStorage access issues.
-    }
+    void getCloudSession()
+      .then(session => {
+        setCloudAvailable(session.available)
+        setCloudAuthenticated(session.authenticated)
+        if (session.authenticated) {
+          void refreshCloudLayouts(true)
+        }
+      })
+      .catch(error => {
+        setCloudError(error instanceof Error ? error.message : 'Failed to check cloud session.')
+      })
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -96,16 +103,40 @@ export default function LayoutManagerModal({ onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function rememberCloudKey(value: string) {
-    setCloudSaveKey(value)
+  async function handleCloudSignIn() {
+    if (!cloudPassword.trim()) {
+      setCloudError('Enter the cloud admin password first.')
+      return
+    }
+
+    setCloudLoading(true)
+    setCloudError(null)
+    setCloudStatus(null)
     try {
-      if (value.trim()) {
-        window.localStorage.setItem(CLOUD_SAVE_KEY, value.trim())
-      } else {
-        window.localStorage.removeItem(CLOUD_SAVE_KEY)
-      }
-    } catch {
-      // Ignore localStorage access issues.
+      await loginCloudSession(cloudPassword)
+      setCloudAuthenticated(true)
+      setCloudPassword('')
+      await refreshCloudLayouts(true)
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : 'Failed to sign in to cloud save.')
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
+  async function handleCloudSignOut() {
+    setCloudLoading(true)
+    setCloudError(null)
+    setCloudStatus(null)
+    try {
+      await logoutCloudSession()
+      setCloudAuthenticated(false)
+      setCloudLayouts([])
+      setCloudPassword('')
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : 'Failed to sign out of cloud save.')
+    } finally {
+      setCloudLoading(false)
     }
   }
 
@@ -155,10 +186,9 @@ export default function LayoutManagerModal({ onClose }: Props) {
   }
 
   async function handleCloudSave() {
-    const trimmedKey = cloudSaveKey.trim()
     const name = cloudName.trim() || activeCloudLayoutName || newName.trim() || 'Floor Plan'
-    if (!trimmedKey) {
-      setCloudError('Enter your cloud save key first.')
+    if (!cloudAuthenticated) {
+      setCloudError('Sign in to cloud save first.')
       return
     }
 
@@ -170,23 +200,26 @@ export default function LayoutManagerModal({ onClose }: Props) {
         id: activeCloudLayoutId,
         name,
         data: extractDocumentSlice(useEditorStore.getState()),
-        saveKey: trimmedKey,
+        expectedRevision: activeCloudLayoutRevision,
       })
-      setActiveCloudLayout({ id: saved.id, name: saved.name })
+      setActiveCloudLayout({ id: saved.id, name: saved.name, revision: saved.revision })
       setCloudName(saved.name)
       setCloudStatus(`Saved "${saved.name}" to cloud.`)
-      await refreshCloudLayouts(trimmedKey)
+      await refreshCloudLayouts()
     } catch (error) {
-      setCloudError(error instanceof Error ? error.message : 'Failed to save cloud layout.')
+      if (error instanceof CloudRevisionConflictError) {
+        setCloudError(error.message)
+      } else {
+        setCloudError(error instanceof Error ? error.message : 'Failed to save cloud layout.')
+      }
     } finally {
       setCloudLoading(false)
     }
   }
 
   async function handleCloudLoad(id: string) {
-    const trimmedKey = cloudSaveKey.trim()
-    if (!trimmedKey) {
-      setCloudError('Enter your cloud save key first.')
+    if (!cloudAuthenticated) {
+      setCloudError('Sign in to cloud save first.')
       return
     }
     if (!window.confirm('Load this cloud layout into the editor? Current work will be replaced.')) return
@@ -195,9 +228,9 @@ export default function LayoutManagerModal({ onClose }: Props) {
     setCloudError(null)
     setCloudStatus(null)
     try {
-      const layout = await loadCloudLayout(id, trimmedKey)
+      const layout = await loadCloudLayout(id)
       loadDocumentSlice(layout.data)
-      setActiveCloudLayout({ id: layout.id, name: layout.name })
+      setActiveCloudLayout({ id: layout.id, name: layout.name, revision: layout.revision })
       setCloudName(layout.name)
       setCloudStatus(`Loaded "${layout.name}" from cloud.`)
       refresh()
@@ -209,9 +242,8 @@ export default function LayoutManagerModal({ onClose }: Props) {
   }
 
   async function handleCloudDelete(id: string, name: string) {
-    const trimmedKey = cloudSaveKey.trim()
-    if (!trimmedKey) {
-      setCloudError('Enter your cloud save key first.')
+    if (!cloudAuthenticated) {
+      setCloudError('Sign in to cloud save first.')
       return
     }
     if (!window.confirm(`Delete cloud layout "${name}"? This cannot be undone.`)) return
@@ -220,12 +252,12 @@ export default function LayoutManagerModal({ onClose }: Props) {
     setCloudError(null)
     setCloudStatus(null)
     try {
-      await deleteCloudLayout(id, trimmedKey)
+      await deleteCloudLayout(id)
       if (activeCloudLayoutId === id) {
         setActiveCloudLayout(null)
       }
       setCloudStatus(`Deleted "${name}" from cloud.`)
-      await refreshCloudLayouts(trimmedKey)
+      await refreshCloudLayouts()
     } catch (error) {
       setCloudError(error instanceof Error ? error.message : 'Failed to delete cloud layout.')
     } finally {
@@ -338,44 +370,75 @@ export default function LayoutManagerModal({ onClose }: Props) {
               <p className="mt-1 text-xs text-gray-400">Stored in Neon and available outside this browser.</p>
             </div>
             <div className="border-b border-gray-800 p-4 space-y-3">
-              <div className="flex gap-2">
-                <input
-                  value={cloudSaveKey}
-                  onChange={e => rememberCloudKey(e.target.value)}
-                  placeholder="Cloud save key..."
-                  className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  onClick={() => void refreshCloudLayouts()}
-                  disabled={cloudLoading || !cloudSaveKey.trim()}
-                  className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-gray-500 disabled:opacity-50"
-                >
-                  Refresh
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  value={cloudName}
-                  onChange={e => setCloudName(e.target.value)}
-                  placeholder={activeCloudLayoutName ? `Current: ${activeCloudLayoutName}` : 'Cloud layout name...'}
-                  className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  onClick={() => void handleCloudSave()}
-                  disabled={cloudLoading || !cloudSaveKey.trim()}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-medium rounded"
-                >
-                  {activeCloudLayoutId ? 'Update Cloud' : 'Save To Cloud'}
-                </button>
-              </div>
+              {!cloudAvailable && (
+                <p className="text-xs text-gray-400">
+                  Cloud save is disabled on this deployment until the server is configured with a database, admin password, and session secret.
+                </p>
+              )}
+              {cloudAvailable && !cloudAuthenticated && (
+                <div className="flex gap-2">
+                  <input
+                    value={cloudPassword}
+                    onChange={e => setCloudPassword(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') void handleCloudSignIn()
+                    }}
+                    type="password"
+                    placeholder="Cloud admin password..."
+                    className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    onClick={() => void handleCloudSignIn()}
+                    disabled={cloudLoading || !cloudPassword.trim()}
+                    className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-gray-500 disabled:opacity-50"
+                  >
+                    Sign In
+                  </button>
+                </div>
+              )}
+              {cloudAvailable && cloudAuthenticated && (
+                <>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => void refreshCloudLayouts()}
+                      disabled={cloudLoading}
+                      className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-gray-500 disabled:opacity-50"
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      onClick={() => void handleCloudSignOut()}
+                      disabled={cloudLoading}
+                      className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-red-500 disabled:opacity-50"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={cloudName}
+                      onChange={e => setCloudName(e.target.value)}
+                      placeholder={activeCloudLayoutName ? `Current: ${activeCloudLayoutName}` : 'Cloud layout name...'}
+                      className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      onClick={() => void handleCloudSave()}
+                      disabled={cloudLoading}
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-medium rounded"
+                    >
+                      {activeCloudLayoutId ? 'Update Cloud' : 'Save To Cloud'}
+                    </button>
+                  </div>
+                </>
+              )}
               {cloudStatus && <p className="text-xs text-emerald-300">{cloudStatus}</p>}
               {cloudError && <p className="text-xs text-red-300">{cloudError}</p>}
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-1">
-              {!cloudSaveKey.trim() && (
-                <p className="text-gray-500 text-sm text-center py-6">Enter your cloud save key to list server-backed layouts.</p>
+              {cloudAvailable && !cloudAuthenticated && (
+                <p className="text-gray-500 text-sm text-center py-6">Sign in to list server-backed layouts.</p>
               )}
-              {cloudSaveKey.trim() && !cloudLoading && cloudLayouts.length === 0 && !cloudError && (
+              {cloudAvailable && cloudAuthenticated && !cloudLoading && cloudLayouts.length === 0 && !cloudError && (
                 <p className="text-gray-500 text-sm text-center py-6">No cloud layouts saved yet.</p>
               )}
               {cloudLayouts.map(l => (

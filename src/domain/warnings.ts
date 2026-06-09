@@ -40,7 +40,7 @@ export interface OverlapWarning {
 /** Two adjacent tables with a clear gap below minAisleWidth. Severity: warning. */
 export interface NarrowAisleWarning {
   type: 'narrow-aisle'
-  severity: 'warning'
+  severity: WarningSeverity
   tableIds: [string, string]
   measuredWidth: number
   minimumWidth: number

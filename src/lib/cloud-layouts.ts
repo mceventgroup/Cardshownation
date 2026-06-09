@@ -4,6 +4,7 @@ export interface CloudLayoutSummary {
   id: string
   name: string
   savedAt: string
+  revision: number
   tableCount: number
   vendorCount: number
 }
@@ -14,28 +15,81 @@ export interface CloudLayoutRecord extends CloudLayoutSummary {
 
 interface ErrorPayload {
   error?: string
+  code?: string
+  currentLayout?: CloudLayoutSummary | null
 }
 
-async function readError(response: Response): Promise<string> {
+export interface CloudSessionStatus {
+  available: boolean
+  authenticated: boolean
+}
+
+export class CloudRevisionConflictError extends Error {
+  currentLayout: CloudLayoutSummary | null
+
+  constructor(message: string, currentLayout: CloudLayoutSummary | null) {
+    super(message)
+    this.name = 'CloudRevisionConflictError'
+    this.currentLayout = currentLayout
+  }
+}
+
+async function readError(response: Response): Promise<ErrorPayload> {
   try {
     const payload = await response.json() as ErrorPayload
-    if (payload?.error) return payload.error
+    if (payload?.error) return payload
   } catch {
     // Ignore malformed error payloads.
   }
-  return `Request failed (${response.status})`
+  return { error: `Request failed (${response.status})` }
 }
 
-export async function listCloudLayouts(saveKey: string): Promise<CloudLayoutSummary[]> {
-  const response = await fetch('/api/cloud-layouts', {
-    headers: {
-      'x-floorplanner-key': saveKey,
-    },
-  })
+async function assertOk(response: Response): Promise<void> {
+  if (response.ok) return
 
-  if (!response.ok) {
-    throw new Error(await readError(response))
+  const payload = await readError(response)
+  if (response.status === 409 && payload.code === 'revision-conflict') {
+    throw new CloudRevisionConflictError(
+      payload.error ?? `Request failed (${response.status})`,
+      payload.currentLayout ?? null,
+    )
   }
+  throw new Error(payload.error ?? `Request failed (${response.status})`)
+}
+
+export async function getCloudSession(): Promise<CloudSessionStatus> {
+  const response = await fetch('/api/cloud-session', {
+    credentials: 'same-origin',
+  })
+  await assertOk(response)
+  return await response.json() as CloudSessionStatus
+}
+
+export async function loginCloudSession(password: string): Promise<void> {
+  const response = await fetch('/api/cloud-session', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ password }),
+  })
+  await assertOk(response)
+}
+
+export async function logoutCloudSession(): Promise<void> {
+  const response = await fetch('/api/cloud-session', {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  })
+  await assertOk(response)
+}
+
+export async function listCloudLayouts(): Promise<CloudLayoutSummary[]> {
+  const response = await fetch('/api/cloud-layouts', {
+    credentials: 'same-origin',
+  })
+  await assertOk(response)
 
   const payload = await response.json() as { layouts: CloudLayoutSummary[] }
   return payload.layouts
@@ -45,53 +99,41 @@ export async function saveCloudLayout(input: {
   id?: string | null
   name: string
   data: DocumentSlice
-  saveKey: string
+  expectedRevision?: number | null
 }): Promise<CloudLayoutSummary> {
   const response = await fetch('/api/cloud-layouts', {
     method: 'POST',
+    credentials: 'same-origin',
     headers: {
       'content-type': 'application/json',
-      'x-floorplanner-key': input.saveKey,
     },
     body: JSON.stringify({
       id: input.id ?? null,
       name: input.name,
       data: input.data,
+      expectedRevision: input.expectedRevision ?? null,
     }),
   })
-
-  if (!response.ok) {
-    throw new Error(await readError(response))
-  }
+  await assertOk(response)
 
   const payload = await response.json() as { layout: CloudLayoutSummary }
   return payload.layout
 }
 
-export async function loadCloudLayout(id: string, saveKey: string): Promise<CloudLayoutRecord> {
+export async function loadCloudLayout(id: string): Promise<CloudLayoutRecord> {
   const response = await fetch(`/api/cloud-layouts/${encodeURIComponent(id)}`, {
-    headers: {
-      'x-floorplanner-key': saveKey,
-    },
+    credentials: 'same-origin',
   })
-
-  if (!response.ok) {
-    throw new Error(await readError(response))
-  }
+  await assertOk(response)
 
   const payload = await response.json() as { layout: CloudLayoutRecord }
   return payload.layout
 }
 
-export async function deleteCloudLayout(id: string, saveKey: string): Promise<void> {
+export async function deleteCloudLayout(id: string): Promise<void> {
   const response = await fetch(`/api/cloud-layouts/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: {
-      'x-floorplanner-key': saveKey,
-    },
+    credentials: 'same-origin',
   })
-
-  if (!response.ok) {
-    throw new Error(await readError(response))
-  }
+  await assertOk(response)
 }

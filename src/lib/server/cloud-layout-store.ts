@@ -1,14 +1,24 @@
 import { neon } from '@neondatabase/serverless'
-import { timingSafeEqual } from 'node:crypto'
 import type { DocumentSlice } from '@/lib/persistence'
 
 export interface CloudLayoutRow {
   id: string
   name: string
   saved_at: string
+  revision: number
   table_count: number
   vendor_count: number
   data?: DocumentSlice
+}
+
+export class CloudLayoutConflictError extends Error {
+  currentLayout: CloudLayoutRow | null
+
+  constructor(message: string, currentLayout: CloudLayoutRow | null) {
+    super(message)
+    this.name = 'CloudLayoutConflictError'
+    this.currentLayout = currentLayout
+  }
 }
 
 function getDatabaseUrl(): string {
@@ -19,30 +29,12 @@ function getDatabaseUrl(): string {
   return value
 }
 
-function getSaveKey(): string {
-  const value = process.env.FLOORPLANNER_SAVE_KEY
-  if (!value) {
-    throw new Error('FLOORPLANNER_SAVE_KEY is not configured.')
-  }
-  return value
-}
-
 function getSql() {
   return neon(getDatabaseUrl())
 }
 
 export function isCloudSaveConfigured(): boolean {
-  return Boolean(process.env.DATABASE_URL && process.env.FLOORPLANNER_SAVE_KEY)
-}
-
-export function authorizeCloudRequest(providedKey: string | null): boolean {
-  if (!providedKey) return false
-
-  const expected = Buffer.from(getSaveKey())
-  const received = Buffer.from(providedKey)
-  if (expected.length !== received.length) return false
-
-  return timingSafeEqual(expected, received)
+  return Boolean(process.env.DATABASE_URL)
 }
 
 export async function ensureCloudLayoutsTable(): Promise<void> {
@@ -52,18 +44,23 @@ export async function ensureCloudLayoutsTable(): Promise<void> {
       id text primary key,
       name text not null,
       data jsonb not null,
+      revision integer not null default 1,
       table_count integer not null default 0,
       vendor_count integer not null default 0,
       created_at timestamptz not null default now(),
       saved_at timestamptz not null default now()
     )
   `
+  await sql`
+    alter table floorplanner_cloud_layouts
+    add column if not exists revision integer not null default 1
+  `
 }
 
 export async function listCloudLayouts(): Promise<CloudLayoutRow[]> {
   const sql = getSql()
   const rows = await sql`
-    select id, name, saved_at, table_count, vendor_count
+    select id, name, saved_at, revision, table_count, vendor_count
     from floorplanner_cloud_layouts
     order by saved_at desc, name asc
   `
@@ -73,7 +70,7 @@ export async function listCloudLayouts(): Promise<CloudLayoutRow[]> {
 export async function getCloudLayout(id: string): Promise<CloudLayoutRow | null> {
   const sql = getSql()
   const rows = await sql`
-    select id, name, saved_at, table_count, vendor_count, data
+    select id, name, saved_at, revision, table_count, vendor_count, data
     from floorplanner_cloud_layouts
     where id = ${id}
     limit 1
@@ -85,24 +82,58 @@ export async function upsertCloudLayout(input: {
   id: string
   name: string
   data: DocumentSlice
+  expectedRevision: number | null
 }): Promise<CloudLayoutRow> {
   const sql = getSql()
   const tableCount = Object.keys(input.data.tables).length
   const vendorCount = Object.keys(input.data.vendors).length
 
+  if (input.expectedRevision === null) {
+    const inserted = await sql`
+      insert into floorplanner_cloud_layouts (id, name, data, revision, table_count, vendor_count, saved_at)
+      values (${input.id}, ${input.name}, ${JSON.stringify(input.data)}, 1, ${tableCount}, ${vendorCount}, now())
+      on conflict (id) do nothing
+      returning id, name, saved_at, revision, table_count, vendor_count
+    `
+
+    const row = (inserted as CloudLayoutRow[])[0]
+    if (row) return row
+
+    const current = await getCloudLayout(input.id)
+    throw new CloudLayoutConflictError(
+      'This cloud layout already exists. Reload it before saving again.',
+      current,
+    )
+  }
+
   const rows = await sql`
-    insert into floorplanner_cloud_layouts (id, name, data, table_count, vendor_count, saved_at)
-    values (${input.id}, ${input.name}, ${JSON.stringify(input.data)}, ${tableCount}, ${vendorCount}, now())
-    on conflict (id) do update
-      set name = excluded.name,
-          data = excluded.data,
-          table_count = excluded.table_count,
-          vendor_count = excluded.vendor_count,
-          saved_at = now()
-    returning id, name, saved_at, table_count, vendor_count
+    update floorplanner_cloud_layouts
+    set name = ${input.name},
+        data = ${JSON.stringify(input.data)},
+        revision = revision + 1,
+        table_count = ${tableCount},
+        vendor_count = ${vendorCount},
+        saved_at = now()
+    where id = ${input.id}
+      and revision = ${input.expectedRevision}
+    returning id, name, saved_at, revision, table_count, vendor_count
   `
 
-  return (rows as CloudLayoutRow[])[0]
+  const row = (rows as CloudLayoutRow[])[0]
+  if (row) return row
+
+  const current = await getCloudLayout(input.id)
+  if (current) {
+    throw new CloudLayoutConflictError(
+      'This cloud layout changed since you loaded it. Reload it before saving again.',
+      current,
+    )
+  }
+
+  throw new CloudLayoutConflictError(
+    'This cloud layout no longer exists on the server. Reload your cloud layouts list.',
+    null,
+  )
 }
 
 export async function deleteCloudLayout(id: string): Promise<void> {

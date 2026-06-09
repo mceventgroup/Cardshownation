@@ -37,6 +37,8 @@ function warningTableIds(w: LayoutWarning): string[] {
 export default function WarningsPanel() {
   const result = useWarnings()
   const setSelected = useEditorStore(s => s.setSelected)
+  const reviewUnassignedTables = useEditorStore(s => s.reviewUnassignedTables)
+  const setReviewUnassignedTables = useEditorStore(s => s.setReviewUnassignedTables)
 
   const handleClickWarning = (w: LayoutWarning) => {
     const ids = warningTableIds(w)
@@ -45,6 +47,17 @@ export default function WarningsPanel() {
 
   return (
     <div className="text-sm flex flex-col">
+      <div className="px-3 py-2 border-b border-gray-100">
+        <label className="flex items-center justify-between gap-3 text-xs font-medium text-gray-600">
+          <span>Review unassigned tables</span>
+          <input
+            type="checkbox"
+            checked={reviewUnassignedTables}
+            onChange={e => setReviewUnassignedTables(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300"
+          />
+        </label>
+      </div>
 
       {/* Summary badges */}
       {result.warnings.length > 0 && (

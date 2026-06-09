@@ -1,4 +1,11 @@
-import { saveToLocalStorage, loadFromLocalStorage, clearLocalStorage, extractDocumentSlice } from '@/lib/persistence'
+import {
+  saveToLocalStorage,
+  loadFromLocalStorage,
+  clearLocalStorage,
+  extractDocumentSlice,
+  deleteLayout,
+  saveLayoutAs,
+} from '@/lib/persistence'
 import type { DocumentSlice } from '@/lib/persistence'
 import type { TableId, RowId, SectionId } from '@/domain/types'
 import { DEFAULT_SETTINGS } from '@/lib/defaults'
@@ -94,6 +101,42 @@ describe('clearLocalStorage', () => {
 
     clearLocalStorage()
     expect(loadFromLocalStorage()).toBeNull()
+  })
+})
+
+describe('deleteLayout', () => {
+  it('promotes the next saved layout into active storage when deleting the active layout', () => {
+    const first = makeSlice({
+      tables: {
+        t1: {
+          id: 't1' as TableId, roomId: 'R1', tableNumber: 1, displayId: 'R1-1', x: 10, y: 10, width: 72, height: 30,
+          rotation: 0, shape: 'rectangle', label: 'R1-1', labelOverridden: false,
+          rowId: null as RowId | null, sectionId: null as SectionId | null, order: 0, premium: false,
+        },
+      },
+    })
+    const second = makeSlice({
+      tables: {
+        t2: {
+          id: 't2' as TableId, roomId: 'R1', tableNumber: 2, displayId: 'R1-2', x: 20, y: 20, width: 72, height: 30,
+          rotation: 0, shape: 'rectangle', label: 'R1-2', labelOverridden: false,
+          rowId: null as RowId | null, sectionId: null as SectionId | null, order: 0, premium: false,
+        },
+      },
+    })
+
+    const firstId = saveLayoutAs('First', first)
+    const secondId = saveLayoutAs('Second', second)
+
+    expect(loadFromLocalStorage()?.tables.t2).toBeDefined()
+
+    deleteLayout(secondId)
+
+    const loaded = loadFromLocalStorage()
+    expect(loaded?.tables.t1).toBeDefined()
+    expect(loaded?.tables.t2).toBeUndefined()
+    expect(store[`floorplanner:layouts:${secondId}`]).toBeUndefined()
+    expect(store[`floorplanner:layouts:${firstId}`]).toBeDefined()
   })
 })
 

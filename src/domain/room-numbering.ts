@@ -570,10 +570,11 @@ export function syncRoomFieldsForTables(
     const existingRoomId = table.roomId
     const detectedRoomId = getRoomIdForTable(table, room)
     const resolvedRoomId =
-      (existingRoomId && roomIds.includes(existingRoomId) ? existingRoomId : null) ??
       detectedRoomId ??
+      (existingRoomId && roomIds.includes(existingRoomId) ? existingRoomId : null) ??
       firstRoomId
 
+    table.roomId = resolvedRoomId
     tablesByResolvedRoom.get(resolvedRoomId)?.push(table)
   }
 

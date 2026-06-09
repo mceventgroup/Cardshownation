@@ -22,7 +22,7 @@ import type { ImportSession, FieldMapping, ConflictResolution } from '@/domain/d
 import { DEFAULT_SETTINGS, DRAFT_LAYOUT_ID } from '@/lib/defaults'
 import {
   loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage,
-  saveLayoutAs, loadLayout, saveToFile as saveToFileLib, parseFilePayload,
+  saveLayoutAs, loadLayout, restoreBackgroundImagePayloads, saveToFile as saveToFileLib, parseFilePayload,
   type DocumentSlice,
 } from '@/lib/persistence'
 import { csvImportModule, expandTableNumbers } from '@/domain/csv-import.impl'
@@ -73,6 +73,7 @@ function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): vo
   state.showMode = false
   state.showCaseHighlights = false
   state.showSectionColors = false
+  state.reviewUnassignedTables = false
   state.history = { ...EMPTY_HISTORY, past: [], future: [] }
 }
 
@@ -121,6 +122,7 @@ export interface EditorState {
   showMode: boolean
   showCaseHighlights: boolean
   showSectionColors: boolean
+  reviewUnassignedTables: boolean
   stageScale: number
   stagePosition: Point
 
@@ -149,6 +151,7 @@ export interface EditorState {
   setShowMode: (visible: boolean) => void
   setShowCaseHighlights: (visible: boolean) => void
   setShowSectionColors: (visible: boolean) => void
+  setReviewUnassignedTables: (visible: boolean) => void
 
   // ── Builder config actions ─────────────────────────────────────────────
   setTableBuilderConfig: (config: { tableWidth: number; tableHeight: number } | null) => void
@@ -179,7 +182,8 @@ export interface EditorState {
   loadDocumentSlice: (slice: DocumentSlice) => void
   activeCloudLayoutId: string | null
   activeCloudLayoutName: string | null
-  setActiveCloudLayout: (layout: { id: string; name: string } | null) => void
+  activeCloudLayoutRevision: number | null
+  setActiveCloudLayout: (layout: { id: string; name: string; revision?: number | null } | null) => void
 
   // ── CSV Import actions ─────────────────────────────────────────────────
   importSession: ImportSession | null
@@ -230,6 +234,7 @@ export const useEditorStore = create<EditorState>()(
     showMode: false,
     showCaseHighlights: false,
     showSectionColors: false,
+    reviewUnassignedTables: false,
     stageScale:    1,
     stagePosition: { x: 0, y: 0 },
     tableBuilderConfig: null,
@@ -241,6 +246,7 @@ export const useEditorStore = create<EditorState>()(
     hasHydratedFromStorage: false,
     activeCloudLayoutId: null,
     activeCloudLayoutName: null,
+    activeCloudLayoutRevision: null,
 
     // ── Canvas actions ─────────────────────────────────────────────────────
 
@@ -253,6 +259,13 @@ export const useEditorStore = create<EditorState>()(
         if (!slice) return
         applyDocumentSliceToState(state, slice)
       })
+      if (slice) {
+        void restoreBackgroundImagePayloads(slice).then(restored => {
+          set(state => {
+            state.backgroundImages = restored.backgroundImages
+          })
+        })
+      }
     },
 
     dispatch(command) {
@@ -394,6 +407,12 @@ export const useEditorStore = create<EditorState>()(
     setShowSectionColors(visible) {
       set(state => {
         state.showSectionColors = visible
+      })
+    },
+
+    setReviewUnassignedTables(visible) {
+      set(state => {
+        state.reviewUnassignedTables = visible
       })
     },
 
@@ -575,7 +594,10 @@ export const useEditorStore = create<EditorState>()(
       for (const row of state.importSession.rows) {
         const willApply =
           row.status === 'valid' ||
-          (row.status === 'conflict' && row.conflict?.resolution === 'overwrite')
+          (
+            row.status === 'conflict' &&
+            (row.conflict?.resolution === 'overwrite' || row.conflict?.resolution === 'create-unplaced')
+          )
         if (!willApply) continue
 
         const normalizedEmail = row.mapped.email?.trim().toLowerCase() || null
@@ -654,16 +676,8 @@ export const useEditorStore = create<EditorState>()(
         createdVendors,
         replacedAssignments,
         createdAssignments,
+        vendorTableCountDeltas: Array.from(existingVendorTableDeltas, ([vendorId, delta]) => ({ vendorId, delta })),
       })
-
-      if (existingVendorTableDeltas.size > 0) {
-        set(s => {
-          for (const [vendorId, delta] of existingVendorTableDeltas) {
-            const vendor = s.vendors[vendorId]
-            if (vendor) vendor.tablesNeeded += delta
-          }
-        })
-      }
 
       set(s => { s.importSession = null })
     },
@@ -701,9 +715,11 @@ export const useEditorStore = create<EditorState>()(
         state.showMode = false
         state.showCaseHighlights = false
         state.showSectionColors = false
+        state.reviewUnassignedTables = false
         state.history = { ...EMPTY_HISTORY, past: [], future: [] }
         state.activeCloudLayoutId = null
         state.activeCloudLayoutName = null
+        state.activeCloudLayoutRevision = null
       })
       clearLocalStorage()
     },
@@ -745,6 +761,7 @@ export const useEditorStore = create<EditorState>()(
         applyDocumentSliceToState(state, slice)
         state.activeCloudLayoutId = null
         state.activeCloudLayoutName = null
+        state.activeCloudLayoutRevision = null
       })
       return null
     },
@@ -759,6 +776,7 @@ export const useEditorStore = create<EditorState>()(
       set(state => {
         state.activeCloudLayoutId = layout?.id ?? null
         state.activeCloudLayoutName = layout?.name ?? null
+        state.activeCloudLayoutRevision = layout?.revision ?? null
       })
     },
 
@@ -769,6 +787,12 @@ export const useEditorStore = create<EditorState>()(
         applyDocumentSliceToState(state, slice)
         state.activeCloudLayoutId = null
         state.activeCloudLayoutName = null
+        state.activeCloudLayoutRevision = null
+      })
+      void restoreBackgroundImagePayloads(slice).then(restored => {
+        set(state => {
+          state.backgroundImages = restored.backgroundImages
+        })
       })
       return true
     },
@@ -852,6 +876,7 @@ export const selectGridVisible = (s: EditorState) => s.gridVisible
 export const selectShowMode = (s: EditorState) => s.showMode
 export const selectShowCaseHighlights = (s: EditorState) => s.showCaseHighlights
 export const selectShowSectionColors = (s: EditorState) => s.showSectionColors
+export const selectReviewUnassignedTables = (s: EditorState) => s.reviewUnassignedTables
 
 /** Derives the RowId when all selected tables share the same row, else null. */
 export const selectSelectedRowId = (s: EditorState): RowId | null => {

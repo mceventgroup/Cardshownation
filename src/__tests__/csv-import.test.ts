@@ -249,4 +249,15 @@ describe('csvImportModule.isReadyToApply', () => {
     )
     expect(csvImportModule.isReadyToApply(session)).toBe(false)
   })
+
+  it('returns true when a table-not-found conflict is resolved as create-unplaced', () => {
+    const parsed = csvImportModule.parseCSV('Table,Vendor\n99,Ghost')
+    const session = csvImportModule.buildSession(
+      parsed, mapping, tables, [],
+      'layout-1' as LayoutId, 'user' as UserId, 'sess-1' as ImportSessionId,
+    )
+    session.rows[0].conflict!.resolution = 'create-unplaced'
+    session.conflictSummary = csvImportModule.recomputeSummary(session.rows)
+    expect(csvImportModule.isReadyToApply(session)).toBe(true)
+  })
 })

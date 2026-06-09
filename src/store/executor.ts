@@ -217,6 +217,12 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
       for (const a of command.createdAssignments) {
         state.vendorAssignments[a.id] = { ...a }
       }
+      if (command.type === 'APPLY_IMPORT') {
+        for (const delta of command.vendorTableCountDeltas) {
+          const vendor = state.vendors[delta.vendorId]
+          if (vendor) vendor.tablesNeeded += delta.delta
+        }
+      }
       break
     }
 
@@ -501,6 +507,10 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
       if (command.type === 'APPLY_IMPORT') {
         for (const v of command.createdVendors) {
           delete state.vendors[v.id]
+        }
+        for (const delta of command.vendorTableCountDeltas) {
+          const vendor = state.vendors[delta.vendorId]
+          if (vendor) vendor.tablesNeeded -= delta.delta
         }
       }
       for (const a of command.createdAssignments) {

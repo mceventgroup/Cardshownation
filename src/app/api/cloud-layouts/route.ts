@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createLayoutId } from '@/lib/id'
+import { validateDocumentSlice } from '@/lib/document-schema'
+import { authorizeCloudRequest, isCloudAuthConfigured } from '@/lib/server/cloud-auth'
 import {
-  authorizeCloudRequest,
+  CloudLayoutConflictError,
   ensureCloudLayoutsTable,
   isCloudSaveConfigured,
   listCloudLayouts,
@@ -13,7 +15,7 @@ const MAX_REQUEST_BYTES = 10 * 1024 * 1024
 const LAYOUT_ID_PATTERN = /^layout-[a-z0-9]+$/
 
 function unauthorizedResponse(): NextResponse {
-  return NextResponse.json({ error: 'Invalid save key.' }, { status: 401 })
+  return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
 }
 
 function unavailableResponse(message: string): NextResponse {
@@ -24,6 +26,7 @@ function summaryFromRow(row: {
   id: string
   name: string
   saved_at: string
+  revision: number
   table_count: number
   vendor_count: number
 }) {
@@ -31,16 +34,17 @@ function summaryFromRow(row: {
     id: row.id,
     name: row.name,
     savedAt: row.saved_at,
+    revision: row.revision,
     tableCount: row.table_count,
     vendorCount: row.vendor_count,
   }
 }
 
 export async function GET(request: NextRequest) {
-  if (!isCloudSaveConfigured()) {
+  if (!isCloudSaveConfigured() || !isCloudAuthConfigured()) {
     return unavailableResponse('Cloud save is not configured on this deployment.')
   }
-  if (!authorizeCloudRequest(request.headers.get('x-floorplanner-key'))) {
+  if (!authorizeCloudRequest(request)) {
     return unauthorizedResponse()
   }
 
@@ -57,10 +61,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isCloudSaveConfigured()) {
+  if (!isCloudSaveConfigured() || !isCloudAuthConfigured()) {
     return unavailableResponse('Cloud save is not configured on this deployment.')
   }
-  if (!authorizeCloudRequest(request.headers.get('x-floorplanner-key'))) {
+  if (!authorizeCloudRequest(request)) {
     return unauthorizedResponse()
   }
 
@@ -72,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let body: { id?: string | null; name?: string; data?: DocumentSlice }
+  let body: { id?: string | null; name?: string; data?: unknown; expectedRevision?: number | null }
   try {
     body = await request.json()
   } catch {
@@ -93,18 +97,37 @@ export async function POST(request: NextRequest) {
   if (!body.data) {
     return NextResponse.json({ error: 'Layout data is required.' }, { status: 400 })
   }
+  if (body.expectedRevision !== undefined && body.expectedRevision !== null && (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 1)) {
+    return NextResponse.json({ error: 'expectedRevision must be a positive integer or null.' }, { status: 400 })
+  }
+
+  let data: DocumentSlice
+  try {
+    data = validateDocumentSlice(body.data)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Layout data is invalid.'
+    return NextResponse.json({ error: message }, { status: 400 })
+  }
 
   try {
     await ensureCloudLayoutsTable()
     const layout = await upsertCloudLayout({
       id: layoutId || createLayoutId(),
       name,
-      data: body.data,
+      data,
+      expectedRevision: body.expectedRevision ?? null,
     })
     return NextResponse.json({
       layout: summaryFromRow(layout),
     })
   } catch (error) {
+    if (error instanceof CloudLayoutConflictError) {
+      return NextResponse.json({
+        error: error.message,
+        code: 'revision-conflict',
+        currentLayout: error.currentLayout ? summaryFromRow(error.currentLayout) : null,
+      }, { status: 409 })
+    }
     const message = error instanceof Error ? error.message : 'Failed to save cloud layout.'
     return NextResponse.json({ error: message }, { status: 500 })
   }

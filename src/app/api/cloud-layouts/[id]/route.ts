@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { authorizeCloudRequest, isCloudAuthConfigured } from '@/lib/server/cloud-auth'
 import {
-  authorizeCloudRequest,
   deleteCloudLayout,
   ensureCloudLayoutsTable,
   getCloudLayout,
@@ -10,7 +10,7 @@ import {
 const LAYOUT_ID_PATTERN = /^layout-[a-z0-9]+$/
 
 function unauthorizedResponse(): NextResponse {
-  return NextResponse.json({ error: 'Invalid save key.' }, { status: 401 })
+  return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
 }
 
 function unavailableResponse(message: string): NextResponse {
@@ -21,10 +21,10 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!isCloudSaveConfigured()) {
+  if (!isCloudSaveConfigured() || !isCloudAuthConfigured()) {
     return unavailableResponse('Cloud save is not configured on this deployment.')
   }
-  if (!authorizeCloudRequest(request.headers.get('x-floorplanner-key'))) {
+  if (!authorizeCloudRequest(request)) {
     return unauthorizedResponse()
   }
 
@@ -44,6 +44,7 @@ export async function GET(
         id: layout.id,
         name: layout.name,
         savedAt: layout.saved_at,
+        revision: layout.revision,
         tableCount: layout.table_count,
         vendorCount: layout.vendor_count,
         data: layout.data,
@@ -59,10 +60,10 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!isCloudSaveConfigured()) {
+  if (!isCloudSaveConfigured() || !isCloudAuthConfigured()) {
     return unavailableResponse('Cloud save is not configured on this deployment.')
   }
-  if (!authorizeCloudRequest(request.headers.get('x-floorplanner-key'))) {
+  if (!authorizeCloudRequest(request)) {
     return unauthorizedResponse()
   }
 

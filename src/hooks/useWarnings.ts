@@ -8,6 +8,7 @@ import {
   selectSettings,
   selectDoors,
   selectRoom,
+  selectReviewUnassignedTables,
 } from '@/store/index'
 import { warningsModule } from '@/domain/warnings.impl'
 import { EMPTY_WARNING_RESULT } from '@/domain/warnings'
@@ -19,12 +20,14 @@ import type { WarningResult } from '@/domain/warnings'
  *
  * checkUnassigned: pass true only when in "finalized" mode.
  */
-export function useWarnings(checkUnassigned = false): WarningResult {
+export function useWarnings(checkUnassigned?: boolean): WarningResult {
   const tables = useEditorStore(selectTables)
   const vendorAssignments = useEditorStore(selectVendorAssignments)
   const settings = useEditorStore(selectSettings)
   const doors = useEditorStore(selectDoors)
   const room = useEditorStore(selectRoom)
+  const reviewUnassignedTables = useEditorStore(selectReviewUnassignedTables)
+  const effectiveCheckUnassigned = checkUnassigned ?? reviewUnassignedTables
 
   return useMemo(() => {
     const tableList = Object.values(tables)
@@ -38,8 +41,8 @@ export function useWarnings(checkUnassigned = false): WarningResult {
       doorList,
       assignmentList,
       settings,
-      checkUnassigned,
+      effectiveCheckUnassigned,
       room,
     )
-  }, [tables, vendorAssignments, settings, doors, room, checkUnassigned])
+  }, [tables, vendorAssignments, settings, doors, room, effectiveCheckUnassigned])
 }

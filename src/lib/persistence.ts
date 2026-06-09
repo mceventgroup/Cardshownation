@@ -9,6 +9,14 @@ import type {
   LayoutSettings,
   BackgroundImage,
 } from '@/domain/types'
+import { validateDocumentSlice } from './document-schema'
+import {
+  canPersistBackgroundImagesExternally,
+  clearAllBackgroundImagesExternally,
+  deleteBackgroundImagesExternally,
+  loadBackgroundImagesExternally,
+  saveBackgroundImagesExternally,
+} from './background-image-storage'
 
 const STORAGE_KEY = 'floorplanner:layout'
 const MANIFEST_KEY = 'floorplanner:manifest'
@@ -47,6 +55,29 @@ interface LayoutManifest {
   layouts: LayoutEntry[]
 }
 
+function detachBackgroundImagePayloads(slice: DocumentSlice): DocumentSlice {
+  if (!canPersistBackgroundImagesExternally()) return slice
+
+  const backgroundImages: Record<string, BackgroundImage> = {}
+  for (const image of Object.values(slice.backgroundImages)) {
+    backgroundImages[image.id] = { ...image, dataUrl: '' }
+  }
+
+  return {
+    ...slice,
+    backgroundImages,
+  }
+}
+
+export async function restoreBackgroundImagePayloads(slice: DocumentSlice): Promise<DocumentSlice> {
+  if (!canPersistBackgroundImagesExternally()) return slice
+
+  return {
+    ...slice,
+    backgroundImages: await loadBackgroundImagesExternally(slice.backgroundImages),
+  }
+}
+
 export function extractDocumentSlice(state: {
   tables: Record<string, TableObject>
   rows: Record<string, Row>
@@ -75,9 +106,13 @@ export type SaveError = 'quota-exceeded' | 'unknown'
 
 export function saveToLocalStorage(slice: DocumentSlice): SaveError | null {
   try {
+    if (canPersistBackgroundImagesExternally()) {
+      void saveBackgroundImagesExternally(slice.backgroundImages)
+    }
+
     const payload: PersistedPayload = {
       version: CURRENT_VERSION,
-      data: slice,
+      data: detachBackgroundImagePayloads(slice),
       savedAt: new Date().toISOString(),
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
@@ -112,6 +147,7 @@ export function loadFromLocalStorage(): DocumentSlice | null {
     }
 
     const migrated = migrate(payload)
+    migrated.data = validateDocumentSlice(migrated.data)
     migrateToMultiLayout(migrated.data)
     return migrated.data
   } catch {
@@ -122,6 +158,7 @@ export function loadFromLocalStorage(): DocumentSlice | null {
 export function clearLocalStorage(): void {
   try {
     localStorage.removeItem(STORAGE_KEY)
+    void clearAllBackgroundImagesExternally()
   } catch {
     // Ignore
   }
@@ -166,6 +203,7 @@ export function recoverLayoutsFromStorage(): number {
 
     try {
       const payload = migrate(JSON.parse(raw) as PersistedPayload)
+      payload.data = validateDocumentSlice(payload.data)
       if (!payload?.data) continue
 
       const existingEntry = existingManifest.layouts.find(layout => layout.id === id)
@@ -199,6 +237,7 @@ export function recoverLayoutsFromStorage(): number {
     if (raw) {
       try {
         const payload = migrate(JSON.parse(raw) as PersistedPayload)
+        payload.data = validateDocumentSlice(payload.data)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
       } catch {
         // Ignore malformed active payload during recovery.
@@ -212,9 +251,12 @@ export function recoverLayoutsFromStorage(): number {
 export function saveLayoutAs(name: string, slice: DocumentSlice): string {
   const id = 'layout-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
   const now = new Date().toISOString()
+  if (canPersistBackgroundImagesExternally()) {
+    void saveBackgroundImagesExternally(slice.backgroundImages)
+  }
   const payload: PersistedPayload = {
     version: CURRENT_VERSION,
-    data: slice,
+    data: detachBackgroundImagePayloads(slice),
     savedAt: now,
   }
 
@@ -244,6 +286,7 @@ export function loadLayout(id: string): DocumentSlice | null {
     if (!payload?.data) return null
 
     const migrated = migrate(payload)
+    migrated.data = validateDocumentSlice(migrated.data)
     const manifest = loadManifest()
     manifest.activeLayoutId = id
     saveManifest(manifest)
@@ -270,9 +313,21 @@ export function clearAllLayouts(): void {
   }
   localStorage.removeItem(MANIFEST_KEY)
   localStorage.removeItem(STORAGE_KEY)
+  void clearAllBackgroundImagesExternally()
 }
 
 export function deleteLayout(id: string): void {
+  try {
+    const raw = localStorage.getItem(LAYOUT_PREFIX + id)
+    if (raw) {
+      const payload: PersistedPayload = JSON.parse(raw)
+      const imageIds = Object.keys(payload?.data?.backgroundImages ?? {})
+      void deleteBackgroundImagesExternally(imageIds)
+    }
+  } catch {
+    // Ignore malformed layout payload during asset cleanup.
+  }
+
   localStorage.removeItem(LAYOUT_PREFIX + id)
   const manifest = loadManifest()
   manifest.layouts = manifest.layouts.filter(l => l.id !== id)
@@ -280,6 +335,21 @@ export function deleteLayout(id: string): void {
     manifest.activeLayoutId = manifest.layouts[0]?.id ?? null
   }
   saveManifest(manifest)
+
+  if (manifest.activeLayoutId) {
+    const nextLayoutRaw = localStorage.getItem(LAYOUT_PREFIX + manifest.activeLayoutId)
+    if (nextLayoutRaw) {
+      try {
+        const payload = migrate(JSON.parse(nextLayoutRaw) as PersistedPayload)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+        return
+      } catch {
+        // Fall through and clear stale active storage.
+      }
+    }
+  }
+
+  localStorage.removeItem(STORAGE_KEY)
 }
 
 export function migrateToMultiLayout(legacySlice?: DocumentSlice | null): void {
@@ -324,6 +394,7 @@ export function parseFilePayload(jsonText: string): DocumentSlice {
   }
 
   const migrated = migrate(payload as unknown as PersistedPayload)
+  migrated.data = validateDocumentSlice(migrated.data)
   return migrated.data
 }
 
@@ -360,6 +431,24 @@ function migrate(payload: PersistedPayload): PersistedPayload {
   if ((payload.data.settings as { wallThickness?: number }).wallThickness === undefined) {
     (payload.data.settings as { wallThickness: number }).wallThickness = 6
   }
+  const settingsWithShowFields = payload.data.settings as {
+    eventName?: string
+    eventDate?: string
+    upcomingShow1Date?: string
+    upcomingShow1Location?: string
+    upcomingShow2Date?: string
+    upcomingShow2Location?: string
+    upcomingShow3Date?: string
+    upcomingShow3Location?: string
+  }
+  if (settingsWithShowFields.eventName === undefined) settingsWithShowFields.eventName = 'Kansas Card Show'
+  if (settingsWithShowFields.eventDate === undefined) settingsWithShowFields.eventDate = ''
+  if (settingsWithShowFields.upcomingShow1Date === undefined) settingsWithShowFields.upcomingShow1Date = ''
+  if (settingsWithShowFields.upcomingShow1Location === undefined) settingsWithShowFields.upcomingShow1Location = ''
+  if (settingsWithShowFields.upcomingShow2Date === undefined) settingsWithShowFields.upcomingShow2Date = ''
+  if (settingsWithShowFields.upcomingShow2Location === undefined) settingsWithShowFields.upcomingShow2Location = ''
+  if (settingsWithShowFields.upcomingShow3Date === undefined) settingsWithShowFields.upcomingShow3Date = ''
+  if (settingsWithShowFields.upcomingShow3Location === undefined) settingsWithShowFields.upcomingShow3Location = ''
   if (payload.data.room && !Array.isArray((payload.data.room as { circles?: unknown }).circles)) {
     ;(payload.data.room as CompositeRoom).circles = []
   }

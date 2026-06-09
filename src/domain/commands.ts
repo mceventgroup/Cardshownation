@@ -41,6 +41,7 @@ import type {
   Point,
   VendorAssignment,
   Vendor,
+  VendorId,
   LayoutSettings,
 } from './types'
 
@@ -258,6 +259,10 @@ export interface ApplyImportCommand extends CommandBase {
   readonly createdVendors: ReadonlyArray<Vendor>
   readonly replacedAssignments: ReadonlyArray<VendorAssignment>
   readonly createdAssignments: ReadonlyArray<VendorAssignment>
+  readonly vendorTableCountDeltas: ReadonlyArray<{
+    vendorId: VendorId
+    delta: number
+  }>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
