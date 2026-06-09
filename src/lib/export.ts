@@ -2,6 +2,7 @@ import type {
   BackgroundImage,
   CompositeRoom,
   Door,
+  LayoutSettings,
   Point,
   Rect,
   Section,
@@ -12,7 +13,7 @@ import type {
 import { getRoomLabel, getRoomZones } from '@/domain/room-numbering'
 import { getStage } from './stage'
 import { vendorColor } from './defaults'
-import { resolveVendorBuckets } from './vendor-resolution'
+import { resolveVendorBuckets, vendorDisplayName } from './vendor-resolution'
 import { compressTableLabels } from './table-ranges'
 
 function abbreviateAssignedTablePrefix(value: string): string {
@@ -771,6 +772,145 @@ export function printVendorManifest(
 </html>`
 
   openPrintWindow(html, 900, 700, true)
+}
+
+function getUpcomingShows(settings: LayoutSettings): Array<{ date: string; label: string }> {
+  const entries = [
+    { date: settings.upcomingShow1Date.trim(), label: settings.upcomingShow1Location.trim() },
+    { date: settings.upcomingShow2Date.trim(), label: settings.upcomingShow2Location.trim() },
+    { date: settings.upcomingShow3Date.trim(), label: settings.upcomingShow3Location.trim() },
+  ]
+
+  return entries.filter(entry => entry.date || entry.label)
+}
+
+function compareAssignedTablesForPrint(
+  a: TableObject,
+  b: TableObject,
+  sections: Record<string, Section>,
+): number {
+  const aSectionOrder = a.sectionId ? (sections[a.sectionId]?.order ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
+  const bSectionOrder = b.sectionId ? (sections[b.sectionId]?.order ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
+  if (aSectionOrder !== bSectionOrder) return aSectionOrder - bSectionOrder
+
+  const aSectionName = a.sectionId ? sections[a.sectionId]?.name ?? '' : ''
+  const bSectionName = b.sectionId ? sections[b.sectionId]?.name ?? '' : ''
+  const sectionNameCmp = aSectionName.localeCompare(bSectionName, undefined, { numeric: true, sensitivity: 'base' })
+  if (sectionNameCmp !== 0) return sectionNameCmp
+
+  return (a.displayId || a.label || String(a.tableNumber)).localeCompare(
+    b.displayId || b.label || String(b.tableNumber),
+    undefined,
+    { numeric: true, sensitivity: 'base' },
+  )
+}
+
+export function printVendorTableAssignments(
+  tables: Record<string, TableObject>,
+  sections: Record<string, Section>,
+  vendors: Record<string, Vendor>,
+  assignments: Record<string, VendorAssignment>,
+  settings: LayoutSettings,
+): void {
+  const grouped = resolveVendorBuckets(vendors, assignments)
+    .map(bucket => {
+      const assignedTables = bucket.assignments
+        .map(assignment => tables[assignment.tableId])
+        .filter((table): table is TableObject => Boolean(table))
+        .sort((a, b) => compareAssignedTablesForPrint(a, b, sections))
+
+      if (assignedTables.length === 0) return null
+
+      return {
+        key: bucket.key,
+        vendorName: bucket.vendor ? vendorDisplayName(bucket.vendor) : bucket.displayName,
+        tableLabels: assignedTables.map(table => table.displayId || table.label || String(table.tableNumber)),
+        sortTable: assignedTables[0],
+      }
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .sort((a, b) => compareAssignedTablesForPrint(a.sortTable, b.sortTable, sections))
+
+  if (grouped.length === 0) {
+    alert('No vendor assignments available to print.')
+    return
+  }
+
+  const upcomingShows = getUpcomingShows(settings)
+  const pages = grouped.map(row => `
+    <section class="assignment-page">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div class="event-name">${esc(settings.eventName.trim() || 'Kansas Card Show')}</div>
+          <div class="event-date">${esc(settings.eventDate.trim() || 'Date TBD')}</div>
+        </div>
+        <div class="vendor-block">
+          <div class="label">Vendor</div>
+          <div class="vendor-name">${esc(row.vendorName)}</div>
+        </div>
+        <div class="assignment-block">
+          <div class="label">Table Assignment</div>
+          <div class="assignment-value">${esc(compressTableLabels(row.tableLabels))}</div>
+        </div>
+        <div class="footer-block">
+          <div class="shows">
+            <div class="shows-title">Upcoming Shows</div>
+            ${upcomingShows.length === 0
+              ? '<div class="show-line muted">No upcoming shows listed</div>'
+              : upcomingShows.map(show => `<div class="show-line">${esc(show.date)} - ${esc(show.label)}</div>`).join('')}
+          </div>
+          <div class="website">kansascardshow.com</div>
+        </div>
+      </div>
+    </section>
+  `).join('')
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+  <title>Vendor Table Assignments</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f5f5; font-family: "Helvetica Neue", Arial, sans-serif; color: #111827; }
+    .header { padding: 12px 24px; border-bottom: 1px solid #d1d5db; display: flex; justify-content: space-between; align-items: center; background: #fff; position: sticky; top: 0; }
+    .title { font-size: 18px; font-weight: 700; }
+    .assignment-page { min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 24px; page-break-after: always; }
+    .assignment-page:last-child { page-break-after: auto; }
+    .sheet { width: 100%; max-width: 850px; min-height: 1040px; border: 2px solid #111827; background: #fff; padding: 40px 44px; display: flex; flex-direction: column; }
+    .sheet-head { border-bottom: 1px solid #d1d5db; padding-bottom: 18px; }
+    .event-name { font-size: 28px; font-weight: 700; letter-spacing: 0.02em; }
+    .event-date { margin-top: 6px; font-size: 18px; color: #374151; }
+    .vendor-block { margin-top: 56px; }
+    .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.18em; color: #6b7280; }
+    .vendor-name { margin-top: 10px; font-size: 34px; font-weight: 700; line-height: 1.08; }
+    .assignment-block { margin-top: 70px; border: 3px solid #111827; padding: 30px 26px; text-align: center; }
+    .assignment-value { margin-top: 16px; font-size: 72px; font-weight: 800; letter-spacing: 0.04em; line-height: 1; }
+    .footer-block { margin-top: auto; padding-top: 48px; border-top: 1px solid #d1d5db; display: flex; justify-content: space-between; gap: 24px; align-items: end; }
+    .shows-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: #4b5563; }
+    .show-line { margin-top: 8px; font-size: 18px; }
+    .muted { color: #9ca3af; }
+    .website { font-size: 18px; font-weight: 700; }
+    @media print {
+      .no-print { display: none !important; }
+      @page { margin: 0.45in; }
+      body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .assignment-page { padding: 0; min-height: auto; }
+      .sheet { min-height: 9.8in; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">Vendor Table Assignments</div>
+    <button class="no-print" onclick="window.print()" style="padding:8px 16px;background:#111827;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Print / Save PDF</button>
+  </div>
+  ${pages}
+</body>
+</html>`
+
+  openPrintWindow(html, 1000, 900, true)
 }
 
 function buildSVG(

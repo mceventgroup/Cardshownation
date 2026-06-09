@@ -18,6 +18,14 @@ export const DEFAULT_SETTINGS: LayoutSettings = {
   defaultTableHeight: 30, // 30 in table width
   defaultTableShape: 'rectangle',
   unitLabel: 'in',      // base unit is inches
+  eventName: 'Kansas Card Show',
+  eventDate: '',
+  upcomingShow1Date: '',
+  upcomingShow1Location: '',
+  upcomingShow2Date: '',
+  upcomingShow2Location: '',
+  upcomingShow3Date: '',
+  upcomingShow3Location: '',
 }
 
 // Default stage zoom levels

@@ -197,6 +197,65 @@ export default function SettingsPanel() {
           </label>
         </div>
       </CollapsibleSection>
+
+      <CollapsibleSection title="Show Settings" panelId="settings-show">
+        <div className="space-y-4 bg-white px-4 py-4">
+          <div className="grid grid-cols-1 gap-3">
+            <label className="block">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Event Name</span>
+              <input
+                type="text"
+                value={settings.eventName}
+                onChange={e => updateSetting('eventName', e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+                placeholder="Kansas Card Show"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Event Date</span>
+              <input
+                type="text"
+                value={settings.eventDate}
+                onChange={e => updateSetting('eventDate', e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+                placeholder="June 14, 2026"
+              />
+            </label>
+          </div>
+
+          <div className="space-y-3">
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Upcoming Shows</div>
+            {[
+              ['upcomingShow1Date', 'upcomingShow1Location', 'Upcoming Show 1'],
+              ['upcomingShow2Date', 'upcomingShow2Location', 'Upcoming Show 2'],
+              ['upcomingShow3Date', 'upcomingShow3Location', 'Upcoming Show 3 (Optional)'],
+            ].map(([dateKey, locationKey, label]) => (
+              <div key={dateKey} className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">{label} Date</span>
+                  <input
+                    type="text"
+                    value={settings[dateKey as keyof typeof settings] as string}
+                    onChange={e => updateSetting(dateKey as keyof typeof settings, e.target.value as never)}
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+                    placeholder="June 27"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">{label} Location/Name</span>
+                  <input
+                    type="text"
+                    value={settings[locationKey as keyof typeof settings] as string}
+                    onChange={e => updateSetting(locationKey as keyof typeof settings, e.target.value as never)}
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+                    placeholder="Topeka"
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CollapsibleSection>
     </div>
   )
 }

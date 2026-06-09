@@ -250,6 +250,14 @@ export interface LayoutSettings {
   defaultTableHeight: number
   defaultTableShape: TableShape
   unitLabel: string             // "ft" or "px" — display only in v1, no real conversion
+  eventName: string
+  eventDate: string
+  upcomingShow1Date: string
+  upcomingShow1Location: string
+  upcomingShow2Date: string
+  upcomingShow2Location: string
+  upcomingShow3Date: string
+  upcomingShow3Location: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

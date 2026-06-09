@@ -1,9 +1,37 @@
 import { applyCommand, reverseCommand, type MutableCanvasState } from '../executor'
 import type { CompositeRoom, Row, TableObject } from '@/domain/types'
 import type { LayoutCommand } from '@/domain/commands'
+import { DEFAULT_SETTINGS } from '@/lib/defaults'
 
 function makeState(tables: Record<string, TableObject>): MutableCanvasState {
-  return { tables, rows: {}, sections: {}, vendors: {}, vendorAssignments: {}, room: null, doors: {}, settings: { canvasWidth: 6000, canvasHeight: 4800, gridSize: 6, snapToGrid: true, snapToObjects: false, minAisleWidth: 36, doorClearance: 48, wallThickness: 6, wallSetback: 36, showWallSetback: false, vendorColorCoding: true, defaultTableWidth: 72, defaultTableHeight: 30, defaultTableShape: 'rectangle', unitLabel: 'in', roomLocked: false } }
+  return {
+    tables,
+    rows: {},
+    sections: {},
+    vendors: {},
+    vendorAssignments: {},
+    room: null,
+    doors: {},
+    settings: {
+      ...DEFAULT_SETTINGS,
+      canvasWidth: 6000,
+      canvasHeight: 4800,
+      gridSize: 6,
+      snapToGrid: true,
+      snapToObjects: false,
+      minAisleWidth: 36,
+      doorClearance: 48,
+      wallThickness: 6,
+      wallSetback: 36,
+      showWallSetback: false,
+      vendorColorCoding: true,
+      defaultTableWidth: 72,
+      defaultTableHeight: 30,
+      defaultTableShape: 'rectangle',
+      unitLabel: 'in',
+      roomLocked: false,
+    },
+  }
 }
 
 function makeTable(id: string, overrides: Partial<TableObject> = {}): TableObject {

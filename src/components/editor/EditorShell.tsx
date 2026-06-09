@@ -9,10 +9,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useEditorStore, selectShowCaseHighlights, selectShowMode, selectShowSectionColors } from '@/store/index'
-import { exportFloorplanImage, exportVendorAssignmentsCsv, exportVendorListImage, printShowModeSheet, printVendorManifest } from '@/lib/export'
+import { exportFloorplanImage, exportVendorAssignmentsCsv, exportVendorListImage, printShowModeSheet, printVendorManifest, printVendorTableAssignments } from '@/lib/export'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar from './LeftSidebar'
+import ShowModeSidebar from './ShowModeSidebar'
 import KonvaCanvas from './KonvaCanvas'
 import VendorDrawer from './VendorDrawer'
 import ShowModeVendorList from './ShowModeVendorList'
@@ -37,6 +38,7 @@ export default function EditorShell() {
   const room = useEditorStore(s => s.room)
   const doors = useEditorStore(s => s.doors)
   const backgroundImages = useEditorStore(s => s.backgroundImages)
+  const settings = useEditorStore(s => s.settings)
   const [showHelp, setShowHelp] = useState(false)
   const [showFirstRun, setShowFirstRun] = useState(false)
   const [activeTab, setActiveTab] = useState<'layout' | 'vendors' | 'settings'>('layout')
@@ -81,87 +83,37 @@ export default function EditorShell() {
       {!showMode && <Toolbar />}
       <div className="flex-1 overflow-hidden">
         <div className="flex h-full flex-row overflow-hidden">
-          {!showMode && <LeftSidebar activeTab={activeTab} onTabChange={handleTabChange} />}
+          {showMode ? (
+            <ShowModeSidebar
+              onPrintShowSheet={() => printShowModeSheet(tables, sections, vendors, assignments, room, 'Show Sheet', doors, backgroundImages)}
+              onSaveFloorplanImage={() => exportFloorplanImage(
+                tables,
+                sections,
+                vendors,
+                assignments,
+                room,
+                doors,
+                { showVendorNames: false, showPaymentStatus: false, title: 'Floor Plan' },
+                backgroundImages,
+                'floorplan.png',
+              )}
+              onSaveVendorListImage={() => exportVendorListImage(tables, vendors, assignments, 'Vendor List', 'vendor-list.png')}
+              onExportVendorCsv={() => exportVendorAssignmentsCsv(tables, vendors, assignments, room, 'vendor-list')}
+              onPrintVendorChecklist={() => printVendorManifest(tables, vendors, assignments, 'Vendor Checklist')}
+              onPrintVendorTablesPdf={() => printVendorTableAssignments(tables, sections, vendors, assignments, settings)}
+              onPrintCaseRentals={() => printVendorManifest(tables, vendors, assignments, 'Case Rental Checklist', { casesOnly: true })}
+              showCaseHighlights={showCaseHighlights}
+              onToggleCaseHighlights={setShowCaseHighlights}
+              showSectionColors={showSectionColors}
+              onToggleSectionColors={setShowSectionColors}
+              onExitShowMode={() => setShowMode(false)}
+            />
+          ) : (
+            <LeftSidebar activeTab={activeTab} onTabChange={handleTabChange} />
+          )}
           <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
             <div className="relative min-h-0 flex-1 overflow-hidden">
               <KonvaCanvas />
-              {showMode && (
-                <div className="absolute left-4 top-4 z-30 flex gap-2">
-                  <button
-                    onClick={() => printShowModeSheet(tables, sections, vendors, assignments, room, 'Show Sheet', doors, backgroundImages)}
-                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                  >
-                    Print / Save PDF
-                  </button>
-                  <button
-                    onClick={() => exportFloorplanImage(
-                      tables,
-                      sections,
-                      vendors,
-                      assignments,
-                      room,
-                      doors,
-                      { showVendorNames: false, showPaymentStatus: false, title: 'Floor Plan' },
-                      backgroundImages,
-                      'floorplan.png',
-                    )}
-                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                  >
-                    Save Floorplan Image
-                  </button>
-                  <button
-                    onClick={() => exportVendorListImage(tables, vendors, assignments, 'Vendor List', 'vendor-list.png')}
-                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                  >
-                    Save Vendor List Image
-                  </button>
-                  <button
-                    onClick={() => exportVendorAssignmentsCsv(tables, vendors, assignments, room, 'vendor-list')}
-                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                  >
-                    Export Vendor CSV
-                  </button>
-                  <button
-                    onClick={() => printVendorManifest(tables, vendors, assignments, 'Vendor Checklist')}
-                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                  >
-                    Print Vendor Checklist
-                  </button>
-                  <button
-                    onClick={() => printVendorManifest(tables, vendors, assignments, 'Case Rental Checklist', { casesOnly: true })}
-                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                  >
-                    Print Case Rentals
-                  </button>
-                  <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white">
-                    <input
-                      type="checkbox"
-                      checked={showCaseHighlights}
-                      onChange={e => setShowCaseHighlights(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                    <span>Highlight Cases</span>
-                    <span className="text-xs font-normal text-slate-500">Blue ring + count</span>
-                  </label>
-                  <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white">
-                    <input
-                      type="checkbox"
-                      checked={showSectionColors}
-                      onChange={e => setShowSectionColors(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                    <span>Section Colors</span>
-                  </label>
-                  <button
-                    onClick={() => {
-                      setShowMode(false)
-                    }}
-                    className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-sm hover:bg-white"
-                  >
-                    Exit Show Mode
-                  </button>
-                </div>
-              )}
             </div>
             {!showMode && <VendorDrawer active={activeTab === 'vendors'} />}
           </div>
