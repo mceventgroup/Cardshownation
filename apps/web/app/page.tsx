@@ -208,6 +208,32 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <section className="container-wide pb-10">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
+                New Product
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-slate-950">
+                Floorplanner now has its own spot on Card Show Nation.
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+                Explore the dedicated floor planning product built to map tables,
+                vendor zones, and event layouts for card shows.
+              </p>
+            </div>
+            <Link
+              href="/floorplanner"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+            >
+              Explore Floorplanner
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Promoter CTA */}
       <section className="container-wide pb-12">
         <div className="rounded-[2rem] bg-slate-950 px-6 py-8 text-white flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

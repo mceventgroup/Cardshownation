@@ -381,6 +381,14 @@ export default async function AdminShowDetailPage({ params, searchParams }: Prop
       </div>
 
       <div className="mb-8 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-4 flex flex-wrap gap-3">
+          <Link
+            href={`/admin/shows/${show.id}/floorplan`}
+            className="rounded-lg border border-brand-200 bg-brand-50 px-5 py-2 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100"
+          >
+            Open Floorplan
+          </Link>
+        </div>
         {isMutable ? (
           <div className="flex flex-wrap gap-3">
             {show.status !== "APPROVED" && (

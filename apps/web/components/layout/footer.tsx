@@ -34,6 +34,9 @@ export function Footer() {
           <div>
             <p className="text-sm font-semibold text-slate-950">Explore</p>
             <div className="mt-4 flex flex-col gap-2 text-sm text-slate-600">
+              <Link href="/floorplanner" className="transition-colors hover:text-brand-700">
+                Floorplanner
+              </Link>
               <Link href="/card-shows" className="transition-colors hover:text-brand-700">
                 Browse all shows
               </Link>
@@ -68,6 +71,9 @@ export function Footer() {
         <div className="mt-10 flex flex-col gap-2 border-t border-slate-100 pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Card Show Nation. All rights reserved.</p>
           <div className="flex items-center gap-4">
+            <Link href="/floorplanner" className="transition-colors hover:text-slate-800">
+              Floorplanner
+            </Link>
             <Link href="/submit-show" className="transition-colors hover:text-slate-800">
               Submit a show
             </Link>

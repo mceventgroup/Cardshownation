@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { LayoutDashboard, ListChecks, LogOut, RefreshCw, Send, Upload, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  Map,
+  RefreshCw,
+  Send,
+  Upload,
+  Users,
+} from "lucide-react";
 import { logoutAdmin } from "@/app/admin/actions";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +24,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="flex-1 space-y-0.5 px-3 py-4">
           {[
             { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+            { href: "/admin/floorplanner", label: "Floorplanner", icon: Map },
             { href: "/admin/submissions", label: "Submissions", icon: Send },
             { href: "/admin/shows", label: "All Shows", icon: ListChecks },
             { href: "/admin/promoters", label: "Promoters", icon: Users },
