@@ -24,6 +24,7 @@ type SearchParams = {
   resetSent?: string;
   userDeleted?: string;
   error?: string;
+  errorMessage?: string;
 };
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,17 @@ function readRequiredString(formData: FormData, key: string, maxLength: number) 
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function getRedirectErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message) {
+      return message.slice(0, 240);
+    }
+  }
+
+  return fallback;
 }
 
 async function createModerator(formData: FormData) {
@@ -72,7 +84,11 @@ async function createModerator(formData: FormData) {
     redirect("/admin/users?created=1");
   } catch (error) {
     rethrowIfRedirectError(error);
-    redirect("/admin/users?error=moderator");
+    const message = getRedirectErrorMessage(
+      error,
+      "Moderator creation failed. Check the name, email, and password fields.",
+    );
+    redirect(`/admin/users?error=moderator&errorMessage=${encodeURIComponent(message)}`);
   }
 }
 
@@ -124,7 +140,13 @@ async function assignModerator(formData: FormData) {
     redirect("/admin/users?moderatorAssigned=1");
   } catch (error) {
     rethrowIfRedirectError(error);
-    redirect("/admin/users?error=moderator-assign");
+    const message = getRedirectErrorMessage(
+      error,
+      "Moderator assignment failed. Only member accounts can be promoted here.",
+    );
+    redirect(
+      `/admin/users?error=moderator-assign&errorMessage=${encodeURIComponent(message)}`,
+    );
   }
 }
 
@@ -168,7 +190,11 @@ async function sendResetLink(formData: FormData) {
     redirect("/admin/users?resetSent=1");
   } catch (error) {
     rethrowIfRedirectError(error);
-    redirect("/admin/users?error=reset-send");
+    const message = getRedirectErrorMessage(
+      error,
+      "Password reset email could not be sent.",
+    );
+    redirect(`/admin/users?error=reset-send&errorMessage=${encodeURIComponent(message)}`);
   }
 }
 
@@ -220,7 +246,7 @@ function getMessage(sp: SearchParams) {
   }
 
   if (sp.error === "moderator") {
-    return "Moderator creation failed. Check the name, email, and password fields.";
+    return sp.errorMessage ?? "Moderator creation failed. Check the name, email, and password fields.";
   }
 
   if (sp.error === "password") {
@@ -228,7 +254,7 @@ function getMessage(sp: SearchParams) {
   }
 
   if (sp.error === "moderator-assign") {
-    return "Moderator assignment failed. Only member accounts can be promoted here.";
+    return sp.errorMessage ?? "Moderator assignment failed. Only member accounts can be promoted here.";
   }
 
   if (sp.error === "moderator-revoke") {
@@ -236,7 +262,7 @@ function getMessage(sp: SearchParams) {
   }
 
   if (sp.error === "reset-send") {
-    return "Password reset email could not be sent.";
+    return sp.errorMessage ?? "Password reset email could not be sent.";
   }
 
   if (sp.error === "user-delete") {
