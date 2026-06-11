@@ -329,6 +329,12 @@ export async function assignModeratorAccessByAdmin(input: AdminUserActionInput) 
       previousRole: user.role,
     },
   });
+
+  return user.role === "MODERATOR"
+    ? user
+    : db.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
 }
 
 export async function sendPasswordResetByAdmin(input: AdminUserActionInput) {

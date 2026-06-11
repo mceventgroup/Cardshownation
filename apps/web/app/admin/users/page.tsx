@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { requireAdminSession } from "@/lib/admin-auth";
 import { updateAdminPassword } from "@/lib/admins";
 import { getRecentAuditLogs } from "@/lib/audit-log";
+import { sendModeratorVerificationEmail } from "@/lib/email";
 import { rethrowIfRedirectError } from "@/lib/next-control-flow";
+import { createVerificationToken } from "@/lib/verification-token";
 import {
   assignModeratorAccessByAdmin,
   createModeratorAccountByAdmin,
@@ -58,12 +60,15 @@ async function createModerator(formData: FormData) {
   }
 
   try {
-    await createModeratorAccountByAdmin({
+    const user = await createModeratorAccountByAdmin({
       actorId: session.user.id,
       email,
       name,
       password,
     });
+    const token = await createVerificationToken(user.id);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
+    await sendModeratorVerificationEmail(email, `${appUrl}/moderator/verify?token=${token}`);
     redirect("/admin/users?created=1");
   } catch (error) {
     rethrowIfRedirectError(error);
@@ -107,10 +112,15 @@ async function assignModerator(formData: FormData) {
   }
 
   try {
-    await assignModeratorAccessByAdmin({
+    const user = await assignModeratorAccessByAdmin({
       actorId: session.user.id,
       userId,
     });
+    if (user && !user.emailVerifiedAt) {
+      const token = await createVerificationToken(user.id);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
+      await sendModeratorVerificationEmail(user.email, `${appUrl}/moderator/verify?token=${token}`);
+    }
     redirect("/admin/users?moderatorAssigned=1");
   } catch (error) {
     rethrowIfRedirectError(error);

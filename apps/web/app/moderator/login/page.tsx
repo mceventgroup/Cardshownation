@@ -64,6 +64,10 @@ async function handleLogin(formData: FormData) {
     redirect(`/moderator/login?error=invalid&from=${encodeURIComponent(redirectTo)}`);
   }
 
+  if (!user.emailVerifiedAt) {
+    redirect(`/moderator/login?error=unverified&from=${encodeURIComponent(redirectTo)}`);
+  }
+
   resetRateLimit("moderator-login", ip);
   await startModeratorSession(user.id);
   redirect(redirectTo);
@@ -94,6 +98,8 @@ export default async function ModeratorLoginPage({
       ? "Too many attempts. Wait 30 minutes and try again."
         : sp.error === "invalid"
         ? "Email or password did not match this moderator account."
+        : sp.error === "unverified"
+        ? "Please verify your email before logging in. Check your inbox for the verification link."
         : null;
   const disabledMessage =
     secretStatus.error === "missing"
