@@ -5,7 +5,7 @@ const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET;
 const LOGIN_PATH = "/admin/login";
 const SETUP_PATH = "/admin/setup";
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (
@@ -17,7 +17,9 @@ export async function middleware(req: NextRequest) {
   }
 
   if (!ADMIN_SESSION_SECRET) {
-    return new NextResponse("Admin access disabled - set ADMIN_SESSION_SECRET.", { status: 503 });
+    return new NextResponse("Admin access disabled - set ADMIN_SESSION_SECRET.", {
+      status: 503,
+    });
   }
 
   const cookie = req.cookies.get(ADMIN_COOKIE_NAME);

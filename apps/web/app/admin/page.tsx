@@ -43,7 +43,7 @@ export default async function AdminDashboardPage() {
           <div>
             <h2 className="text-base font-semibold text-slate-900">Floorplanner</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Open the admin floor planning workspace for any show.
+              Open the standalone admin floor planning workspace directly.
             </p>
           </div>
           <Link
