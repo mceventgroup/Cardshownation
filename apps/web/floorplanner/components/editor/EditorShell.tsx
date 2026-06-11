@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useKeyboardShortcuts } from '@floorplanner/hooks/useKeyboardShortcuts'
 import { useEditorStore, selectShowCaseHighlights, selectShowMode, selectShowSectionColors } from '@floorplanner/store/index'
 import { exportFloorplanImage, exportVendorAssignmentsCsv, exportVendorListImage, printShowModeSheet, printVendorManifest, printVendorTableAssignments } from '@floorplanner/lib/export'
@@ -16,11 +17,19 @@ import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar from './LeftSidebar'
 import ShowModeSidebar from './ShowModeSidebar'
-import KonvaCanvas from './KonvaCanvas'
 import VendorDrawer from './VendorDrawer'
 import ShowModeVendorList from './ShowModeVendorList'
 import HelpCheatSheetModal from './HelpCheatSheetModal'
 import FirstRunModal from './FirstRunModal'
+
+const KonvaCanvas = dynamic(() => import('./KonvaCanvas'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full min-h-[320px] items-center justify-center bg-slate-200 text-sm text-slate-600">
+      Loading canvas...
+    </div>
+  ),
+})
 
 const FIRST_RUN_BYPASS_KEY = 'floorplanner:onboarding:bypass'
 
