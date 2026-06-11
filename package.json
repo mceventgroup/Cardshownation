@@ -22,9 +22,9 @@
   "devDependencies": {
     "@types/node": "^20.14.0",
     "konva": "8.4.3",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "react-reconciler": "0.29.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-reconciler": "0.33.0",
     "turbo": "^2.9.14",
     "typescript": "^5.5.0"
   },
@@ -34,16 +34,13 @@
     "@typescript-eslint/type-utils": "7.18.0",
     "@typescript-eslint/typescript-estree": "7.18.0",
     "@typescript-eslint/utils": "7.18.0",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "next": {
       "postcss": "8.5.10"
     },
     "konva": "8.4.3",
-    "react-konva": {
-      "react-reconciler": "0.29.0"
-    },
-    "react-reconciler": "0.29.0",
+    "react-reconciler": "0.33.0",
     "postcss": "8.5.10",
     "uuid": "14.0.0"
   },
