@@ -1,19 +1,23 @@
 import { requireAdminSession } from "@/lib/admin-auth";
 import { FloorplanEditorPage } from "@/app/floorplanner/editor-page";
-import { isCloudAuthConfigured } from "@floorplanner/lib/server/cloud-auth";
-import { isCloudSaveConfigured } from "@floorplanner/lib/server/cloud-layout-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminFloorplannerPage() {
   await requireAdminSession("/admin/floorplanner");
-  const cloudReady = isCloudAuthConfigured() && isCloudSaveConfigured();
+  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL?.trim());
+  const hasCloudPassword = Boolean(
+    process.env.FLOORPLANNER_ADMIN_PASSWORD?.trim() ||
+      process.env.FLOORPLANNER_SAVE_KEY?.trim(),
+  );
+  const hasCloudSessionSecret = Boolean(process.env.FLOORPLANNER_SESSION_SECRET?.trim());
+  const cloudReady = hasDatabaseUrl && hasCloudPassword && hasCloudSessionSecret;
   const missingEnvVars = [
-    !process.env.DATABASE_URL ? "DATABASE_URL" : null,
-    !process.env.FLOORPLANNER_ADMIN_PASSWORD && !process.env.FLOORPLANNER_SAVE_KEY
+    !hasDatabaseUrl ? "DATABASE_URL" : null,
+    !hasCloudPassword
       ? "FLOORPLANNER_ADMIN_PASSWORD"
       : null,
-    !process.env.FLOORPLANNER_SESSION_SECRET ? "FLOORPLANNER_SESSION_SECRET" : null,
+    !hasCloudSessionSecret ? "FLOORPLANNER_SESSION_SECRET" : null,
   ].filter((value): value is string => Boolean(value));
 
   return (
