@@ -24,6 +24,26 @@ import FirstRunModal from './FirstRunModal'
 
 const FIRST_RUN_BYPASS_KEY = 'floorplanner:onboarding:bypass'
 
+function readBypassPreference(): boolean {
+  try {
+    return window.localStorage.getItem(FIRST_RUN_BYPASS_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function writeBypassPreference(skipNextTime: boolean): void {
+  try {
+    if (skipNextTime) {
+      window.localStorage.setItem(FIRST_RUN_BYPASS_KEY, 'true')
+    } else {
+      window.localStorage.removeItem(FIRST_RUN_BYPASS_KEY)
+    }
+  } catch {
+    // Ignore browsers that block localStorage access.
+  }
+}
+
 type EditorShellProps = {
   cloudBasePath: string
   initialCloudLayout?: {
@@ -91,18 +111,14 @@ export default function EditorShell({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (window.localStorage.getItem(FIRST_RUN_BYPASS_KEY) !== 'true') {
+    if (!readBypassPreference()) {
       setShowFirstRun(true)
     }
   }, [])
 
   const persistBypass = useCallback((skipNextTime: boolean) => {
     if (typeof window === 'undefined') return
-    if (skipNextTime) {
-      window.localStorage.setItem(FIRST_RUN_BYPASS_KEY, 'true')
-    } else {
-      window.localStorage.removeItem(FIRST_RUN_BYPASS_KEY)
-    }
+    writeBypassPreference(skipNextTime)
   }, [])
 
   const handleStart = useCallback((skipNextTime: boolean) => {
