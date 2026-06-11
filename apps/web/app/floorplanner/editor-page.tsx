@@ -13,6 +13,36 @@ const EditorShell = dynamic(() => import("@floorplanner/components/editor/Editor
   ),
 });
 
+const KonvaProbe = dynamic(() => import("@floorplanner/components/editor/KonvaProbe"), {
+  ssr: false,
+});
+
+class FloorplannerProbeBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Minimal Konva probe also failed: {this.state.error.message}
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 class FloorplannerErrorBoundary extends Component<
   { children: ReactNode },
   { error: Error | null }
@@ -48,6 +78,9 @@ class FloorplannerErrorBoundary extends Component<
             <p className="mt-3 text-sm leading-6 text-slate-600">
               {this.state.error.message || "An unexpected client-side error occurred."}
             </p>
+            <FloorplannerProbeBoundary>
+              <KonvaProbe />
+            </FloorplannerProbeBoundary>
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
