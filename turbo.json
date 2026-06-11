@@ -16,6 +16,8 @@
         "PROMOTER_SESSION_SECRET",
         "USER_SESSION_SECRET",
         "CRON_SECRET",
+        "RESEND_API_KEY",
+        "BLOB_READ_WRITE_TOKEN",
         "CSN_DATA_MODE",
         "NODE_ENV"
       ]
