@@ -23,6 +23,7 @@
     "@types/node": "^20.14.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "react-reconciler": "0.29.0",
     "turbo": "^2.9.14",
     "typescript": "^5.5.0"
   },
@@ -37,6 +38,10 @@
     "next": {
       "postcss": "8.5.10"
     },
+    "react-konva": {
+      "react-reconciler": "0.29.0"
+    },
+    "react-reconciler": "0.29.0",
     "postcss": "8.5.10",
     "uuid": "14.0.0"
   },
