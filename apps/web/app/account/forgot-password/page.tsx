@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { rethrowIfRedirectError } from "@/lib/next-control-flow";
 import { createPasswordResetToken } from "@/lib/password-reset-token";
 
 async function handleForgotPassword(formData: FormData) {
@@ -12,15 +13,21 @@ async function handleForgotPassword(formData: FormData) {
     redirect("/account/forgot-password?error=1");
   }
 
-  const user = await db.user.findUnique({
-    where: { email },
-  });
+  try {
+    const user = await db.user.findUnique({
+      where: { email },
+    });
 
-  if (user?.role === "FAN") {
-    const token = await createPasswordResetToken(user.id);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
-    const resetUrl = `${appUrl}/account/reset-password?token=${token}`;
-    await sendPasswordResetEmail(email, resetUrl, "FAN");
+    if (user?.role === "FAN") {
+      const token = await createPasswordResetToken(user.id);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
+      const resetUrl = `${appUrl}/account/reset-password?token=${token}`;
+      await sendPasswordResetEmail(email, resetUrl, "FAN");
+    }
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    console.error("[account forgot-password] reset email failed", { email, error });
+    redirect("/account/forgot-password?error=send");
   }
 
   redirect("/account/forgot-password?sent=1");
@@ -59,6 +66,11 @@ export default async function AccountForgotPasswordPage({
     );
   }
 
+  const errorMessage =
+    sp.error === "send"
+      ? "We couldn't send the reset email right now. Please try again in a minute."
+      : null;
+
   return (
     <div className="container-narrow py-6 sm:py-10">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
@@ -71,6 +83,12 @@ export default async function AccountForgotPasswordPage({
         <p className="mt-4 text-base leading-7 text-slate-600">
           Enter the email address on your account and we&apos;ll send you a reset link.
         </p>
+
+        {errorMessage && (
+          <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </p>
+        )}
 
         <form action={handleForgotPassword} className="mt-8 space-y-5">
           <div>

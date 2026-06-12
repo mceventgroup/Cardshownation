@@ -31,6 +31,13 @@ async function sendEmail(input: Parameters<Resend["emails"]["send"]>[0]) {
     throw new Error("Email send failed: provider did not return a message id.");
   }
 
+  console.info("[email] sent", {
+    id: result.data.id,
+    to: input.to,
+    from: input.from,
+    subject: input.subject,
+  });
+
   return result.data;
 }
 

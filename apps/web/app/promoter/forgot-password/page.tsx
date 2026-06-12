@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { createPasswordResetToken } from "@/lib/password-reset-token";
 import { sendPromoterPasswordResetEmail } from "@/lib/email";
+import { rethrowIfRedirectError } from "@/lib/next-control-flow";
 
 async function handleForgotPassword(formData: FormData) {
   "use server";
@@ -13,16 +14,22 @@ async function handleForgotPassword(formData: FormData) {
   }
 
   // Always redirect to the same page — don't leak whether the email exists
-  const user = await db.user.findUnique({
-    where: { email },
-    include: { organizer: true },
-  });
+  try {
+    const user = await db.user.findUnique({
+      where: { email },
+      include: { organizer: true },
+    });
 
-  if (user?.organizer && user.role === "ORGANIZER") {
-    const token = await createPasswordResetToken(user.id);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
-    const resetUrl = `${appUrl}/promoter/reset-password?token=${token}`;
-    await sendPromoterPasswordResetEmail(email, resetUrl);
+    if (user?.organizer && user.role === "ORGANIZER") {
+      const token = await createPasswordResetToken(user.id);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
+      const resetUrl = `${appUrl}/promoter/reset-password?token=${token}`;
+      await sendPromoterPasswordResetEmail(email, resetUrl);
+    }
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    console.error("[promoter forgot-password] reset email failed", { email, error });
+    redirect("/promoter/forgot-password?error=send");
   }
 
   redirect("/promoter/forgot-password?sent=1");
@@ -64,6 +71,11 @@ export default async function ForgotPasswordPage({
     );
   }
 
+  const errorMessage =
+    sp.error === "send"
+      ? "We couldn't send the reset email right now. Please try again in a minute."
+      : null;
+
   return (
     <div className="container-narrow py-6 sm:py-10">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
@@ -77,6 +89,12 @@ export default async function ForgotPasswordPage({
           Enter the email address on your promoter account and we&apos;ll send
           you a reset link.
         </p>
+
+        {errorMessage && (
+          <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </p>
+        )}
 
         <form action={handleForgotPassword} className="mt-8 space-y-5">
           <div>
