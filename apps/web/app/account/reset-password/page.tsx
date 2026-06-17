@@ -2,16 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { consumePasswordResetToken } from "@/lib/password-reset-token";
-import { hashPassword } from "@/lib/passwords";
+import { hashPassword, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
 import { startUserSession } from "@/lib/user-auth";
 
 async function handleReset(token: string, formData: FormData) {
   "use server";
 
-  const password = (formData.get("password") as string)?.trim();
-  const confirmPassword = (formData.get("confirmPassword") as string)?.trim();
+  const password = readPasswordInput(formData, "password");
+  const confirmPassword = readPasswordInput(formData, "confirmPassword");
 
-  if (!password || password.length < 8 || password !== confirmPassword) {
+  if (!password || password.length < MIN_PASSWORD_LENGTH || password !== confirmPassword) {
     redirect(`/account/reset-password?token=${token}&error=validation`);
   }
 
@@ -64,7 +64,9 @@ export default async function AccountResetPasswordPage({
   }
 
   const errorMessage =
-    sp.error === "validation" ? "Passwords must match and be at least 8 characters." : null;
+    sp.error === "validation"
+      ? `Passwords must match and be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
+      : null;
 
   const handleResetWithToken = handleReset.bind(null, token);
 
@@ -97,7 +99,8 @@ export default async function AccountResetPasswordPage({
               name="password"
               type="password"
               required
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
+              maxLength={MAX_PASSWORD_LENGTH}
               autoComplete="new-password"
               autoFocus
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
@@ -113,7 +116,8 @@ export default async function AccountResetPasswordPage({
               name="confirmPassword"
               type="password"
               required
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
+              maxLength={MAX_PASSWORD_LENGTH}
               autoComplete="new-password"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
             />

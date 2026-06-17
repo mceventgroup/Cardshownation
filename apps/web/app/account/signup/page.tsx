@@ -13,6 +13,7 @@ import {
 } from "@/lib/user-auth";
 import { createVerificationToken } from "@/lib/verification-token";
 import { sendFanVerificationEmail } from "@/lib/email";
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
 import { registerFanAccount } from "@/lib/users";
 
 const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
@@ -47,8 +48,8 @@ async function handleSignup(formData: FormData) {
   const sessionSecret = await getUserSessionSecret();
   const name = readRequiredString(formData, "name", 120);
   const email = readRequiredString(formData, "email", 320).toLowerCase();
-  const password = readRequiredString(formData, "password", 200);
-  const confirmPassword = readRequiredString(formData, "confirmPassword", 200);
+  const password = readPasswordInput(formData, "password");
+  const confirmPassword = readPasswordInput(formData, "confirmPassword");
   const stateCodes = formData
     .getAll("stateCodes")
     .filter((value): value is string => typeof value === "string")
@@ -70,7 +71,7 @@ async function handleSignup(formData: FormData) {
     redirect("/account/signup?error=disabled");
   }
 
-  if (!name || !isValidEmail(email) || password.length < 8 || password !== confirmPassword) {
+  if (!name || !isValidEmail(email) || password.length < MIN_PASSWORD_LENGTH || password !== confirmPassword) {
     redirect("/account/signup?error=validation");
   }
 
@@ -145,7 +146,7 @@ export default async function UserSignupPage({
         : sp.error === "rate"
           ? "Too many attempts. Wait a bit and try again."
           : sp.error === "validation"
-            ? "Check your information. Passwords must match and be at least 8 characters."
+            ? `Check your information. Passwords must match and be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
             : null;
 
   return (
@@ -215,7 +216,8 @@ export default async function UserSignupPage({
                 name="password"
                 type="password"
                 required
-                minLength={8}
+                minLength={MIN_PASSWORD_LENGTH}
+                maxLength={MAX_PASSWORD_LENGTH}
                 disabled={!secret}
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
               />
@@ -229,7 +231,8 @@ export default async function UserSignupPage({
                 name="confirmPassword"
                 type="password"
                 required
-                minLength={8}
+                minLength={MIN_PASSWORD_LENGTH}
+                maxLength={MAX_PASSWORD_LENGTH}
                 disabled={!secret}
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
               />

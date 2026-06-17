@@ -226,3 +226,136 @@ test("deleteUserAccountByAdmin explicitly detaches organizer records before dele
     },
   });
 });
+
+test("updateFanProfile updates profile fields without reverification when email is unchanged", async () => {
+  const findUserMock = stubMethod(db.user, "findUnique", async (input) => {
+    if (input.where.id === "fan-1") {
+      return {
+        id: "fan-1",
+        email: "fan@example.com",
+        role: "FAN",
+        emailVerifiedAt: new Date("2026-06-01T00:00:00.000Z"),
+      };
+    }
+
+    return null;
+  });
+  const updateUserMock = stubMethod(db.user, "update", async (input) => input);
+
+  const result = await usersModule.updateFanProfile({
+    userId: "fan-1",
+    name: "Updated Fan",
+    email: "fan@example.com",
+    phone: "555-111-2222",
+    city: "Wichita",
+    state: "ks",
+  });
+
+  assert.equal(findUserMock.mock.calls.length, 1);
+  assert.deepEqual(updateUserMock.mock.calls[0]?.arguments[0], {
+    where: { id: "fan-1" },
+    data: {
+      name: "Updated Fan",
+      phone: "555-111-2222",
+      city: "Wichita",
+      state: "KS",
+      email: "fan@example.com",
+    },
+  });
+  assert.deepEqual(result, { emailChanged: false });
+});
+
+test("updateFanProfile changes email, stores a verification token, and sends verification email", async () => {
+  process.env.RESEND_API_KEY = "re_test_key";
+  process.env.RESEND_FROM_EMAIL = "Card Show Nation <noreply@cardshownation.com>";
+
+  stubMethod(db.user, "findUnique", async (input) => {
+    if (input.where.id === "fan-1") {
+      return {
+        id: "fan-1",
+        email: "fan@example.com",
+        role: "FAN",
+        emailVerifiedAt: new Date("2026-06-01T00:00:00.000Z"),
+      };
+    }
+
+    if (input.where.email === "new@example.com") {
+      return null;
+    }
+
+    return null;
+  });
+
+  const updateUserCalls: any[] = [];
+  const deleteTokenCalls: any[] = [];
+  const createTokenCalls: any[] = [];
+  const sentEmails: any[] = [];
+  const originalTransaction = db.$transaction;
+  const originalFetch = global.fetch;
+
+  stubMethod(db.user, "update", async (input) => {
+    updateUserCalls.push(input);
+    return input;
+  });
+
+  global.fetch = async (_input: any, init?: any) => {
+    sentEmails.push(JSON.parse(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ id: "email_123" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  (db as any).$transaction = async (callback: (tx: any) => Promise<void>) => {
+    await callback({
+      emailVerificationToken: {
+        deleteMany: async (input: any) => {
+          deleteTokenCalls.push(input);
+          return input;
+        },
+        create: async (input: any) => {
+          createTokenCalls.push(input);
+          return input;
+        },
+      },
+      user: {
+        update: async (input: any) => {
+          updateUserCalls.push(input);
+          return input;
+        },
+      },
+    });
+  };
+
+  restorers.push(() => {
+    (db as any).$transaction = originalTransaction;
+    global.fetch = originalFetch;
+  });
+
+  const result = await usersModule.updateFanProfile({
+    userId: "fan-1",
+    name: "Updated Fan",
+    email: "new@example.com",
+    city: "Omaha",
+    state: "NE",
+  });
+
+  assert.deepEqual(updateUserCalls[0], {
+    where: { id: "fan-1" },
+    data: {
+      name: "Updated Fan",
+      phone: null,
+      city: "Omaha",
+      state: "NE",
+    },
+  });
+  assert.deepEqual(deleteTokenCalls[0], {
+    where: { userId: "fan-1" },
+  });
+  assert.equal(createTokenCalls.length, 1);
+  assert.equal(createTokenCalls[0]?.data.userId, "fan-1");
+  assert.equal(typeof createTokenCalls[0]?.data.token, "string");
+  assert.equal(sentEmails[0]?.from, "Card Show Nation <noreply@cardshownation.com>");
+  assert.equal(sentEmails[0]?.to, "new@example.com");
+  assert.deepEqual(result, { emailChanged: true });
+});

@@ -1,9 +1,12 @@
+import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit-log";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { getEmailConfigStatus, sendFanVerificationEmail, sendPasswordResetEmail } from "@/lib/email";
 import { createPasswordResetToken } from "@/lib/password-reset-token";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
-import type { UserRole } from "@csn/db";
+import { US_STATES } from "@/lib/states";
+import { hashOpaqueToken } from "@/lib/token-hash";
+import type { Prisma, UserRole } from "@csn/db";
 
 type RegisterFanInput = {
   email: string;
@@ -29,8 +32,55 @@ type AdminUserActionInput = {
   userId: string;
 };
 
+type UpdateFanProfileInput = {
+  userId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  city?: string;
+  state?: string;
+};
+
+const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const VALID_STATE_CODES = new Set(US_STATES.map((state) => state.code));
+
+type FanAccountData = Prisma.UserGetPayload<{
+  include: {
+    subscriptions: {
+      orderBy: {
+        stateCode: "asc";
+      };
+    };
+    _count: {
+      select: {
+        savedShows: true;
+      };
+    };
+  };
+}>;
+
 function getAppUrl() {
   return process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://cardshownation.com";
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeOptionalField(value: string | undefined, maxLength: number) {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.slice(0, maxLength);
+}
+
+function createEmailVerificationTokenValue() {
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = hashOpaqueToken(token);
+  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS);
+  return { token, tokenHash, expiresAt };
 }
 
 export function getPasswordResetPathForRole(role: UserRole) {
@@ -93,7 +143,7 @@ export async function authenticateFan(email: string, password: string) {
   return user;
 }
 
-export async function getFanAccountData(userId: string) {
+export async function getFanAccountData(userId: string): Promise<FanAccountData | null> {
   const user = await db.user.findUnique({
     where: { id: userId },
     include: {
@@ -229,6 +279,114 @@ export async function listManageableAccounts() {
     },
     orderBy: [{ createdAt: "desc" }],
   });
+}
+
+export async function updateFanProfile(input: UpdateFanProfileInput) {
+  const name = input.name.trim().slice(0, 120);
+  const email = input.email.trim().toLowerCase().slice(0, 320);
+  const phone = normalizeOptionalField(input.phone, 40);
+  const city = normalizeOptionalField(input.city, 80);
+  const state = normalizeOptionalField(input.state, 2)?.toUpperCase() ?? null;
+
+  if (!name || !isValidEmail(email)) {
+    throw new Error("Please enter a valid name and email address.");
+  }
+
+  if (state && !VALID_STATE_CODES.has(state)) {
+    throw new Error("Please choose a valid state.");
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: input.userId },
+  });
+
+  if (!user || user.role !== "FAN") {
+    throw new Error("User account not found.");
+  }
+
+  const profileData = {
+    name,
+    phone,
+    city,
+    state,
+  };
+
+  const emailChanged = email !== user.email;
+  if (!emailChanged) {
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        ...profileData,
+        email,
+      },
+    });
+
+    return { emailChanged: false as const };
+  }
+
+  const emailConfig = getEmailConfigStatus();
+  if (!emailConfig.ready) {
+    throw new Error(emailConfig.error);
+  }
+
+  const existingUser = await db.user.findUnique({
+    where: { email },
+  });
+  if (existingUser && existingUser.id !== user.id) {
+    throw new Error("An account already exists for that email.");
+  }
+
+  await db.user.update({
+    where: { id: user.id },
+    data: profileData,
+  });
+
+  const verification = createEmailVerificationTokenValue();
+
+  await db.$transaction(async (tx) => {
+    await tx.emailVerificationToken.deleteMany({
+      where: { userId: user.id },
+    });
+
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        email,
+        emailVerifiedAt: null,
+      },
+    });
+
+    await tx.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        token: verification.tokenHash,
+        expiresAt: verification.expiresAt,
+      },
+    });
+  });
+
+  try {
+    const verifyUrl = `${getAppUrl()}/account/verify?token=${verification.token}`;
+    await sendFanVerificationEmail(email, verifyUrl);
+  } catch (error) {
+    await db.$transaction(async (tx) => {
+      await tx.emailVerificationToken.deleteMany({
+        where: { userId: user.id },
+      });
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          email: user.email,
+          emailVerifiedAt: user.emailVerifiedAt,
+        },
+      });
+    });
+
+    throw error;
+  }
+
+  return { emailChanged: true as const };
 }
 
 export async function getUserRoleStats() {

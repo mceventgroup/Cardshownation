@@ -9,6 +9,7 @@ import {
   MIN_MODERATOR_SESSION_SECRET_LENGTH,
   startModeratorSession,
 } from "@/lib/moderator-auth";
+import { MAX_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
 import { getRequestIp } from "@/lib/request-ip";
 import { consumeRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { sanitizeLocalRedirectTarget } from "@/lib/url";
@@ -39,7 +40,7 @@ async function handleLogin(formData: FormData) {
   "use server";
 
   const email = readString(formData, "email", 320).toLowerCase();
-  const password = readString(formData, "password", 200);
+  const password = readPasswordInput(formData, "password");
   const redirectTo = sanitizeModeratorRedirectTarget(formData.get("from"));
   const sessionSecret = await getModeratorSessionSecret();
   const requestHeaders = await headers();
@@ -158,6 +159,7 @@ export default async function ModeratorLoginPage({
               name="password"
               type="password"
               required
+              maxLength={MAX_PASSWORD_LENGTH}
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
             />
           </div>
