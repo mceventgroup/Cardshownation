@@ -1,16 +1,14 @@
 import Link from "next/link";
 import { MapPin, Search } from "lucide-react";
 import { getDataModeLabel, isFixtureMode } from "@/lib/data-mode";
-import { getPromoterSession } from "@/lib/promoter-auth";
+import { getPublicPortalLink } from "@/lib/public-portal";
 import { getStatesByCodes } from "@/lib/states";
 
 // High-traffic states shown as quick links on mobile
 const quickStateLinks = getStatesByCodes(["TX", "CA", "FL", "OH", "PA", "IL"]);
 
 export async function Header() {
-  const session = await getPromoterSession();
-  const promoterHref = session ? "/promoter" : "/promoter/login";
-  const promoterLabel = session ? "My Dashboard" : "Promoter Login";
+  const portalLink = await getPublicPortalLink();
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -47,11 +45,11 @@ export async function Header() {
               <span className="sm:hidden">Browse</span>
             </Link>
             <Link
-              href={promoterHref}
+              href={portalLink.href}
               className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800"
             >
-              <span className="hidden sm:inline">{promoterLabel}</span>
-              <span className="sm:hidden">{session ? "Dashboard" : "Login"}</span>
+              <span className="hidden sm:inline">{portalLink.label}</span>
+              <span className="sm:hidden">{portalLink.shortLabel}</span>
             </Link>
             <Link
               href="/submit-show"
@@ -73,10 +71,10 @@ export async function Header() {
             </Link>
           ))}
           <Link
-            href={promoterHref}
+            href={portalLink.href}
             className="whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800"
           >
-            {promoterLabel}
+            {portalLink.shortLabel}
           </Link>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { ArrowRight, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
 import { ShowListItem } from "@/components/shows/show-list-item";
-import { getPromoterSession } from "@/lib/promoter-auth";
+import { getPublicPortalLink } from "@/lib/public-portal";
 import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
 import { US_STATES } from "@/lib/states";
 
@@ -21,8 +21,8 @@ export const metadata: Metadata = {
 const HOME_INLINE_AD_SLOT = process.env.NEXT_PUBLIC_AD_SLOT_HOME_INLINE?.trim() ?? "";
 
 export default async function HomePage() {
-  const [session, upcomingShows, stats] = await Promise.all([
-    getPromoterSession(),
+  const [portalLink, upcomingShows, stats] = await Promise.all([
+    getPublicPortalLink(),
     getUpcomingShows({ limit: 8 }).catch((err) => {
       console.error("[HomePage] getUpcomingShows failed, rendering empty list:", err);
       return { shows: [], total: 0 };
@@ -32,9 +32,6 @@ export default async function HomePage() {
       return { upcomingShows: 0, activeStates: 0, activeOrganizers: 0 };
     }),
   ]);
-  const accountHref = "/account/login";
-  const promoterHref = session ? "/promoter" : "/promoter/login";
-  const promoterLabel = session ? "My Dashboard" : "Promoter Login";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -117,16 +114,10 @@ export default async function HomePage() {
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href={accountHref}
+              href={portalLink.href}
               className="inline-flex items-center justify-center rounded-2xl border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-white/15"
             >
-              Login
-            </Link>
-            <Link
-              href={promoterHref}
-              className="inline-flex items-center justify-center rounded-2xl border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-white/15"
-            >
-              {promoterLabel}
+              {portalLink.label}
             </Link>
           </div>
 
@@ -224,16 +215,16 @@ export default async function HomePage() {
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href={accountHref}
+              href={portalLink.href}
               className="inline-flex items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10 shrink-0"
             >
-              Login
+              {portalLink.label}
             </Link>
             <Link
-              href={promoterHref}
+              href="/promoter/signup"
               className="inline-flex items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10 shrink-0"
             >
-              {promoterLabel}
+              Create promoter account
             </Link>
           </div>
         </div>
