@@ -33,8 +33,10 @@ test("getFromAddress falls back to Resend onboarding sender", () => {
 
 test("getEmailConfigStatus reports missing Resend API keys", () => {
   const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFromEmail = process.env.RESEND_FROM_EMAIL;
 
   process.env.RESEND_API_KEY = "";
+  process.env.RESEND_FROM_EMAIL = "Card Show Nation <noreply@cardshownation.com>";
 
   assert.deepEqual(getEmailConfigStatus(), {
     ready: false,
@@ -42,4 +44,22 @@ test("getEmailConfigStatus reports missing Resend API keys", () => {
   });
 
   process.env.RESEND_API_KEY = originalApiKey;
+  process.env.RESEND_FROM_EMAIL = originalFromEmail;
+});
+
+test("getEmailConfigStatus rejects personal inbox senders", () => {
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFromEmail = process.env.RESEND_FROM_EMAIL;
+
+  process.env.RESEND_API_KEY = "re_test_key";
+  process.env.RESEND_FROM_EMAIL = "Card Show Nation <cardshownation@gmail.com>";
+
+  assert.deepEqual(getEmailConfigStatus(), {
+    ready: false,
+    error:
+      "Email sending is not configured: RESEND_FROM_EMAIL must use a verified sending domain, not a personal inbox address.",
+  });
+
+  process.env.RESEND_API_KEY = originalApiKey;
+  process.env.RESEND_FROM_EMAIL = originalFromEmail;
 });

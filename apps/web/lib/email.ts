@@ -2,6 +2,46 @@ import { Resend } from "resend";
 import type { UserRole } from "@csn/db";
 
 const DEFAULT_FROM_ADDRESS = "Card Show Nation <onboarding@resend.dev>";
+const PERSONAL_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "icloud.com",
+  "me.com",
+  "aol.com",
+]);
+
+function extractEmailAddress(input: string) {
+  const trimmed = input.trim();
+  const match = trimmed.match(/<([^>]+)>/);
+  return (match?.[1] ?? trimmed).trim().toLowerCase();
+}
+
+function getSenderConfigError() {
+  const configuredFromAddress =
+    process.env.RESEND_FROM_EMAIL?.trim() || process.env.RESEND_FROM_ADDRESS?.trim() || "";
+
+  if (!configuredFromAddress) {
+    return null;
+  }
+
+  const emailAddress = extractEmailAddress(configuredFromAddress);
+  const atIndex = emailAddress.lastIndexOf("@");
+  if (atIndex === -1) {
+    return "Email sending is not configured: RESEND_FROM_EMAIL must be a valid sender address.";
+  }
+
+  const domain = emailAddress.slice(atIndex + 1);
+  if (PERSONAL_EMAIL_DOMAINS.has(domain)) {
+    return "Email sending is not configured: RESEND_FROM_EMAIL must use a verified sending domain, not a personal inbox address.";
+  }
+
+  return null;
+}
 
 export function getEmailConfigStatus() {
   const apiKey = process.env.RESEND_API_KEY?.trim() || "";
@@ -9,6 +49,14 @@ export function getEmailConfigStatus() {
     return {
       ready: false as const,
       error: "Email sending is not configured: set RESEND_API_KEY.",
+    };
+  }
+
+  const senderError = getSenderConfigError();
+  if (senderError) {
+    return {
+      ready: false as const,
+      error: senderError,
     };
   }
 
