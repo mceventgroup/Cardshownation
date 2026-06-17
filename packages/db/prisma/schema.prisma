@@ -56,6 +56,7 @@ model User {
   reports           ShowReport[]
   moderatedSubmissions ShowSubmission[] @relation("SubmissionReviewer")
   subscriptions     UserStateSubscription[]
+  favoriteOrganizers UserFavoriteOrganizer[]
   auditLogs         AuditLog[] @relation("AuditActor")
   organizer         Organizer?
   verificationTokens EmailVerificationToken[]
@@ -113,6 +114,7 @@ model Organizer {
   updatedAt    DateTime @updatedAt
   shows        Show[]
   approvals    OrganizerApproval[]
+  followers    UserFavoriteOrganizer[]
   user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
@@ -306,6 +308,19 @@ model UserStateSubscription {
 
   @@unique([userId, stateCode])
   @@index([stateCode])
+}
+
+model UserFavoriteOrganizer {
+  id          String   @id @default(cuid())
+  userId      String
+  organizerId String
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizerId])
+  @@index([organizerId])
 }
 
 model AuditLog {

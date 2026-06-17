@@ -13,6 +13,7 @@ type RegisterFanInput = {
   password: string;
   name: string;
   stateCodes: string[];
+  organizerIds: string[];
 };
 
 type CreateModeratorInput = {
@@ -46,6 +47,22 @@ const VALID_STATE_CODES = new Set(US_STATES.map((state) => state.code));
 
 type FanAccountData = Prisma.UserGetPayload<{
   include: {
+    favoriteOrganizers: {
+      include: {
+        organizer: {
+          select: {
+            id: true;
+            name: true;
+            verified: true;
+          };
+        };
+      };
+      orderBy: {
+        organizer: {
+          name: "asc";
+        };
+      };
+    };
     subscriptions: {
       orderBy: {
         stateCode: "asc";
@@ -58,6 +75,12 @@ type FanAccountData = Prisma.UserGetPayload<{
     };
   };
 }>;
+
+export type FavoriteOrganizerOption = {
+  id: string;
+  name: string;
+  verified: boolean;
+};
 
 function getAppUrl() {
   return process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://cardshownation.com";
@@ -103,6 +126,7 @@ export async function registerFanAccount(input: RegisterFanInput) {
 
   const passwordHash = await hashPassword(input.password);
   const stateCodes = [...new Set(input.stateCodes.map((code) => code.trim().toUpperCase()).filter(Boolean))];
+  const organizerIds = [...new Set(input.organizerIds.map((id) => id.trim()).filter(Boolean))];
 
   return db.user.create({
     data: {
@@ -118,8 +142,16 @@ export async function registerFanAccount(input: RegisterFanInput) {
             })),
           }
         : undefined,
+      favoriteOrganizers: organizerIds.length
+        ? {
+            create: organizerIds.map((organizerId) => ({
+              organizerId,
+            })),
+          }
+        : undefined,
     },
     include: {
+      favoriteOrganizers: true,
       subscriptions: true,
     },
   });
@@ -147,6 +179,22 @@ export async function getFanAccountData(userId: string): Promise<FanAccountData 
   const user = await db.user.findUnique({
     where: { id: userId },
     include: {
+      favoriteOrganizers: {
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              verified: true,
+            },
+          },
+        },
+        orderBy: {
+          organizer: {
+            name: "asc",
+          },
+        },
+      },
       subscriptions: {
         orderBy: { stateCode: "asc" },
       },
@@ -279,6 +327,79 @@ export async function listManageableAccounts() {
     },
     orderBy: [{ createdAt: "desc" }],
   });
+}
+
+export async function updateFanFavoriteOrganizers(userId: string, organizerIds: string[]) {
+  const normalizedIds = [...new Set(organizerIds.map((id) => id.trim()).filter(Boolean))];
+
+  const availableOrganizers = normalizedIds.length
+    ? await db.organizer.findMany({
+        where: {
+          id: { in: normalizedIds },
+        },
+        select: {
+          id: true,
+        },
+      })
+    : [];
+  const validOrganizerIds = new Set(availableOrganizers.map((organizer) => organizer.id));
+
+  await db.$transaction(async (tx) => {
+    await tx.userFavoriteOrganizer.deleteMany({
+      where: {
+        userId,
+        organizerId: {
+          notIn: normalizedIds.length ? normalizedIds : ["__NONE__"],
+        },
+      },
+    });
+
+    for (const organizerId of normalizedIds) {
+      if (!validOrganizerIds.has(organizerId)) {
+        continue;
+      }
+
+      await tx.userFavoriteOrganizer.upsert({
+        where: {
+          userId_organizerId: {
+            userId,
+            organizerId,
+          },
+        },
+        create: {
+          userId,
+          organizerId,
+        },
+        update: {},
+      });
+    }
+  });
+}
+
+export async function listFavoriteOrganizerOptions(): Promise<FavoriteOrganizerOption[]> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const organizers = await db.organizer.findMany({
+    where: {
+      shows: {
+        some: {
+          status: "APPROVED",
+          startDate: { gte: today },
+          OR: [{ expiresAt: null }, { expiresAt: { gte: today } }],
+        },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      verified: true,
+    },
+    orderBy: [{ verified: "desc" }, { name: "asc" }],
+    take: 24,
+  });
+
+  return organizers;
 }
 
 export async function updateFanProfile(input: UpdateFanProfileInput) {

@@ -10,7 +10,13 @@ import {
   MIN_USER_SESSION_SECRET_LENGTH,
   requireUserSession,
 } from "@/lib/user-auth";
-import { getFanAccountData, updateFanProfile, updateFanStateSubscriptions } from "@/lib/users";
+import {
+  getFanAccountData,
+  listFavoriteOrganizerOptions,
+  updateFanFavoriteOrganizers,
+  updateFanProfile,
+  updateFanStateSubscriptions,
+} from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -69,8 +75,16 @@ async function saveSubscriptions(formData: FormData) {
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim().toUpperCase())
     .filter(Boolean);
+  const organizerIds = formData
+    .getAll("organizerIds")
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
 
-  await updateFanStateSubscriptions(session.user.id, stateCodes);
+  await Promise.all([
+    updateFanStateSubscriptions(session.user.id, stateCodes),
+    updateFanFavoriteOrganizers(session.user.id, organizerIds),
+  ]);
   redirect("/account?updated=1");
 }
 
@@ -138,8 +152,12 @@ export default async function AccountPage({
   if (!account) {
     redirect("/account/login");
   }
+  const favoriteOrganizers = await listFavoriteOrganizerOptions();
 
   const selectedStates = new Set(account.subscriptions.map((subscription) => subscription.stateCode));
+  const selectedOrganizerIds = new Set(
+    account.favoriteOrganizers.map((favoriteOrganizer) => favoriteOrganizer.organizerId)
+  );
   const successMessage =
     sp.profile === "verify"
       ? "Profile saved. Check your new email inbox for a verification link before your next login."
@@ -162,7 +180,7 @@ export default async function AccountPage({
                 {account.name ?? account.email}
               </h1>
               <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                Keep your profile current and manage the states you want to follow for future show alerts.
+                Keep your profile current and manage the states and show hosts you want to follow for future alerts.
               </p>
             </div>
 
@@ -290,7 +308,7 @@ export default async function AccountPage({
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Email alerts</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Toggle the states you want to follow.
+                    Toggle the states and promoters you want to follow.
                   </p>
                 </div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">SMS / push later</p>
@@ -313,6 +331,47 @@ export default async function AccountPage({
                   </label>
                 ))}
               </div>
+
+              <div className="mt-6 border-t border-slate-200 pt-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">Favorite show hosts</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Save your preferred promoters so future account features can highlight their shows first.
+                    </p>
+                  </div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Promoters</p>
+                </div>
+
+                {favoriteOrganizers.length === 0 ? (
+                  <p className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                    Promoter favorites will appear here once more upcoming shows are linked to hosts.
+                  </p>
+                ) : (
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    {favoriteOrganizers.map((organizer) => (
+                      <label
+                        key={organizer.id}
+                        className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
+                      >
+                        <input
+                          type="checkbox"
+                          name="organizerIds"
+                          value={organizer.id}
+                          defaultChecked={selectedOrganizerIds.has(organizer.id)}
+                          className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                        />
+                        <span>
+                          <span className="block font-medium text-slate-900">{organizer.name}</span>
+                          <span className="block text-xs text-slate-500">
+                            {organizer.verified ? "Verified promoter" : "Promoter profile"}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <button
@@ -331,6 +390,7 @@ export default async function AccountPage({
             </p>
             <div className="mt-4 grid gap-4">
               <StatCard label="Tracked states" value={String(account.subscriptions.length)} />
+              <StatCard label="Favorite hosts" value={String(account.favoriteOrganizers.length)} />
               <StatCard label="Saved shows" value={String(account._count.savedShows)} />
               <StatCard label="Delivery" value="Email first" />
               <StatCard

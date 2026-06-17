@@ -359,3 +359,70 @@ test("updateFanProfile changes email, stores a verification token, and sends ver
   assert.equal(sentEmails[0]?.to, "new@example.com");
   assert.deepEqual(result, { emailChanged: true });
 });
+
+test("registerFanAccount creates both state and organizer preferences", async () => {
+  stubMethod(db.user, "findUnique", async () => null);
+  const createUserMock = stubMethod(db.user, "create", async (input) => input);
+
+  await usersModule.registerFanAccount({
+    email: "fan@example.com",
+    password: "password123",
+    name: "Favorite Fan",
+    stateCodes: ["ks", "MO", "KS"],
+    organizerIds: ["org-1", "org-2", "org-1"],
+  });
+
+  const createInput = createUserMock.mock.calls[0]?.arguments[0];
+  assert.equal(createInput.data.email, "fan@example.com");
+  assert.equal(createInput.data.name, "Favorite Fan");
+  assert.deepEqual(createInput.data.subscriptions.create, [
+    { stateCode: "KS", emailEnabled: true },
+    { stateCode: "MO", emailEnabled: true },
+  ]);
+  assert.deepEqual(createInput.data.favoriteOrganizers.create, [
+    { organizerId: "org-1" },
+    { organizerId: "org-2" },
+  ]);
+});
+
+test("updateFanFavoriteOrganizers replaces saved host follows", async () => {
+  stubMethod(db.organizer, "findMany", async () => [{ id: "org-1" }, { id: "org-2" }]);
+
+  const deleteCalls: any[] = [];
+  const upsertCalls: any[] = [];
+  const originalTransaction = db.$transaction;
+
+  (db as any).$transaction = async (callback: (tx: any) => Promise<void>) => {
+    await callback({
+      userFavoriteOrganizer: {
+        deleteMany: async (input: any) => {
+          deleteCalls.push(input);
+          return input;
+        },
+        upsert: async (input: any) => {
+          upsertCalls.push(input);
+          return input;
+        },
+      },
+    });
+  };
+
+  restorers.push(() => {
+    (db as any).$transaction = originalTransaction;
+  });
+
+  await usersModule.updateFanFavoriteOrganizers("fan-1", ["org-1", "org-2", "org-missing", "org-1"]);
+
+  assert.deepEqual(deleteCalls[0], {
+    where: {
+      userId: "fan-1",
+      organizerId: {
+        notIn: ["org-1", "org-2", "org-missing"],
+      },
+    },
+  });
+  assert.deepEqual(upsertCalls.map((call) => call.where.userId_organizerId), [
+    { userId: "fan-1", organizerId: "org-1" },
+    { userId: "fan-1", organizerId: "org-2" },
+  ]);
+});

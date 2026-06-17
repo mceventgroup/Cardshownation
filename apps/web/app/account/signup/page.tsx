@@ -14,7 +14,7 @@ import {
 import { createVerificationToken } from "@/lib/verification-token";
 import { sendFanVerificationEmail } from "@/lib/email";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
-import { registerFanAccount } from "@/lib/users";
+import { listFavoriteOrganizerOptions, registerFanAccount } from "@/lib/users";
 
 const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
 const SIGNUP_BLOCK_MS = 2 * 60 * 60 * 1000;
@@ -55,6 +55,11 @@ async function handleSignup(formData: FormData) {
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim().toUpperCase())
     .filter(Boolean);
+  const organizerIds = formData
+    .getAll("organizerIds")
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
   const requestHeaders = await headers();
   const ip = getRequestIp(requestHeaders) ?? "unknown";
   const rateLimit = await consumeRateLimit("user-signup", ip, {
@@ -81,6 +86,7 @@ async function handleSignup(formData: FormData) {
       password,
       name,
       stateCodes,
+      organizerIds,
     });
     await resetRateLimit("user-signup", ip);
     const token = await createVerificationToken(user.id);
@@ -106,6 +112,7 @@ export default async function UserSignupPage({
     getUserSessionSecretStatus(),
     searchParams,
   ]);
+  const favoriteOrganizers = await listFavoriteOrganizerOptions();
   if (session) {
     redirect("/account");
   }
@@ -159,7 +166,7 @@ export default async function UserSignupPage({
           Create account
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-          Pick the states you care about now so Card Show Nation can grow into targeted email alerts, then later SMS and app notifications.
+          Pick the states and show hosts you care about now so Card Show Nation can grow into targeted email alerts, then later SMS and app notifications.
         </p>
 
         {!secret && (
@@ -267,6 +274,47 @@ export default async function UserSignupPage({
                 </label>
               ))}
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Favorite show hosts</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Follow the promoters you want to hear from first.
+                </p>
+              </div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Host alerts</p>
+            </div>
+
+            {favoriteOrganizers.length === 0 ? (
+              <p className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                Promoter favorites will show up here as more hosts are linked to upcoming shows.
+              </p>
+            ) : (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {favoriteOrganizers.map((organizer) => (
+                  <label
+                    key={organizer.id}
+                    className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
+                  >
+                    <input
+                      type="checkbox"
+                      name="organizerIds"
+                      value={organizer.id}
+                      disabled={!secret}
+                      className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span>
+                      <span className="block font-medium text-slate-900">{organizer.name}</span>
+                      <span className="block text-xs text-slate-500">
+                        {organizer.verified ? "Verified promoter" : "Promoter profile"}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <button
