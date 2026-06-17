@@ -9,11 +9,19 @@ export type PublicPortalLink = {
 };
 
 export async function getPublicPortalLink(): Promise<PublicPortalLink> {
-  const [moderatorSession, promoterSession, userSession] = await Promise.all([
-    getModeratorSession(),
-    getPromoterSession(),
-    getUserSession(),
-  ]);
+  let moderatorSession: Awaited<ReturnType<typeof getModeratorSession>> = null;
+  let promoterSession: Awaited<ReturnType<typeof getPromoterSession>> = null;
+  let userSession: Awaited<ReturnType<typeof getUserSession>> = null;
+
+  try {
+    [moderatorSession, promoterSession, userSession] = await Promise.all([
+      getModeratorSession(),
+      getPromoterSession(),
+      getUserSession(),
+    ]);
+  } catch (error) {
+    console.error("[public portal] failed to resolve session state", error);
+  }
 
   if (moderatorSession) {
     return {
