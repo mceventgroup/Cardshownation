@@ -2,17 +2,14 @@
 
 ## Next.js / PostCSS audit exception
 
-As of 2026-06-10, the actionable dependency vulnerabilities in this repo were addressed by upgrading:
-
-- `next` to `15.5.19`
-- `ws` to `8.21.0`
-- `turbo` to `2.9.18`
-
-Local verification showed that the remaining `npm audit` finding is tied to `next` bundling `postcss@8.4.31` as a nested dependency.
+As of 2026-06-17, the remaining production audit finding in this repo is still tied to `next` bundling `postcss@8.4.31` as a nested dependency.
 
 Important context:
 
 - This is currently upstream to this repo rather than caused by a directly pinned local dependency.
+- Local verification showed:
+  - `npm audit --omit=dev` reports `GHSA-qx2v-qp2m-jg93`
+  - `npm ls postcss next` still resolves `next@15.5.18 -> postcss@8.4.31`
 - At the time of verification, the published `next@16.2.9` package still declared `postcss: 8.4.31`.
 - Because of that, a normal Next.js upgrade path did not provide a clean local remediation for this remaining audit result.
 
