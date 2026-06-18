@@ -8,6 +8,8 @@ import ExportModal from './ExportModal'
 import LayoutManagerModal from './LayoutManagerModal'
 import HelpCheatSheetModal from './HelpCheatSheetModal'
 
+const OPEN_HELP_EVENT = 'floorplanner:open-help'
+
 interface MenuItem {
   label: string
   shortcut?: string
@@ -104,7 +106,7 @@ function useMenuItems(
     ],
     Help: [
       { label: 'Cheat Sheet', action: openHelp },
-      { label: 'Keyboard Shortcuts', shortcut: '?', action: () => emit('?') },
+      { label: 'Keyboard Shortcuts', shortcut: '?', action: openHelp },
     ],
   }
 }
@@ -196,6 +198,13 @@ export default function Toolbar() {
     setOpenMenu(null)
   }, [])
 
+  const openHelp = useCallback(() => {
+    setOpenMenu(null)
+    window.setTimeout(() => {
+      setShowHelp(true)
+    }, 0)
+  }, [])
+
   const menus = useMenuItems(
     handleStartNewLayout,
     openBrowserLayouts,
@@ -205,7 +214,7 @@ export default function Toolbar() {
     saveToFile,
     () => { setShowImport(true); setOpenMenu(null) },
     () => { setShowExport(true); setOpenMenu(null) },
-    () => { setShowHelp(true); setOpenMenu(null) },
+    openHelp,
   )
 
   const updateTitle = useCallback((value: string) => {
@@ -230,14 +239,20 @@ export default function Toolbar() {
       setOpenMenu(null)
     }
 
+    function handleOpenHelp() {
+      openHelp()
+    }
+
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('keydown', handleEscape)
+    window.addEventListener(OPEN_HELP_EVENT, handleOpenHelp)
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
+      window.removeEventListener(OPEN_HELP_EVENT, handleOpenHelp)
     }
-  }, [])
+  }, [openHelp])
 
   function toggleMenu(name: string) {
     setOpenMenu(prev => prev === name ? null : name)

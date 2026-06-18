@@ -30,6 +30,7 @@ interface ClipboardEntry {
 
 /** Paste offset so successive pastes don't stack exactly on top of each other. */
 const PASTE_OFFSET = 24 // 2 ft
+const OPEN_HELP_EVENT = 'floorplanner:open-help'
 
 export function useKeyboardShortcuts() {
   const undo         = useEditorStore(s => s.undo)
@@ -255,6 +256,12 @@ export function useKeyboardShortcuts() {
         e.preventDefault()
         const allIds = Object.keys(tables)
         useEditorStore.getState().setSelected(allIds)
+        return
+      }
+
+      if (e.key === '?') {
+        e.preventDefault()
+        window.dispatchEvent(new Event(OPEN_HELP_EVENT))
         return
       }
     }
