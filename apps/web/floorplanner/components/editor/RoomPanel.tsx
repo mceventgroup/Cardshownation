@@ -374,7 +374,28 @@ export default function RoomPanel() {
   return (
     <div className="px-3 py-2 space-y-3 text-sm">
       <div>
-        <div className="font-medium text-gray-700 mb-1">Room Builder</div>
+        <div className="mb-1.5 flex items-center justify-between gap-3">
+          <div>
+            <div className="font-medium text-gray-700">Room size</div>
+            <div className="text-xs text-gray-400">Set width and depth in feet.</div>
+          </div>
+          <label className="flex items-center gap-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.roomLocked}
+              onChange={e => {
+                dispatch({
+                  type: 'UPDATE_SETTINGS',
+                  prev: { roomLocked: settings.roomLocked },
+                  next: { roomLocked: e.target.checked },
+                  timestamp: Date.now(),
+                })
+              }}
+              className="w-3.5 h-3.5 rounded border-gray-300"
+            />
+            <span className="text-xs text-gray-500">Lock layout</span>
+          </label>
+        </div>
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 w-8">W</label>
           <input
@@ -465,27 +486,6 @@ export default function RoomPanel() {
             ))}
           </div>
         )}
-        <div className="flex items-center gap-2 mt-2">
-          <label className="flex items-center gap-1 ml-auto cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.roomLocked}
-              onChange={e => {
-                dispatch({
-                  type: 'UPDATE_SETTINGS',
-                  prev: { roomLocked: settings.roomLocked },
-                  next: { roomLocked: e.target.checked },
-                  timestamp: Date.now(),
-                })
-              }}
-              className="w-3.5 h-3.5 rounded border-gray-300"
-            />
-            <span className="text-xs text-gray-500">Lock Layout</span>
-          </label>
-        </div>
-        <div className="text-xs text-gray-400 mt-1">
-          Draw on canvas: <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">B</kbd> rectangle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">C</kbd> circle, <kbd className="font-mono bg-gray-100 border border-gray-200 rounded px-0.5">F</kbd> freehand. Use <span className="font-medium text-gray-500">Add Room</span> for separate spaces, <span className="font-medium text-gray-500">Add Attached Area</span> to extend an existing footprint, and <span className="font-medium text-gray-500">Add Circle Room</span> for round halls or arenas.
-        </div>
         <button
           onClick={() => setActiveTool(activeTool === 'split-room' ? 'select' : 'split-room')}
           disabled={!room || room.segments.length === 0}
@@ -495,14 +495,25 @@ export default function RoomPanel() {
               : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           } disabled:bg-gray-100 disabled:text-gray-400`}
         >
-          {activeTool === 'split-room' ? 'Exit Split Mode' : 'Split Room on Canvas'}
+          {activeTool === 'split-room' ? 'Exit Split Mode' : 'Split Room'}
         </button>
-        <div className="text-xs text-gray-400 mt-1">
-          When <span className="font-medium text-gray-500">Lock Layout</span> is off, drag inside a room to move the whole room.
+        <div className="text-xs text-gray-400">
+          {activeTool === 'split-room'
+            ? 'Click inside a rectangular room segment and drag a divider wall.'
+            : 'Turn off Lock layout to drag an entire room.'}
         </div>
-        <div className="text-xs text-gray-400 mt-1">
-          In <span className="font-medium text-gray-500">Split Room</span> mode, click inside a rectangular segment where you want the divider and drag vertically or horizontally to connect it to the opposite walls.
-        </div>
+        <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <summary className="cursor-pointer text-xs font-medium text-slate-600">
+            Quick tips
+          </summary>
+          <div className="mt-2 space-y-1 text-xs text-slate-500">
+            <div>
+              Shortcuts: <kbd className="font-mono rounded border border-gray-200 bg-white px-1">B</kbd> rectangle, <kbd className="font-mono rounded border border-gray-200 bg-white px-1">C</kbd> circle, <kbd className="font-mono rounded border border-gray-200 bg-white px-1">F</kbd> freehand.
+            </div>
+            <div>Create Room starts the first room. Add Room creates a separate space.</div>
+            <div>Add Attached Area extends an existing footprint. Circle Room is for round halls.</div>
+          </div>
+        </details>
       </div>
 
       {room && room.segments.length > 0 && (
