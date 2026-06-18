@@ -2,13 +2,10 @@ import Link from "next/link";
 import { MapPin, Search } from "lucide-react";
 import { getDataModeLabel, isFixtureMode } from "@/lib/data-mode";
 import { getPublicPortalLink } from "@/lib/public-portal";
-import { getStatesByCodes } from "@/lib/states";
-
-// High-traffic states shown as quick links on mobile
-const quickStateLinks = getStatesByCodes(["TX", "CA", "FL", "OH", "PA", "IL"]);
 
 export async function Header() {
   const portalLink = await getPublicPortalLink();
+  const showGuestCta = portalLink.href === "/login";
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -35,7 +32,7 @@ export async function Header() {
             </div>
           </Link>
 
-          <nav className="flex items-center gap-2 sm:gap-3">
+          <nav className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             <Link
               href="/card-shows"
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950"
@@ -51,6 +48,15 @@ export async function Header() {
               <span className="hidden sm:inline">{portalLink.label}</span>
               <span className="sm:hidden">{portalLink.shortLabel}</span>
             </Link>
+            {showGuestCta && (
+              <Link
+                href="/account/signup"
+                className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100 sm:px-4"
+              >
+                <span className="hidden sm:inline">Create Account</span>
+                <span className="sm:hidden">Create</span>
+              </Link>
+            )}
             <Link
               href="/submit-show"
               className="inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
@@ -58,24 +64,6 @@ export async function Header() {
               Submit a Show
             </Link>
           </nav>
-        </div>
-
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden">
-          {quickStateLinks.map((state) => (
-            <Link
-              key={state.code}
-              href={`/card-shows/${state.slug}`}
-              className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-            >
-              {state.name}
-            </Link>
-          ))}
-          <Link
-            href={portalLink.href}
-            className="whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800"
-          >
-            {portalLink.shortLabel}
-          </Link>
         </div>
       </div>
     </header>

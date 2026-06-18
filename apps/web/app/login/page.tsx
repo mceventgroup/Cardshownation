@@ -178,11 +178,11 @@ export default async function UnifiedLoginPage({
           Login
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Sign in to your account
+          Login once. We&apos;ll send you to the right place.
         </h1>
         <p className="mt-4 text-base leading-7 text-slate-600">
-          Use the same login form for member, promoter, and moderator accounts. We&apos;ll route you
-          to the right dashboard after sign-in.
+          Use one login form for members, promoters, and moderators. After sign-in, Card Show Nation
+          routes you to the correct dashboard automatically.
         </p>
 
         {errorMessage && (
@@ -231,46 +231,61 @@ export default async function UnifiedLoginPage({
           </button>
         </form>
 
-        <div className="mt-6 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-          <p>
-            Member password reset:{" "}
-            <Link href="/account/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
-              Reset member password
-            </Link>
-          </p>
-          <p>
-            Promoter password reset:{" "}
-            <Link href="/promoter/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
-              Reset promoter password
-            </Link>
-          </p>
-          <p>
-            Moderator password reset:{" "}
-            <Link href="/moderator/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
-              Reset moderator password
-            </Link>
-          </p>
-          <p>
-            Need a member account?{" "}
-            <Link href="/account/signup" className="font-semibold text-brand-700 hover:text-brand-800">
-              Create account
-            </Link>
-          </p>
-          <p>
-            Need a promoter account?{" "}
-            <Link href="/promoter/signup" className="font-semibold text-brand-700 hover:text-brand-800">
-              Create promoter account
-            </Link>
-          </p>
-        </div>
+        <div className="mt-8 grid gap-4 lg:grid-cols-3">
+          <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Member
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-slate-950">Collector account</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Save favorite states, follow show hosts, and manage your account details.
+            </p>
+            <div className="mt-4 flex flex-col gap-2 text-sm">
+              <Link href="/account/signup" className="font-semibold text-brand-700 hover:text-brand-800">
+                Create account
+              </Link>
+              <Link href="/account/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
+                Reset member password
+              </Link>
+            </div>
+          </section>
 
-        <p className="mt-4 text-sm text-slate-500">
-          Moderator accounts are created by admin. Admin sign-in stays on{" "}
-          <Link href="/admin/login" className="font-semibold text-brand-700 hover:text-brand-800">
-            the admin login page
-          </Link>
-          .
-        </p>
+          <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Promoter
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-slate-950">Organizer account</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Submit shows, manage your listings, and work inside the promoter dashboard.
+            </p>
+            <div className="mt-4 flex flex-col gap-2 text-sm">
+              <Link href="/promoter/signup" className="font-semibold text-brand-700 hover:text-brand-800">
+                Create promoter account
+              </Link>
+              <Link href="/promoter/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
+                Reset promoter password
+              </Link>
+            </div>
+          </section>
+
+          <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Staff
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-slate-950">Moderator or admin</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Moderator accounts are admin-managed. Admin access stays on a separate login page.
+            </p>
+            <div className="mt-4 flex flex-col gap-2 text-sm">
+              <Link href="/moderator/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
+                Reset moderator password
+              </Link>
+              <Link href="/admin/login" className="font-semibold text-brand-700 hover:text-brand-800">
+                Go to admin login
+              </Link>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
