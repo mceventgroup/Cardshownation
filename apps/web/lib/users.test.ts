@@ -89,6 +89,148 @@ test("assignModeratorAccessByAdmin rejects organizer accounts", async () => {
   );
 });
 
+test("createManagedAccountByAdmin creates member accounts and records the audit log", async () => {
+  stubMethod(db.user, "findUnique", async () => null);
+  const createUserMock = stubMethod(db.user, "create", async (input) => ({
+    id: "fan-2",
+    email: input.data.email,
+    role: input.data.role,
+    name: input.data.name,
+  }));
+  const auditLogMock = stubMethod(db.auditLog, "create", async (input) => input);
+
+  const result = await usersModule.createManagedAccountByAdmin({
+    actorId: "admin-1",
+    role: "FAN",
+    email: "newfan@example.com",
+    name: "New Fan",
+  });
+
+  assert.equal(createUserMock.mock.calls.length, 1);
+  assert.deepEqual(createUserMock.mock.calls[0]?.arguments[0], {
+    data: {
+      name: "New Fan",
+      email: "newfan@example.com",
+      passwordHash: createUserMock.mock.calls[0]?.arguments[0].data.passwordHash,
+      role: "FAN",
+    },
+  });
+  assert.equal(typeof createUserMock.mock.calls[0]?.arguments[0].data.passwordHash, "string");
+  assert.deepEqual(auditLogMock.mock.calls[0]?.arguments[0], {
+    data: {
+      actorId: "admin-1",
+      actorRole: "ADMIN",
+      action: "user.created_by_admin",
+      targetType: "User",
+      targetId: "fan-2",
+      details: {
+        email: "newfan@example.com",
+        role: "FAN",
+        organizerName: null,
+      },
+    },
+  });
+  assert.deepEqual(result, {
+    id: "fan-2",
+    email: "newfan@example.com",
+    role: "FAN",
+    name: "New Fan",
+  });
+});
+
+test("createManagedAccountByAdmin links promoter accounts to existing organizer records", async () => {
+  stubMethod(db.user, "findUnique", async () => null);
+  stubMethod(db.organizer, "findFirst", async () => ({
+    id: "organizer-1",
+  }));
+  const createUserMock = stubMethod(db.user, "create", async (input) => ({
+    id: "promoter-user-1",
+    email: input.data.email,
+    role: input.data.role,
+    name: input.data.name,
+  }));
+  const updateOrganizerMock = stubMethod(db.organizer, "update", async (input) => input);
+  const auditLogMock = stubMethod(db.auditLog, "create", async (input) => input);
+
+  const result = await usersModule.createManagedAccountByAdmin({
+    actorId: "admin-1",
+    role: "ORGANIZER",
+    email: "promoter@example.com",
+    name: "Promoter Person",
+    organizerName: "Big Card Shows",
+  });
+
+  assert.equal(createUserMock.mock.calls.length, 1);
+  assert.deepEqual(updateOrganizerMock.mock.calls[0]?.arguments[0], {
+    where: { id: "organizer-1" },
+    data: {
+      userId: "promoter-user-1",
+      name: "Big Card Shows",
+    },
+  });
+  assert.deepEqual(auditLogMock.mock.calls[0]?.arguments[0], {
+    data: {
+      actorId: "admin-1",
+      actorRole: "ADMIN",
+      action: "user.created_by_admin",
+      targetType: "User",
+      targetId: "promoter-user-1",
+      details: {
+        email: "promoter@example.com",
+        role: "ORGANIZER",
+        organizerName: "Big Card Shows",
+      },
+    },
+  });
+  assert.deepEqual(result, {
+    id: "promoter-user-1",
+    email: "promoter@example.com",
+    role: "ORGANIZER",
+    name: "Promoter Person",
+  });
+});
+
+test("createTestAccountByAdmin creates auto-verified test accounts with a login path", async () => {
+  const createUserMock = stubMethod(db.user, "create", async (input) => ({
+    id: "test-user-1",
+    email: input.data.email,
+    role: input.data.role,
+    name: input.data.name,
+  }));
+  const auditLogMock = stubMethod(db.auditLog, "create", async (input) => input);
+
+  const result = await usersModule.createTestAccountByAdmin({
+    actorId: "admin-1",
+    role: "MODERATOR",
+    name: "QA Moderator",
+  });
+
+  assert.equal(createUserMock.mock.calls.length, 1);
+  assert.match(createUserMock.mock.calls[0]?.arguments[0].data.email, /^moderator-test-/);
+  assert.match(createUserMock.mock.calls[0]?.arguments[0].data.email, /@cardshownation\.test$/);
+  assert.equal(createUserMock.mock.calls[0]?.arguments[0].data.role, "MODERATOR");
+  assert.equal(typeof createUserMock.mock.calls[0]?.arguments[0].data.passwordHash, "string");
+  assert.ok(createUserMock.mock.calls[0]?.arguments[0].data.emailVerifiedAt instanceof Date);
+  assert.deepEqual(auditLogMock.mock.calls[0]?.arguments[0], {
+    data: {
+      actorId: "admin-1",
+      actorRole: "ADMIN",
+      action: "user.test_created_by_admin",
+      targetType: "User",
+      targetId: "test-user-1",
+      details: {
+        email: createUserMock.mock.calls[0]?.arguments[0].data.email,
+        role: "MODERATOR",
+        organizerName: null,
+      },
+    },
+  });
+  assert.equal(result.user.id, "test-user-1");
+  assert.equal(result.user.role, "MODERATOR");
+  assert.equal(result.loginPath, "/moderator/login");
+  assert.match(result.password, /^Csn-/);
+});
+
 test("getPasswordResetPathForRole returns the correct route for each account type", () => {
   assert.equal(usersModule.getPasswordResetPathForRole("FAN"), "/account/reset-password");
   assert.equal(usersModule.getPasswordResetPathForRole("MODERATOR"), "/moderator/reset-password");

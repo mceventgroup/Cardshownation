@@ -62,9 +62,9 @@ export default function StatusBar() {
   })
 
   return (
-    <div className="shrink-0 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-1px_0_rgba(148,163,184,0.08)]">
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="min-w-[220px]">
+    <div className="shrink-0 border-t border-slate-200 bg-white/95 px-4 py-2.5 shadow-[0_-1px_0_rgba(148,163,184,0.08)] backdrop-blur">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-[180px] max-w-[260px] flex-1">
           <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500">
             <span>Layout Fill</span>
             <span>{percentFilled}%</span>
@@ -99,7 +99,9 @@ export default function StatusBar() {
 
         <div className="flex-1" />
         <span className="text-xs font-medium text-sky-700">{showLabel}</span>
-        <span className="text-xs text-slate-500">Scroll to zoom | Space+drag to pan | Shift+click for multi-select</span>
+        <span className="hidden text-xs text-slate-500 xl:inline">
+          Scroll to zoom | Space+drag to pan | Shift+click for multi-select
+        </span>
         {saveStatus === 'saving' && <span className="text-xs text-slate-400">Saving...</span>}
         {saveStatus === 'saved' && <span className="text-xs text-emerald-600">Saved</span>}
         {saveStatus === 'error' && (

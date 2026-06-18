@@ -10,11 +10,29 @@ import {
   Users,
 } from "lucide-react";
 import { logoutAdmin } from "@/app/admin/actions";
+import { WorkspaceShell } from "@/components/layout/workspace-shell";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const navItems = [
+    { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/admin/floorplanner", label: "Floorplanner", icon: Map },
+    { href: "/admin/submissions", label: "Submissions", icon: Send },
+    { href: "/admin/shows", label: "All Shows", icon: ListChecks },
+    { href: "/admin/promoters", label: "Promoters", icon: Users },
+    { href: "/admin/users", label: "Users", icon: Users },
+    { href: "/admin/import", label: "Import CSV", icon: Upload },
+    { href: "/admin/imports", label: "Auto-Import", icon: RefreshCw },
+  ];
+
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
+    <WorkspaceShell
+      homeHref="/admin"
+      brand="CSN Admin"
+      subtitle="Launch restricted internal apps from here."
+      launchHref="/admin/floorplanner"
+      launchLabel="Launch Floorplanner"
+      desktopSidebar={
+        <aside className="hidden w-56 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
         <div className="border-b border-slate-100 px-4 py-5">
           <Link href="/admin" className="text-sm font-bold text-slate-900">
             CSN Admin
@@ -22,16 +40,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <p className="mt-0.5 text-xs text-slate-400">Card Show Nation</p>
         </div>
         <nav className="flex-1 space-y-0.5 px-3 py-4">
-          {[
-            { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-            { href: "/admin/floorplanner", label: "Floorplanner", icon: Map },
-            { href: "/admin/submissions", label: "Submissions", icon: Send },
-            { href: "/admin/shows", label: "All Shows", icon: ListChecks },
-            { href: "/admin/promoters", label: "Promoters", icon: Users },
-            { href: "/admin/users", label: "Users", icon: Users },
-            { href: "/admin/import", label: "Import CSV", icon: Upload },
-            { href: "/admin/imports", label: "Auto-Import", icon: RefreshCw },
-          ].map(({ href, label, icon: Icon }) => (
+          {navItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -60,24 +69,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </form>
         </div>
       </aside>
-
-      <main className="min-w-0 flex-1 bg-slate-50">
-        <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:px-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Admin Tools</p>
-              <p className="text-xs text-slate-500">Launch restricted internal apps from here.</p>
-            </div>
-            <Link
-              href="/admin/floorplanner"
-              className="inline-flex items-center rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
-            >
-              Launch Floorplanner
-            </Link>
-          </div>
-        </div>
-        {children}
-      </main>
-    </div>
+      }
+    >
+      {children}
+    </WorkspaceShell>
   );
 }

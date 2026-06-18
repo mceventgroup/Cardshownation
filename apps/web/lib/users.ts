@@ -28,6 +28,24 @@ type CreateModeratorInput = {
   actorId: string;
 };
 
+type AdminCreatableRole = "FAN" | "ORGANIZER";
+type AdminTestRole = AdminCreatableRole | "MODERATOR";
+
+type CreateManagedAccountByAdminInput = {
+  actorId: string;
+  role: AdminCreatableRole;
+  email: string;
+  name: string;
+  organizerName?: string;
+};
+
+type CreateTestAccountByAdminInput = {
+  actorId: string;
+  role: AdminTestRole;
+  name: string;
+  organizerName?: string;
+};
+
 type AdminModeratorActionInput = {
   moderatorUserId: string;
   actorId: string;
@@ -93,12 +111,72 @@ export type FavoriteOrganizerOption = {
   verified: boolean;
 };
 
+export type AdminCreatedAccount = {
+  id: string;
+  email: string;
+  role: AdminCreatableRole;
+  name: string | null;
+};
+
+export type AdminCreatedTestAccount = {
+  user: {
+    id: string;
+    email: string;
+    role: AdminTestRole;
+    name: string | null;
+  };
+  password: string;
+  loginPath: string;
+};
+
 function getAppUrl() {
   return process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://cardshownation.com";
 }
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function getRoleDisplayLabel(role: AdminTestRole) {
+  switch (role) {
+    case "MODERATOR":
+      return "moderator";
+    case "ORGANIZER":
+      return "promoter";
+    default:
+      return "member";
+  }
+}
+
+function getRoleLoginPath(role: AdminTestRole) {
+  switch (role) {
+    case "MODERATOR":
+      return "/moderator/login";
+    case "ORGANIZER":
+      return "/promoter/login";
+    default:
+      return "/account/login";
+  }
+}
+
+function createGeneratedPassword() {
+  return `Csn-${randomBytes(12).toString("base64url")}`;
+}
+
+function slugifyLabel(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+}
+
+function buildTestAccountEmail(role: AdminTestRole, name: string) {
+  const rolePrefix =
+    role === "ORGANIZER" ? "portal-test" : role === "MODERATOR" ? "moderator-test" : "member-test";
+  const label = slugifyLabel(name) || "account";
+  const suffix = randomBytes(4).toString("hex");
+  return `${rolePrefix}-${label}-${suffix}@cardshownation.test`;
 }
 
 function normalizeOptionalField(value: string | undefined, maxLength: number) {
@@ -297,6 +375,159 @@ export async function createModeratorAccountByAdmin(input: CreateModeratorInput)
   });
 
   return user;
+}
+
+export async function createManagedAccountByAdmin(
+  input: CreateManagedAccountByAdminInput
+): Promise<AdminCreatedAccount> {
+  const email = input.email.trim().toLowerCase();
+  const name = input.name.trim().slice(0, 120);
+  const organizerName = input.organizerName?.trim().slice(0, 120) ?? "";
+
+  if (!name || !isValidEmail(email)) {
+    throw new Error("Please enter a valid name and email address.");
+  }
+
+  if (input.role === "ORGANIZER" && !organizerName) {
+    throw new Error("Promoter accounts need an organizer name.");
+  }
+
+  const existingUser = await db.user.findUnique({ where: { email } });
+  if (existingUser) {
+    throw new Error("An account already exists for that email.");
+  }
+
+  const passwordHash = await hashPassword(createGeneratedPassword());
+  const createdUser =
+    input.role === "ORGANIZER"
+      ? await (async () => {
+          const existingOrganizer = await db.organizer.findFirst({
+            where: { email, userId: null },
+          });
+
+          if (existingOrganizer) {
+            const user = await db.user.create({
+              data: {
+                name,
+                email,
+                passwordHash,
+                role: "ORGANIZER",
+              },
+            });
+
+            await db.organizer.update({
+              where: { id: existingOrganizer.id },
+              data: {
+                userId: user.id,
+                name: organizerName,
+              },
+            });
+
+            return user;
+          }
+
+          return db.user.create({
+            data: {
+              name,
+              email,
+              passwordHash,
+              role: "ORGANIZER",
+              organizer: {
+                create: {
+                  name: organizerName,
+                  email,
+                },
+              },
+            },
+          });
+        })()
+      : await db.user.create({
+          data: {
+            name,
+            email,
+            passwordHash,
+            role: "FAN",
+          },
+        });
+
+  await writeAuditLog({
+    actorId: input.actorId,
+    actorRole: "ADMIN",
+    action: "user.created_by_admin",
+    targetType: "User",
+    targetId: createdUser.id,
+    details: {
+      email: createdUser.email,
+      role: createdUser.role,
+      organizerName: input.role === "ORGANIZER" ? organizerName : null,
+    },
+  });
+
+  return {
+    id: createdUser.id,
+    email: createdUser.email,
+    role: createdUser.role as AdminCreatableRole,
+    name: createdUser.name,
+  };
+}
+
+export async function createTestAccountByAdmin(
+  input: CreateTestAccountByAdminInput
+): Promise<AdminCreatedTestAccount> {
+  const name = input.name.trim().slice(0, 120) || `Test ${getRoleDisplayLabel(input.role)}`;
+  const organizerName = input.organizerName?.trim().slice(0, 120) ?? "";
+
+  if (input.role === "ORGANIZER" && !organizerName) {
+    throw new Error("Promoter test accounts need an organizer name.");
+  }
+
+  const email = buildTestAccountEmail(input.role, name);
+  const password = createGeneratedPassword();
+  const passwordHash = await hashPassword(password);
+  const now = new Date();
+
+  const createdUser = await db.user.create({
+    data: {
+      name,
+      email,
+      passwordHash,
+      role: input.role,
+      emailVerifiedAt: now,
+      organizer:
+        input.role === "ORGANIZER"
+          ? {
+              create: {
+                name: organizerName,
+                email,
+              },
+            }
+          : undefined,
+    },
+  });
+
+  await writeAuditLog({
+    actorId: input.actorId,
+    actorRole: "ADMIN",
+    action: "user.test_created_by_admin",
+    targetType: "User",
+    targetId: createdUser.id,
+    details: {
+      email: createdUser.email,
+      role: createdUser.role,
+      organizerName: input.role === "ORGANIZER" ? organizerName : null,
+    },
+  });
+
+  return {
+    user: {
+      id: createdUser.id,
+      email: createdUser.email,
+      role: createdUser.role as AdminTestRole,
+      name: createdUser.name,
+    },
+    password,
+    loginPath: getRoleLoginPath(input.role),
+  };
 }
 
 export async function listModeratorAccounts() {

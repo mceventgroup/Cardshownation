@@ -115,6 +115,17 @@ function getResetAudienceLabel(role: UserRole) {
   }
 }
 
+function getAccountAudienceLabel(role: UserRole) {
+  switch (role) {
+    case "MODERATOR":
+      return "moderator";
+    case "ORGANIZER":
+      return "promoter";
+    default:
+      return "member";
+  }
+}
+
 export async function sendPasswordResetEmail(to: string, resetUrl: string, role: UserRole) {
   const audienceLabel = getResetAudienceLabel(role);
   await sendEmail({
@@ -139,6 +150,37 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string, role:
         <p style="color:#94a3b8;font-size:13px;margin-top:24px">
           If you didn't request this, you can ignore this email.
           Your password won't change.
+        </p>
+      </div>
+    `,
+  });
+}
+
+export async function sendAdminCreatedAccountEmail(to: string, setupUrl: string, role: UserRole) {
+  const audienceLabel = getAccountAudienceLabel(role);
+
+  await sendEmail({
+    from: getFromAddress(),
+    to,
+    subject: "Your Card Show Nation account is ready",
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px">
+        <h1 style="font-size:22px;font-weight:600;color:#020617;margin-bottom:8px">
+          Your account is ready
+        </h1>
+        <p style="color:#475569;font-size:15px;line-height:1.6;margin-bottom:24px">
+          An admin created a Card Show Nation ${audienceLabel} account for this email address.
+          Click the button below to set your password and finish activating your account.
+          This link expires in 1 hour.
+        </p>
+        <a href="${setupUrl}"
+           style="display:inline-block;background:#0284c7;color:#fff;font-size:14px;
+                  font-weight:600;padding:12px 24px;border-radius:9999px;
+                  text-decoration:none">
+          Set password
+        </a>
+        <p style="color:#94a3b8;font-size:13px;margin-top:24px">
+          If you were not expecting this account, you can ignore this email.
         </p>
       </div>
     `,

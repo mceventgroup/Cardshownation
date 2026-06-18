@@ -4,6 +4,7 @@ import Script from "next/script";
 import { Suspense } from "react";
 import { GooglePageViewTracker } from "@/components/analytics/google-page-view-tracker";
 import { MetaPixelTracker } from "@/components/analytics/meta-pixel-tracker";
+import { AppChrome } from "@/components/layout/app-chrome";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import "./globals.css";
@@ -112,11 +113,9 @@ export default function RootLayout({
             />
           </noscript>
         )}
-        <div className="flex min-h-screen flex-col">
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </div>
+        <AppChrome header={<Header />} footer={<Footer />}>
+          {children}
+        </AppChrome>
       </body>
     </html>
   );

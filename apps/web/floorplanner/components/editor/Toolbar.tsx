@@ -253,9 +253,9 @@ export default function Toolbar() {
 
   return (
     <div className="shrink-0">
-      <div ref={toolbarRef} className="border-b border-slate-200 bg-white/95 shadow-sm">
+      <div ref={toolbarRef} className="border-b border-slate-200 bg-white/92 shadow-sm backdrop-blur">
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 lg:flex-nowrap">
-          <span className="pr-2 text-sm font-semibold text-slate-800">Floorplanner</span>
+          <span className="pr-2 text-sm font-semibold text-slate-800">Workspace</span>
 
           <div className="flex flex-wrap items-center gap-1">
             {Object.keys(menus).map(name => (
@@ -376,7 +376,7 @@ export default function Toolbar() {
       </div>
 
       {openMenu && activeItems.length > 0 && (
-        <div className="h-9 bg-gray-50 border-b border-gray-200 flex items-center gap-1 px-4 overflow-x-auto">
+        <div className="flex h-9 items-center gap-1 overflow-x-auto border-b border-gray-200 bg-gray-50 px-4">
           {activeItems.map(item => (
             <div key={item.label} className="flex items-center gap-1">
               {item.section && (
