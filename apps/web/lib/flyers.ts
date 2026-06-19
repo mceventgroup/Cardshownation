@@ -1,8 +1,6 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { randomUUID } from "crypto";
 import { isIP } from "net";
-import { put } from "@vercel/blob";
+import { isHostedFlyerAssetUrl, persistFlyerAsset } from "@/lib/flyer-storage";
 import { normalizeExternalUrl } from "@/lib/url";
 import {
   FLYER_MAX_SIZE_BYTES,
@@ -12,8 +10,6 @@ import {
 } from "@/lib/flyer-spec";
 import { slugify } from "@/lib/utils";
 
-const blobReadWriteToken = process.env.BLOB_READ_WRITE_TOKEN?.trim();
-const isProduction = process.env.NODE_ENV === "production";
 const FLYER_BACKGROUND = { r: 248, g: 250, b: 252, alpha: 1 };
 const FLYER_REMOTE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const DISALLOWED_FLYER_HOSTNAMES = new Set([
@@ -124,13 +120,7 @@ export function isManagedFlyerUrl(value: string | null | undefined) {
 
   const url = new URL(normalized);
   const appHost = new URL(getAppBaseUrl()).host;
-  const isLocalFlyerPath = url.host === appHost && url.pathname.startsWith("/uploads/flyers/");
-  const isBlobFlyerPath =
-    url.host.includes("vercel-storage.com") &&
-    url.pathname.includes("/flyers/") &&
-    url.pathname.toLowerCase().endsWith(".webp");
-
-  return isLocalFlyerPath || isBlobFlyerPath;
+  return isHostedFlyerAssetUrl(url, appHost);
 }
 
 export async function normalizeFlyerImage(bytes: Buffer) {
@@ -154,27 +144,7 @@ export async function normalizeFlyerImage(bytes: Buffer) {
 async function persistNormalizedFlyer(showName: string, normalizedBytes: Buffer) {
   const baseName = slugify(showName) || "show-flyer";
   const finalName = `${baseName}-${randomUUID()}.webp`;
-
-  if (blobReadWriteToken) {
-    const blob = await put(`flyers/${finalName}`, normalizedBytes, {
-      access: "public",
-      addRandomSuffix: false,
-      contentType: "image/webp",
-      token: blobReadWriteToken,
-    });
-
-    return blob.url;
-  }
-
-  if (isProduction) {
-    throw new Error("Flyer uploads require BLOB_READ_WRITE_TOKEN in production.");
-  }
-
-  const uploadDirectory = path.join(process.cwd(), "public", "uploads", "flyers");
-  await mkdir(uploadDirectory, { recursive: true });
-  await writeFile(path.join(uploadDirectory, finalName), normalizedBytes);
-
-  return `/uploads/flyers/${finalName}`;
+  return persistFlyerAsset(finalName, normalizedBytes);
 }
 
 async function readResponseBytes(response: Response, maxBytes: number) {
