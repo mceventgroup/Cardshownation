@@ -25,6 +25,23 @@ export type AutoImportSourceInput = {
   active?: boolean;
 };
 
+export function isMissingAutoImportSourceTableError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("autoimportsource") &&
+    (
+      message.includes("does not exist") ||
+      message.includes("unknown") ||
+      message.includes("no such table") ||
+      message.includes("invalid `db.autoimportsource")
+    )
+  );
+}
+
 function readTrimmedString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
@@ -123,9 +140,18 @@ export function validateAutoImportSourceInput(input: AutoImportSourceInput) {
 }
 
 export async function getDatabaseAutoImportSources() {
-  const rows = await db.autoImportSource.findMany({
-    orderBy: [{ active: "desc" }, { createdAt: "asc" }],
-  });
+  let rows;
+  try {
+    rows = await db.autoImportSource.findMany({
+      orderBy: [{ active: "desc" }, { createdAt: "asc" }],
+    });
+  } catch (error) {
+    if (isMissingAutoImportSourceTableError(error)) {
+      console.warn("[auto-import] AutoImportSource table is missing; returning no managed sources.");
+      return [];
+    }
+    throw error;
+  }
 
   return rows.map((row) => ({
     id: row.id,
