@@ -20,10 +20,17 @@ export async function GET(request: NextRequest) {
   }
 
   const available = getAvailability();
-  return NextResponse.json({
+  const authenticated = available ? authorizeCloudRequest(request) : false;
+  const response = NextResponse.json({
     available,
-    authenticated: available ? authorizeCloudRequest(request) : false,
+    authenticated: available,
   });
+
+  if (available && !authenticated) {
+    setCloudSessionCookie(response);
+  }
+
+  return response;
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  if (!authenticateCloudPassword(body.password)) {
+  if (!authenticateCloudPassword(body.password?.trim())) {
     return NextResponse.json({ error: "Invalid cloud admin password." }, { status: 401 });
   }
 
