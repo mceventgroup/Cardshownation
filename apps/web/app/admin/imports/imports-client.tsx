@@ -61,6 +61,38 @@ function toEditableSource(source?: PublicImportSource): EditableSource {
   };
 }
 
+function Field({
+  label,
+  hint,
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  className = "",
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+  className?: string;
+}) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-1.5 block text-sm font-semibold text-slate-800">{label}</span>
+      {hint && <span className="mb-2 block text-xs leading-5 text-slate-500">{hint}</span>}
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400"
+      />
+    </label>
+  );
+}
+
 export function ImportsClient({ sources }: { sources: SourceData }) {
   const router = useRouter();
   const [running, setRunning] = useState(false);
@@ -214,61 +246,84 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
         </p>
       </div>
 
-      <div className="mb-8 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-slate-900">Manage Portal Sources</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Add a portal-managed source</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Add public website or Facebook URLs here instead of editing environment variables.
+            Add one public website or Facebook page at a time. If the page does not clearly list city/state details, use the fallback fields below so imported shows still land in the right market.
           </p>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <input
+        <div className="mb-5 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 sm:grid-cols-3">
+          <div>
+            <p className="font-semibold text-slate-800">Best for</p>
+            <p className="mt-1 text-xs leading-5">Promoter websites, public event pages, and public Facebook pages.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-800">Avoid</p>
+            <p className="mt-1 text-xs leading-5">Private groups, pages that need login, or feeds that render only after JavaScript app login.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-800">Example URL</p>
+            <p className="mt-1 text-xs leading-5">`https://examplepromotions.com/events`</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            label="Source name"
+            hint="Internal label for your team. Use the promoter or website name."
             value={newSource.name}
-            onChange={(event) => setNewSource((current) => ({ ...current, name: event.target.value }))}
-            placeholder="Source name"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            onChange={(value) => setNewSource((current) => ({ ...current, name: value }))}
+            placeholder="Example Promotions"
           />
-          <input
+          <Field
+            label="Public URL"
+            hint="The page the importer should scan for upcoming shows."
             value={newSource.url}
-            onChange={(event) => setNewSource((current) => ({ ...current, url: event.target.value }))}
-            placeholder="Public URL"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            onChange={(value) => setNewSource((current) => ({ ...current, url: value }))}
+            placeholder="https://examplepromotions.com/events"
           />
-          <input
+          <Field
+            label="Fallback city"
+            hint="Used when the page does not clearly say which city the show is in."
             value={newSource.city}
-            onChange={(event) => setNewSource((current) => ({ ...current, city: event.target.value }))}
-            placeholder="Fallback city"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            onChange={(value) => setNewSource((current) => ({ ...current, city: value }))}
+            placeholder="Wichita"
           />
-          <input
+          <Field
+            label="Fallback state"
+            hint="Two-letter state code."
             value={newSource.state}
-            onChange={(event) => setNewSource((current) => ({ ...current, state: event.target.value }))}
-            placeholder="Fallback state"
+            onChange={(value) => setNewSource((current) => ({ ...current, state: value }))}
+            placeholder="KS"
             maxLength={2}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
           />
-          <input
+          <Field
+            label="Organizer name"
+            hint="Who should be credited if the page does not spell it out."
             value={newSource.organizerName}
-            onChange={(event) => setNewSource((current) => ({ ...current, organizerName: event.target.value }))}
-            placeholder="Organizer name"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            onChange={(value) => setNewSource((current) => ({ ...current, organizerName: value }))}
+            placeholder="Example Promotions"
           />
-          <input
+          <Field
+            label="Canonical Facebook URL"
+            hint="Optional. Useful when the public page points back to Facebook."
             value={newSource.facebookUrl}
-            onChange={(event) => setNewSource((current) => ({ ...current, facebookUrl: event.target.value }))}
-            placeholder="Canonical Facebook URL (optional)"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            onChange={(value) => setNewSource((current) => ({ ...current, facebookUrl: value }))}
+            placeholder="https://facebook.com/examplepromotions"
           />
-          <input
+          <Field
+            label="Categories"
+            hint="Comma-separated. Example: Sports Cards, Pokemon, TCG"
             value={newSource.categories}
-            onChange={(event) => setNewSource((current) => ({ ...current, categories: event.target.value }))}
-            placeholder="Categories, comma-separated"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2"
+            onChange={(value) => setNewSource((current) => ({ ...current, categories: value }))}
+            placeholder="Sports Cards, Pokemon"
+            className="md:col-span-2"
           />
         </div>
 
-        <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+        <label className="mt-4 flex items-center gap-2 text-sm text-slate-600">
           <input
             type="checkbox"
             checked={newSource.active}
@@ -290,8 +345,8 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
         </div>
       </div>
 
-      <div className="mb-8 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900">Portal Sources</h2>
+      <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+        <h2 className="text-lg font-semibold text-slate-900">Portal sources</h2>
         {sources.managedSources.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">No portal-managed sources yet.</p>
         ) : (
@@ -300,83 +355,99 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
               const id = source.id as string;
               const current = editing[id] ?? toEditableSource(source);
               return (
-                <div key={id} className="rounded-xl border border-slate-200 p-4">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <input
+                <div key={id} className="rounded-2xl border border-slate-200 p-4 sm:p-5">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{source.name}</p>
+                      <p className="text-xs text-slate-500">Edit the source details below.</p>
+                    </div>
+                    <a
+                      href={current.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-medium text-brand-600 hover:underline"
+                    >
+                      Open source page
+                    </a>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="Source name"
                       value={current.name}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setEditing((existing) => ({
                           ...existing,
-                          [id]: { ...current, name: event.target.value },
+                          [id]: { ...current, name: value },
                         }))
                       }
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     />
-                    <input
+                    <Field
+                      label="Public URL"
                       value={current.url}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setEditing((existing) => ({
                           ...existing,
-                          [id]: { ...current, url: event.target.value },
+                          [id]: { ...current, url: value },
                         }))
                       }
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     />
-                    <input
+                    <Field
+                      label="Fallback city"
                       value={current.city}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setEditing((existing) => ({
                           ...existing,
-                          [id]: { ...current, city: event.target.value },
+                          [id]: { ...current, city: value },
                         }))
                       }
                       placeholder="Fallback city"
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     />
-                    <input
+                    <Field
+                      label="Fallback state"
                       value={current.state}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setEditing((existing) => ({
                           ...existing,
-                          [id]: { ...current, state: event.target.value },
+                          [id]: { ...current, state: value },
                         }))
                       }
                       maxLength={2}
-                      placeholder="Fallback state"
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      placeholder="KS"
                     />
-                    <input
+                    <Field
+                      label="Organizer name"
                       value={current.organizerName}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setEditing((existing) => ({
                           ...existing,
-                          [id]: { ...current, organizerName: event.target.value },
+                          [id]: { ...current, organizerName: value },
                         }))
                       }
                       placeholder="Organizer name"
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     />
-                    <input
+                    <Field
+                      label="Canonical Facebook URL"
                       value={current.facebookUrl}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setEditing((existing) => ({
                           ...existing,
-                          [id]: { ...current, facebookUrl: event.target.value },
+                          [id]: { ...current, facebookUrl: value },
                         }))
                       }
                       placeholder="Canonical Facebook URL"
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     />
-                    <input
+                    <Field
+                      label="Categories"
                       value={current.categories}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setEditing((existing) => ({
                           ...existing,
-                          [id]: { ...current, categories: event.target.value },
+                          [id]: { ...current, categories: value },
                         }))
                       }
                       placeholder="Categories, comma-separated"
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2"
+                      className="md:col-span-2"
                     />
                   </div>
 

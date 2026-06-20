@@ -8,6 +8,24 @@ import { numberingModule } from './numbering.impl'
 import { formatDisplayId } from '@floorplanner/domain/room-numbering'
 import { createTableId } from '@floorplanner/lib/id'
 
+function getStraightRowVisualSize(
+  orientation: RowConfig['orientation'] | Row['orientation'],
+  tableWidth: number,
+  tableHeight: number,
+) {
+  if (orientation === 'vertical') {
+    return {
+      width: tableHeight,
+      height: tableWidth,
+    }
+  }
+
+  return {
+    width: tableWidth,
+    height: tableHeight,
+  }
+}
+
 function buildRow(config: RowConfig, rowId: RowId): BuiltRow {
   if (config.orientation === 'curved') {
     return buildCurvedRow(config, rowId)
@@ -19,15 +37,14 @@ function buildRow(config: RowConfig, rowId: RowId): BuiltRow {
   // This avoids Konva rotation offset issues — the table is simply taller
   // than it is wide, and stacking math uses the visual dimensions directly.
   const isVertical = config.orientation === 'vertical'
-  const vizWidth  = isVertical ? config.tableHeight : config.tableWidth
-  const vizHeight = isVertical ? config.tableWidth  : config.tableHeight
+  const visualSize = getStraightRowVisualSize(config.orientation, config.tableWidth, config.tableHeight)
 
   for (let i = 0; i < config.tableCount; i++) {
     const x = isVertical
       ? config.origin.x
-      : config.origin.x + i * (vizWidth + config.spacing)
+      : config.origin.x + i * (visualSize.width + config.spacing)
     const y = isVertical
-      ? config.origin.y + i * (vizHeight + config.spacing)
+      ? config.origin.y + i * (visualSize.height + config.spacing)
       : config.origin.y
 
     const label = numberingModule.generateLabel(config.numberingScheme, i)
@@ -41,8 +58,8 @@ function buildRow(config: RowConfig, rowId: RowId): BuiltRow {
       displayId,
       x,
       y,
-      width: vizWidth,
-      height: vizHeight,
+      width: visualSize.width,
+      height: visualSize.height,
       rotation: 0,
       shape: 'rectangle',
       label: label === String(tableNumber) ? displayId : label,
@@ -225,14 +242,19 @@ function recalculateRowPositions(
   const anchor = sorted[0]
   const s = updates.spacing ?? row.spacing
 
-  // Use actual table dimensions (already swapped for vertical rows at build time)
-  const stepW = updates.tableWidth ?? anchor.width
-  const stepH = updates.tableHeight ?? anchor.height
+  const visualSize =
+    updates.tableWidth !== undefined || updates.tableHeight !== undefined
+      ? getStraightRowVisualSize(
+          row.orientation,
+          updates.tableWidth ?? row.tableWidth,
+          updates.tableHeight ?? row.tableHeight,
+        )
+      : { width: anchor.width, height: anchor.height }
 
   return sorted.map((t, i) => ({
     id: t.id,
-    x: row.orientation === 'horizontal' ? anchor.x + i * (stepW + s) : anchor.x,
-    y: row.orientation === 'vertical' ? anchor.y + i * (stepH + s) : anchor.y,
+    x: row.orientation === 'horizontal' ? anchor.x + i * (visualSize.width + s) : anchor.x,
+    y: row.orientation === 'vertical' ? anchor.y + i * (visualSize.height + s) : anchor.y,
   }))
 }
 

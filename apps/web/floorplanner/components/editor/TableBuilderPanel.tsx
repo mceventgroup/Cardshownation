@@ -56,7 +56,7 @@ export default function TableBuilderPanel() {
 
   return (
     <div className="px-3 py-3 text-sm">
-      <p className="text-xs text-gray-500 mb-3">Click canvas to place</p>
+      <p className="mb-3 text-xs font-medium text-slate-600">Click canvas to place</p>
 
       {/* Presets */}
       <div className="flex flex-wrap gap-1 mb-3">
@@ -67,7 +67,7 @@ export default function TableBuilderPanel() {
             className={`px-2 py-1 text-xs rounded border transition-colors ${
               length === p.w && tableWidth === p.h
                 ? 'border-blue-500 bg-blue-50 text-blue-700'
-                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
             }`}
           >
             {p.label}
@@ -77,35 +77,35 @@ export default function TableBuilderPanel() {
 
       <div className="flex gap-2 mb-2">
         <label className="flex-1">
-          <span className="text-gray-600 text-xs">Length <span className="text-gray-400">({formatDimension(length)})</span></span>
+          <span className="text-xs font-medium text-slate-700">Length <span className="text-slate-500">({formatDimension(length)})</span></span>
           <input
             type="number" min={12} max={240}
             value={lengthStr}
             onChange={e => setLengthStr(e.target.value)}
             onBlur={blurLength}
             onKeyDown={e => e.stopPropagation()}
-            className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
           />
         </label>
         <label className="flex-1">
-          <span className="text-gray-600 text-xs">Width <span className="text-gray-400">({formatDimension(tableWidth)})</span></span>
+          <span className="text-xs font-medium text-slate-700">Width <span className="text-slate-500">({formatDimension(tableWidth)})</span></span>
           <input
             type="number" min={6} max={120}
             value={widthStr}
             onChange={e => setWidthStr(e.target.value)}
             onBlur={blurWidth}
             onKeyDown={e => e.stopPropagation()}
-            className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
           />
         </label>
       </div>
 
       <label className="block">
-        <span className="text-gray-600 text-xs">Orientation</span>
+        <span className="text-xs font-medium text-slate-700">Orientation</span>
         <select
           value={orientation}
           onChange={e => setOrientation(e.target.value as 'horizontal' | 'vertical')}
-          className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+          className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
         >
           <option value="horizontal">Horizontal</option>
           <option value="vertical">Vertical</option>

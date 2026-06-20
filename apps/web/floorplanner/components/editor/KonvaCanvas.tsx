@@ -1575,6 +1575,42 @@ export default function KonvaCanvas() {
   )
   const hoveredAssignment = hoveredTableId ? assignmentMap.get(hoveredTableId) ?? null : null
   const hoveredTable = hoveredTableId ? tables[hoveredTableId] ?? null : null
+  const hoveredTableTooltipStyle = useMemo(() => {
+    if (!hoveredTable) return null
+
+    const TOOLTIP_WIDTH = 220
+    const TOOLTIP_HEIGHT = 84
+    const OFFSET_X = 18
+    const OFFSET_Y = 14
+    const EDGE_PADDING = 12
+
+    const anchorX = hoveredTable.x * stageScale + stagePos.x
+    const anchorY = hoveredTable.y * stageScale + stagePos.y
+    const tableWidth = hoveredTable.width * stageScale
+    const tableHeight = hoveredTable.height * stageScale
+
+    let left = anchorX + tableWidth + OFFSET_X
+    let top = anchorY - TOOLTIP_HEIGHT - OFFSET_Y
+
+    if (left + TOOLTIP_WIDTH > stageSize.width - EDGE_PADDING) {
+      left = anchorX - TOOLTIP_WIDTH - OFFSET_X
+    }
+    if (left < EDGE_PADDING) {
+      left = EDGE_PADDING
+    }
+
+    if (top < EDGE_PADDING) {
+      top = anchorY + tableHeight + OFFSET_Y
+    }
+    if (top + TOOLTIP_HEIGHT > stageSize.height - EDGE_PADDING) {
+      top = stageSize.height - TOOLTIP_HEIGHT - EDGE_PADDING
+    }
+    if (top < EDGE_PADDING) {
+      top = EDGE_PADDING
+    }
+
+    return { left, top, maxWidth: TOOLTIP_WIDTH }
+  }, [hoveredTable, stagePos.x, stagePos.y, stageScale, stageSize.height, stageSize.width])
 
   const zoomBy = useCallback((factor: number) => {
     const nextScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, stageScale * factor))
@@ -1977,8 +2013,8 @@ export default function KonvaCanvas() {
         </>
       )}
 
-      {hoveredTable && (
-        <div className="pointer-events-none absolute z-20 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg backdrop-blur-sm" style={{ left: hoveredTable.x * stageScale + stagePos.x + 28, top: hoveredTable.y * stageScale + stagePos.y - 32 }}>
+      {hoveredTable && hoveredTableTooltipStyle && (
+        <div className="pointer-events-none absolute z-20 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg backdrop-blur-sm" style={hoveredTableTooltipStyle}>
           <div className="font-semibold text-slate-900">{hoveredAssignment?.vendorName ?? 'Open table'}</div>
           <div>Table {hoveredTable.displayId}</div>
           <div>{hoveredTable.shape === 'round' ? 'Round' : 'Rectangle'}{hoveredTable.premium ? ' · Premium' : ''}</div>
