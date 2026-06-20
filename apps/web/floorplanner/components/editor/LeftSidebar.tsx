@@ -17,6 +17,8 @@ import WarningsPanel from './WarningsPanel'
 import SettingsPanel from './SettingsPanel'
 import VendorQuickAdd from './VendorQuickAdd'
 
+const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
+
 interface LeftSidebarProps {
   activeTab: 'layout' | 'vendors' | 'settings'
   onTabChange: (tab: 'layout' | 'vendors' | 'settings') => void
@@ -101,6 +103,8 @@ function WarningsBadge() {
 }
 
 export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps) {
+  const clearVendors = useEditorStore(s => s.clearVendors)
+
   return (
     <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-slate-200 bg-slate-50/95 backdrop-blur-sm">
       <div className="border-b border-slate-200 bg-white/90 px-3 py-3 shadow-sm">
@@ -154,8 +158,31 @@ export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps
         {activeTab === 'vendors' && (
           <div className="flex h-full flex-col">
             <VendorQuickAdd />
-            <div className="px-3 py-3 text-xs text-slate-500">
-              Full vendor roster stays in the bottom drawer for search, assignment status, and inline table-count edits.
+            <div className="space-y-3 px-3 py-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Vendor Tools</div>
+                <div className="mt-3 grid gap-2">
+                  <button
+                    onClick={() => window.dispatchEvent(new Event(OPEN_VENDOR_IMPORT_EVENT))}
+                    className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    Import Vendors
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Remove all vendors and clear all vendor-to-table assignments?')) {
+                        clearVendors()
+                      }
+                    }}
+                    className="w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Clear All Vendors
+                  </button>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500">
+                Full vendor roster stays in the bottom drawer for search, multi-select delete, assignment status, and inline table-count edits.
+              </div>
             </div>
           </div>
         )}

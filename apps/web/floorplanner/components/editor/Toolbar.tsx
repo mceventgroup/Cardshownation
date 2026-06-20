@@ -10,6 +10,7 @@ import LayoutManagerModal from './LayoutManagerModal'
 import HelpCheatSheetModal from './HelpCheatSheetModal'
 
 const OPEN_HELP_EVENT = 'floorplanner:open-help'
+const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
 
 interface MenuItem {
   label: string
@@ -25,7 +26,6 @@ function useMenuItems(
   openFilePicker: () => void,
   saveToCloud: () => void,
   saveToFile: () => void,
-  openImport: () => void,
   openExport: () => void,
   openHelp: () => void,
 ): Record<string, MenuItem[]> {
@@ -40,7 +40,6 @@ function useMenuItems(
   }, [])
 
   const clearLayout = useEditorStore(s => s.clearLayout)
-  const clearVendors = useEditorStore(s => s.clearVendors)
 
   return {
     File: [
@@ -64,15 +63,6 @@ function useMenuItems(
       {
         label: 'Save to File...',
         action: saveToFile,
-      },
-      { label: 'Import Vendors...', action: openImport },
-      {
-        label: 'Clear All Vendors',
-        action: () => {
-          if (window.confirm('Remove all vendor assignments? Tables will remain.')) {
-            clearVendors()
-          }
-        },
       },
       { label: 'Export...', action: openExport },
     ],
@@ -215,7 +205,6 @@ export default function Toolbar() {
     openFilePicker,
     saveToCloud,
     saveToFile,
-    () => { setShowImport(true); setOpenMenu(null) },
     () => { setShowExport(true); setOpenMenu(null) },
     openHelp,
   )
@@ -246,14 +235,23 @@ export default function Toolbar() {
       openHelp()
     }
 
+    function handleOpenVendorImport() {
+      setOpenMenu(null)
+      window.setTimeout(() => {
+        setShowImport(true)
+      }, 0)
+    }
+
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('keydown', handleEscape)
     window.addEventListener(OPEN_HELP_EVENT, handleOpenHelp)
+    window.addEventListener(OPEN_VENDOR_IMPORT_EVENT, handleOpenVendorImport)
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
       window.removeEventListener(OPEN_HELP_EVENT, handleOpenHelp)
+      window.removeEventListener(OPEN_VENDOR_IMPORT_EVENT, handleOpenVendorImport)
     }
   }, [openHelp])
 
