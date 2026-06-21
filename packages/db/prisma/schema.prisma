@@ -110,6 +110,7 @@ model Organizer {
   facebookUrl  String?
   instagramUrl String?
   verified     Boolean  @default(false)
+  floorplanEnabled Boolean @default(false)
   userId       String?  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

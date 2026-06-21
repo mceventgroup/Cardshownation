@@ -147,6 +147,14 @@ export default async function PromoterPortalPage({
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
+                        {dashboard.organizer.floorplanEnabled ? (
+                          <Link
+                            href={`/promoter/shows/${encodeURIComponent(show.id)}/floorplan`}
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                          >
+                            Open floor plan
+                          </Link>
+                        ) : null}
                         <Link
                           href={`/promoter/new-show?copy=${encodeURIComponent(show.id)}`}
                           className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"

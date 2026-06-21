@@ -13,7 +13,7 @@ import type { Vendor } from '@floorplanner/domain/types'
 import { resolveVendorBuckets, vendorDisplayName } from '@floorplanner/lib/vendor-resolution'
 
 type VendorFilter = 'all' | 'open' | 'complete' | 'premium'
-type VendorSortKey = 'company' | 'premium' | 'cases' | 'need' | 'assigned' | 'open' | 'tables' | 'tableSize'
+type VendorSortKey = 'company' | 'premium' | 'cases' | 'need' | 'assigned' | 'open' | 'tables' | 'tableSize' | 'inventory'
 type SortDirection = 'asc' | 'desc'
 type ColumnKey = 'select' | VendorSortKey | 'delete'
 
@@ -27,6 +27,7 @@ interface VendorSummary {
   open: number
   tables: string[]
   tableSize: string
+  inventory: string
   isPremium: boolean
 }
 
@@ -47,6 +48,7 @@ const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
   open: 64,
   tables: 180,
   tableSize: 120,
+  inventory: 180,
   delete: 72,
 }
 
@@ -60,6 +62,7 @@ const MIN_COLUMN_WIDTHS: Record<ColumnKey, number> = {
   open: 44,
   tables: 90,
   tableSize: 84,
+  inventory: 120,
   delete: 64,
 }
 
@@ -73,6 +76,7 @@ const COLUMN_DEFS: Array<{ key: ColumnKey; label: string; align: 'text-left' | '
   { key: 'open', label: 'Open', align: 'text-right' },
   { key: 'tables', label: 'Assigned Tables', align: 'text-left' },
   { key: 'tableSize', label: 'Table Size', align: 'text-left' },
+  { key: 'inventory', label: 'Inventory', align: 'text-left' },
   { key: 'delete', label: 'Delete', align: 'text-left', sortable: false },
 ]
 
@@ -189,6 +193,9 @@ function compareSummaries(a: VendorSummary, b: VendorSummary, sortKey: VendorSor
     case 'tableSize':
       result = a.tableSize.localeCompare(b.tableSize, undefined, { numeric: true, sensitivity: 'base' })
       break
+    case 'inventory':
+      result = a.inventory.localeCompare(b.inventory, undefined, { sensitivity: 'base' })
+      break
   }
 
   if (result !== 0) return result * multiplier
@@ -232,6 +239,7 @@ export function useVendorGridData(
         tableSize: summarizeTableSizes(
           [bucket.vendor?.tableSize?.trim() ?? ''].filter(Boolean),
         ),
+        inventory: bucket.vendor?.inventory?.trim() ?? '',
         isPremium: bucket.vendor?.premium ?? false,
       } satisfies VendorSummary
     })
@@ -250,6 +258,7 @@ export function useVendorGridData(
           summary.vendor?.name ?? '',
           summary.tables.join(' '),
           summary.tableSize,
+          summary.inventory,
         ].some(value => value.toLowerCase().includes(q))
       })
       .sort((a, b) => compareSummaries(a, b, sortKey, sortDirection))
@@ -315,7 +324,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
       return
     }
     setSortKey(nextKey)
-    setSortDirection(nextKey === 'company' || nextKey === 'tables' || nextKey === 'tableSize' ? 'asc' : 'desc')
+    setSortDirection(nextKey === 'company' || nextKey === 'tables' || nextKey === 'tableSize' || nextKey === 'inventory' ? 'asc' : 'desc')
   }
 
   function handleNeedChange(vendorId: Vendor['id'], rawValue: string) {
@@ -469,6 +478,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
     `${columnWidths.open}px`,
     `${columnWidths.tables}px`,
     `${columnWidths.tableSize}px`,
+    `${columnWidths.inventory}px`,
     `${columnWidths.delete}px`,
   ].join(' ')
   const minGridWidth = Object.values(columnWidths).reduce((sum, width) => sum + width, 0) + 32
@@ -681,6 +691,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
                   <div className={`${cellClass('text-right')} py-1 tabular-nums font-semibold ${openColorClass}`}>{summary.open}</div>
                   <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{compressedTables || '—'}</div>
                   <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{summary.tableSize || '—'}</div>
+                  <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{summary.inventory || '—'}</div>
                   <div className={`${cellClass('text-left', true)} py-1`}>
                     {summary.vendor ? (
                       <button

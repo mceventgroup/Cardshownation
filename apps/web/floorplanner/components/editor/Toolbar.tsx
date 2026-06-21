@@ -19,6 +19,11 @@ interface MenuItem {
   disabled?: boolean
 }
 
+interface ToolbarProps {
+  theme: 'light' | 'dark'
+  onToggleTheme: () => void
+}
+
 function useMenuItems(
   startNewLayout: () => void,
   openBrowserLayouts: () => void,
@@ -102,7 +107,7 @@ function useMenuItems(
   }
 }
 
-export default function Toolbar() {
+export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
   const canUndo = useEditorStore(selectCanUndo)
   const canRedo = useEditorStore(selectCanRedo)
   const undo = useEditorStore(s => s.undo)
@@ -354,6 +359,15 @@ export default function Toolbar() {
               className="rounded-full border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:px-4"
             >
               Show Mode
+            </button>
+
+            <button
+              onClick={onToggleTheme}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              aria-pressed={theme === 'dark'}
+              className="rounded-full border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:px-4"
+            >
+              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </button>
 
             <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1 py-1">

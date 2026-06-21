@@ -243,6 +243,10 @@ export const csvImportModule: CSVImportModule = {
         /^table[\s_]?size$/i, /^size$/i, /^booth[\s_]?size$/i, /^space[\s_]?size$/i,
         /^length$/i,
       ],
+      inventory: [
+        /^inventory$/i, /^vendor[\s_]?inventory$/i, /^dealer[\s_]?inventory$/i,
+        /^inventory[\s_]?types?$/i, /^products?$/i, /^product[\s_]?types?$/i,
+      ],
       color: [/^color$/i, /^colour$/i, /^table[\s_]?color$/i],
       notes: [/^notes?$/i, /^comments?$/i, /^remarks?$/i, /^memo$/i],
       paymentStatus: [
@@ -255,12 +259,14 @@ export const csvImportModule: CSVImportModule = {
       tableNumber: null, vendorName: null, vendorLastName: null, companyName: null, email: null, vendorCategory: null,
       quantity: null,
       tableSize: null,
+      inventory: null,
       color: null, notes: null, paymentStatus: null, section: null,
     }
     const confidence: Record<Field, number> = {
       tableNumber: 0, vendorName: 0, vendorLastName: 0, companyName: 0, email: 0, vendorCategory: 0,
       quantity: 0,
       tableSize: 0,
+      inventory: 0,
       color: 0, notes: 0, paymentStatus: 0, section: 0,
     }
     const unmappedHeaders: string[] = []
@@ -367,6 +373,9 @@ export const csvImportModule: CSVImportModule = {
       const tableSize = mapping.tableSize
         ? (rawData[mapping.tableSize] ?? '').trim() || null
         : null
+      const inventory = mapping.inventory
+        ? (rawData[mapping.inventory] ?? '').trim() || null
+        : null
 
       const rawPayStatus = mapping.paymentStatus ? rawData[mapping.paymentStatus] ?? '' : ''
       const normStatus   = normalizePaymentStatus(rawPayStatus)
@@ -379,6 +388,7 @@ export const csvImportModule: CSVImportModule = {
         vendorCategory: mapping.vendorCategory ? (rawData[mapping.vendorCategory] ?? '').trim() || null : null,
         quantity,
         tableSize,
+        inventory,
         color:          mapping.color          ? (rawData[mapping.color]          ?? '').trim() || null : null,
         notes:          mapping.notes          ? (rawData[mapping.notes]          ?? '').trim() || null : null,
         paymentStatus:  normStatus,

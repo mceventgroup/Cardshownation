@@ -33,6 +33,9 @@ const KonvaCanvas = dynamic(() => import('./KonvaCanvas'), {
 })
 
 const FIRST_RUN_BYPASS_KEY = 'floorplanner:onboarding:bypass'
+const EDITOR_THEME_KEY = 'floorplanner:theme'
+
+type EditorTheme = 'light' | 'dark'
 
 function readBypassPreference(): boolean {
   try {
@@ -49,6 +52,22 @@ function writeBypassPreference(skipNextTime: boolean): void {
     } else {
       window.localStorage.removeItem(FIRST_RUN_BYPASS_KEY)
     }
+  } catch {
+    // Ignore browsers that block localStorage access.
+  }
+}
+
+function readEditorThemePreference(): EditorTheme {
+  try {
+    return window.localStorage.getItem(EDITOR_THEME_KEY) === 'dark' ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
+function writeEditorThemePreference(theme: EditorTheme): void {
+  try {
+    window.localStorage.setItem(EDITOR_THEME_KEY, theme)
   } catch {
     // Ignore browsers that block localStorage access.
   }
@@ -98,6 +117,7 @@ export default function EditorShell({
   const [showHelp, setShowHelp] = useState(false)
   const [showFirstRun, setShowFirstRun] = useState(false)
   const [activeTab, setActiveTab] = useState<'layout' | 'vendors' | 'settings'>('layout')
+  const [theme, setTheme] = useState<EditorTheme>('light')
 
   useEffect(() => {
     configureFloorplannerRuntime({
@@ -161,6 +181,11 @@ export default function EditorShell({
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setTheme(readEditorThemePreference())
+  }, [])
+
   const persistBypass = useCallback((skipNextTime: boolean) => {
     if (typeof window === 'undefined') return
     writeBypassPreference(skipNextTime)
@@ -181,9 +206,17 @@ export default function EditorShell({
     setActiveTab(nextTab)
   }, [])
 
+  const handleToggleTheme = useCallback(() => {
+    setTheme(currentTheme => {
+      const nextTheme: EditorTheme = currentTheme === 'dark' ? 'light' : 'dark'
+      writeEditorThemePreference(nextTheme)
+      return nextTheme
+    })
+  }, [])
+
   return (
-    <div className="flex h-full w-full flex-col bg-slate-100">
-      {!showMode && <Toolbar />}
+    <div className={`fp-theme-root fp-theme-${theme} flex h-full w-full flex-col bg-slate-100`}>
+      {!showMode && <Toolbar theme={theme} onToggleTheme={handleToggleTheme} />}
       <div className="flex-1 overflow-hidden">
         <div className="flex h-full flex-row overflow-hidden">
           {showMode ? (

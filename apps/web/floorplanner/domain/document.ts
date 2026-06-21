@@ -182,6 +182,7 @@ export interface FieldMapping {
   vendorCategory: string | null
   quantity: string | null
   tableSize: string | null
+  inventory: string | null
   color: string | null
   notes: string | null
   paymentStatus: string | null
@@ -216,6 +217,7 @@ export interface MappedImportRow {
   vendorCategory: string | null
   quantity: number
   tableSize: string | null
+  inventory: string | null
   color: string | null
   notes: string | null
   paymentStatus: string | null

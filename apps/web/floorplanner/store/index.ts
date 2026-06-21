@@ -667,6 +667,7 @@ export const useEditorStore = create<EditorState>()(
           if (!createdVendor.notes && row.mapped.notes) createdVendor.notes = row.mapped.notes
           if (!createdVendor.category && row.mapped.vendorCategory) createdVendor.category = row.mapped.vendorCategory
           if (!createdVendor.tableSize && row.mapped.tableSize) createdVendor.tableSize = row.mapped.tableSize
+          if (!createdVendor.inventory && row.mapped.inventory) createdVendor.inventory = row.mapped.inventory
           if (createdVendor.paymentStatus === 'unknown' && row.mapped.paymentStatus) {
             createdVendor.paymentStatus = row.mapped.paymentStatus as Vendor['paymentStatus']
           }
@@ -686,6 +687,7 @@ export const useEditorStore = create<EditorState>()(
             email: normalizedEmail,
             tablesNeeded: importedTableCount,
             tableSize: row.mapped.tableSize ?? null,
+            inventory: row.mapped.inventory ?? null,
             category: row.mapped.vendorCategory,
             paymentStatus: (row.mapped.paymentStatus ?? 'unknown') as Vendor['paymentStatus'],
             notes: row.mapped.notes,

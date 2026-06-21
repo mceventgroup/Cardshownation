@@ -18,6 +18,7 @@ const FIELD_LABELS: Record<keyof FieldMapping, string> = {
   vendorCategory: 'Category',
   quantity: 'Quantity',
   tableSize: 'Table Size',
+  inventory: 'Inventory',
   color: 'Color',
   notes: 'Notes',
   paymentStatus: 'Payment Status',
@@ -33,6 +34,7 @@ const STRUCTURED_IMPORT_COLUMNS: Array<{ key: keyof FieldMapping; placeholder: s
   { key: 'vendorCategory', placeholder: 'Premium' },
   { key: 'quantity', placeholder: '2' },
   { key: 'tableSize', placeholder: '8ft' },
+  { key: 'inventory', placeholder: 'Sports Cards, Pokemon, Sealed Wax' },
   { key: 'color', placeholder: '#ff0000' },
   { key: 'notes', placeholder: 'Corner booth' },
   { key: 'paymentStatus', placeholder: 'paid' },
@@ -51,6 +53,7 @@ function createEmptyStructuredRow(): StructuredImportRow {
     vendorCategory: '',
     quantity: '',
     tableSize: '',
+    inventory: '',
     color: '',
     notes: '',
     paymentStatus: '',
@@ -255,7 +258,7 @@ export default function ImportModal({ onClose }: Props) {
             <div className="flex flex-col gap-4">
               <p className="text-gray-400 text-sm">
                 Paste from a spreadsheet, upload a .csv file, or type data below.
-                This importer supports first name, last name, company, category, and quantity.
+                This importer supports first name, last name, company, category, inventory, and quantity.
                 Table numbers are optional.
               </p>
 

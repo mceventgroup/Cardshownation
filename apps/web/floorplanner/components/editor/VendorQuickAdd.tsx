@@ -54,6 +54,7 @@ export default function VendorQuickAdd() {
         email: null,
         tablesNeeded: parsedCount,
         tableSize: null,
+        inventory: null,
         category: null,
         paymentStatus: 'unknown',
         notes: null,

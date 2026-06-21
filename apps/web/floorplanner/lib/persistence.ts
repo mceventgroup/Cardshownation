@@ -439,6 +439,9 @@ function migrate(payload: PersistedPayload): PersistedPayload {
     if ((v as { premium?: boolean }).premium === undefined) {
       (v as { premium: boolean }).premium = false
     }
+    if ((v as { inventory?: string | null }).inventory === undefined) {
+      ;(v as { inventory: string | null }).inventory = null
+    }
     const vendorWithCases = v as { cases?: boolean | number }
     if (vendorWithCases.cases === undefined) {
       ;(v as { cases: number }).cases = 0

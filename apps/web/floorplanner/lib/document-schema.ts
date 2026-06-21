@@ -126,6 +126,7 @@ function parseVendor(value: unknown, label: string): Vendor {
     email: record.email === undefined ? undefined : expectNullableString(record.email, `${label}.email`),
     tablesNeeded: expectNumber(record.tablesNeeded, `${label}.tablesNeeded`),
     tableSize: record.tableSize === undefined ? undefined : expectNullableString(record.tableSize, `${label}.tableSize`),
+    inventory: record.inventory === undefined ? undefined : expectNullableString(record.inventory, `${label}.inventory`),
     category: expectNullableString(record.category, `${label}.category`),
     paymentStatus: expectString(record.paymentStatus, `${label}.paymentStatus`) as Vendor['paymentStatus'],
     notes: expectNullableString(record.notes, `${label}.notes`),

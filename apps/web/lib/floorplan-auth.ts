@@ -39,6 +39,9 @@ async function findAdminShow(showId: string) {
 
 export async function requirePromoterFloorplanAccess(showId: string): Promise<FloorplanAccess> {
   const session = await requirePromoterSession(`/promoter/shows/${showId}/floorplan`);
+  if (!session.organizer.floorplanEnabled) {
+    notFound();
+  }
   const show = await findPromoterShow(showId, session.organizer.id);
   if (!show) {
     notFound();
@@ -65,7 +68,7 @@ export async function requireAdminFloorplanAccess(showId: string): Promise<Floor
 
 export async function getPromoterFloorplanAccess(showId: string): Promise<FloorplanAccess | null> {
   const session = await getPromoterSession();
-  if (!session) {
+  if (!session || !session.organizer.floorplanEnabled) {
     return null;
   }
 

@@ -149,6 +149,7 @@ export interface Vendor {
   email?: string | null
   tablesNeeded: number          // how many tables this vendor purchased
   tableSize?: string | null
+  inventory?: string | null
   category: string | null
   paymentStatus: PaymentStatus
   notes: string | null

@@ -41,3 +41,90 @@
     cursor: grabbing;
   }
 }
+
+@layer components {
+  .fp-theme-dark {
+    background:
+      radial-gradient(circle at top, rgba(30, 41, 59, 0.78), rgba(2, 6, 23, 0.96) 42%),
+      linear-gradient(180deg, #020617 0%, #0f172a 100%);
+    color: #e2e8f0;
+  }
+
+  .fp-theme-dark ::selection {
+    background: rgba(59, 130, 246, 0.45);
+    color: #eff6ff;
+  }
+
+  .fp-theme-dark input,
+  .fp-theme-dark select,
+  .fp-theme-dark textarea {
+    background-color: rgba(15, 23, 42, 0.92) !important;
+    border-color: rgba(71, 85, 105, 0.92) !important;
+    color: #e2e8f0 !important;
+  }
+
+  .fp-theme-dark input::placeholder,
+  .fp-theme-dark textarea::placeholder {
+    color: #94a3b8 !important;
+  }
+
+  .fp-theme-dark [class*='bg-white'] {
+    background-color: rgba(15, 23, 42, 0.94) !important;
+  }
+
+  .fp-theme-dark [class*='bg-slate-50'],
+  .fp-theme-dark [class*='bg-gray-50'] {
+    background-color: rgba(15, 23, 42, 0.88) !important;
+  }
+
+  .fp-theme-dark [class*='bg-slate-100'],
+  .fp-theme-dark [class*='bg-gray-100'] {
+    background-color: rgba(30, 41, 59, 0.92) !important;
+  }
+
+  .fp-theme-dark [class*='bg-slate-200'],
+  .fp-theme-dark [class*='bg-gray-200'] {
+    background-color: rgba(51, 65, 85, 0.9) !important;
+  }
+
+  .fp-theme-dark [class*='border-slate-100'],
+  .fp-theme-dark [class*='border-slate-200'],
+  .fp-theme-dark [class*='border-slate-300'],
+  .fp-theme-dark [class*='border-gray-100'],
+  .fp-theme-dark [class*='border-gray-200'],
+  .fp-theme-dark [class*='border-gray-300'] {
+    border-color: rgba(51, 65, 85, 0.96) !important;
+  }
+
+  .fp-theme-dark [class*='text-slate-900'],
+  .fp-theme-dark [class*='text-slate-800'],
+  .fp-theme-dark [class*='text-slate-700'],
+  .fp-theme-dark [class*='text-gray-700'],
+  .fp-theme-dark [class*='text-gray-800'] {
+    color: #e2e8f0 !important;
+  }
+
+  .fp-theme-dark [class*='text-slate-600'],
+  .fp-theme-dark [class*='text-slate-500'],
+  .fp-theme-dark [class*='text-gray-600'],
+  .fp-theme-dark [class*='text-gray-500'],
+  .fp-theme-dark [class*='text-gray-400'] {
+    color: #94a3b8 !important;
+  }
+
+  .fp-theme-dark [class*='hover:bg-gray-50']:hover,
+  .fp-theme-dark [class*='hover:bg-slate-50']:hover {
+    background-color: rgba(30, 41, 59, 0.96) !important;
+  }
+
+  .fp-theme-dark [class*='hover:bg-gray-100']:hover,
+  .fp-theme-dark [class*='hover:bg-slate-100']:hover,
+  .fp-theme-dark [class*='hover:bg-slate-200']:hover {
+    background-color: rgba(51, 65, 85, 0.96) !important;
+  }
+
+  .fp-theme-dark .react-konva__content,
+  .fp-theme-dark canvas {
+    background-color: transparent;
+  }
+}

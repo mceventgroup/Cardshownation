@@ -40,6 +40,23 @@ async function toggleVerified(organizerId: string, nextValue: boolean) {
   redirect(`/admin/promoters/${organizerId}`);
 }
 
+async function toggleFloorplanAccess(organizerId: string, nextValue: boolean) {
+  "use server";
+  const session = await requireAdminSession(`/admin/promoters/${organizerId}`);
+  await db.organizer.update({
+    where: { id: organizerId },
+    data: { floorplanEnabled: nextValue },
+  });
+  await writeAuditLog({
+    actorId: session.user.id,
+    actorRole: "ADMIN",
+    action: nextValue ? "promoter.floorplan_enabled" : "promoter.floorplan_disabled",
+    targetType: "Organizer",
+    targetId: organizerId,
+  });
+  redirect(`/admin/promoters/${organizerId}`);
+}
+
 async function markEmailVerified(organizerId: string) {
   "use server";
   const session = await requireAdminSession(`/admin/promoters/${organizerId}`);
@@ -165,6 +182,11 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
   if (!promoter) notFound();
 
   const verifyAction = toggleVerified.bind(null, promoter.id, !promoter.verified);
+  const toggleFloorplanAccessAction = toggleFloorplanAccess.bind(
+    null,
+    promoter.id,
+    !promoter.floorplanEnabled
+  );
   const markEmailVerifiedAction = markEmailVerified.bind(null, promoter.id);
 
   return (
@@ -200,6 +222,15 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
             </button>
           </form>
 
+          <form action={toggleFloorplanAccessAction}>
+            <button
+              type="submit"
+              className="rounded-lg border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              {promoter.floorplanEnabled ? "Disable floorplanner" : "Enable floorplanner"}
+            </button>
+          </form>
+
           {promoter.user && !promoter.user.emailVerifiedAt && (
             <form action={markEmailVerifiedAction}>
               <button
@@ -216,14 +247,7 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard label="Total shows" value={String(promoter._count.shows)} />
         <StatCard label="Trusted cities" value={String(promoter.approvals.length)} />
-        <StatCard
-          label="Account created"
-          value={
-            promoter.user?.createdAt
-              ? new Date(promoter.user.createdAt).toLocaleDateString()
-              : "No login account"
-          }
-        />
+        <StatCard label="Floorplanner" value={promoter.floorplanEnabled ? "Enabled" : "Disabled"} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -329,6 +353,14 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
             <Field label="Website" value={promoter.websiteUrl ?? "—"} />
             <Field label="Facebook" value={promoter.facebookUrl ?? "—"} />
             <Field label="Instagram" value={promoter.instagramUrl ?? "—"} />
+            <Field
+              label="Account created"
+              value={
+                promoter.user?.createdAt
+                  ? new Date(promoter.user.createdAt).toLocaleDateString()
+                  : "No login account"
+              }
+            />
             <Field label="Organizer ID" value={promoter.id} mono />
           </div>
         </section>
