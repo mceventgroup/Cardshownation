@@ -17,6 +17,8 @@ import { buildAllSectionRenumberChanges, buildSectionRenumberChanges, type Table
 import type { Section, SectionId, TableId } from '@floorplanner/domain/types'
 
 export default function SectionsPanel() {
+  const fieldClassName =
+    'bg-white text-slate-900 placeholder:text-slate-400'
   const sections     = useEditorStore(selectSections)
   const selectedIds  = useEditorStore(selectSelectedIds)
   const dispatch     = useEditorStore(s => s.dispatch)
@@ -143,7 +145,7 @@ export default function SectionsPanel() {
           <select
             value={numberingDirection}
             onChange={e => setNumberingDirection(e.target.value as TableNumberingDirection)}
-            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs"
+            className={`w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs ${fieldClassName}`}
           >
             <option value="ltr">Left to Right</option>
             <option value="rtl">Right to Left</option>
@@ -231,7 +233,7 @@ export default function SectionsPanel() {
                       if (e.key === 'Escape') setEditingId(null)
                     }}
                     onBlur={() => handleRename(s.id)}
-                    className="flex-1 min-w-0 px-1.5 py-0.5 border border-blue-400 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                    className={`flex-1 min-w-0 px-1.5 py-0.5 border border-blue-400 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 ${fieldClassName}`}
                   />
                 ) : (
                   <div className="flex min-w-0 flex-1 items-center gap-2">

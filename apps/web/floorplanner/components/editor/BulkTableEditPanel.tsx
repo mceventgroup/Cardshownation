@@ -25,6 +25,8 @@ function commonValue(values: number[]): string {
 }
 
 export default function BulkTableEditPanel() {
+  const fieldClassName =
+    'mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400'
   const tables = useEditorStore(selectTables)
   const selectedIds = useEditorStore(selectSelectedIds)
   const dispatch = useEditorStore(s => s.dispatch)
@@ -176,7 +178,7 @@ export default function BulkTableEditPanel() {
               value={lengthStr}
               placeholder="Mixed"
               onChange={e => setLengthStr(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+              className={fieldClassName}
             />
           </label>
 
@@ -191,7 +193,7 @@ export default function BulkTableEditPanel() {
               value={widthStr}
               placeholder="Mixed"
               onChange={e => setWidthStr(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+              className={fieldClassName}
             />
           </label>
 
@@ -205,7 +207,7 @@ export default function BulkTableEditPanel() {
               value={rotationStr}
               placeholder="Mixed"
               onChange={e => setRotationStr(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+              className={fieldClassName}
             />
           </label>
         </div>

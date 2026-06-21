@@ -278,6 +278,8 @@ export function useVendorGridData(
 }
 
 export default function VendorRosterPanel({ search, onSearchChange, filter, onFilterChange }: VendorRosterPanelProps) {
+  const fieldClassName =
+    'border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400'
   const activeVendorId = useEditorStore(selectActiveVendorId)
   const settings = useEditorStore(selectSettings)
   const vendors = useEditorStore(selectVendors)
@@ -505,7 +507,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
             value={search}
             onChange={e => onSearchChange(e.target.value)}
             placeholder="Search company or tables"
-            className="min-w-0 flex-1 border border-slate-300 px-2 py-1 text-sm"
+            className={`min-w-0 flex-1 px-2 py-1 text-sm ${fieldClassName}`}
           />
           <div className="flex items-center gap-1">
             {VENDOR_FILTERS.map(item => (
@@ -664,7 +666,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
                         onChange={e => handleCasesChange(summary.vendor!.id, e.target.value)}
                         onClick={e => e.stopPropagation()}
                         onFocus={() => setActiveVendor(summary.vendor!.id)}
-                        className="w-14 border border-slate-300 bg-white px-1 py-0.5 text-right tabular-nums text-slate-900"
+                        className={`w-14 px-1 py-0.5 text-right tabular-nums ${fieldClassName}`}
                         aria-label={`Cases for ${summary.company}`}
                       />
                     ) : (
@@ -680,7 +682,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
                         onChange={e => handleNeedChange(summary.vendor!.id, e.target.value)}
                         onClick={e => e.stopPropagation()}
                         onFocus={() => setActiveVendor(summary.vendor!.id)}
-                        className="w-14 border border-slate-300 bg-white px-1 py-0.5 text-right tabular-nums text-slate-900"
+                        className={`w-14 px-1 py-0.5 text-right tabular-nums ${fieldClassName}`}
                         aria-label={`Tables needed for ${summary.company}`}
                       />
                     ) : (

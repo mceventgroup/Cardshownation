@@ -31,6 +31,8 @@ function clamp(raw: string, min: number, max: number, def: number): number {
 }
 
 export default function RowBuilderPanel() {
+  const fieldClassName =
+    'bg-white border border-gray-300 text-slate-900 placeholder:text-slate-400 rounded text-sm'
   const sections = useEditorStore(selectSections)
   const settings = useEditorStore(selectSettings)
   const setConfig = useEditorStore(s => s.setRowBuilderConfig)
@@ -82,7 +84,7 @@ export default function RowBuilderPanel() {
           onChange={e => setCountStr(e.target.value)}
           onBlur={blurCount}
           onKeyDown={e => e.stopPropagation()}
-          className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          className={`mt-0.5 w-full px-2 py-1 ${fieldClassName}`}
         />
       </label>
 
@@ -95,7 +97,7 @@ export default function RowBuilderPanel() {
             onChange={e => setWidthStr(e.target.value)}
             onBlur={blurWidth}
             onKeyDown={e => e.stopPropagation()}
-            className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+            className={`mt-0.5 w-full px-2 py-1 ${fieldClassName}`}
           />
         </label>
         <label className="flex-1">
@@ -106,7 +108,7 @@ export default function RowBuilderPanel() {
             onChange={e => setHeightStr(e.target.value)}
             onBlur={blurHeight}
             onKeyDown={e => e.stopPropagation()}
-            className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+            className={`mt-0.5 w-full px-2 py-1 ${fieldClassName}`}
           />
         </label>
       </div>
@@ -119,7 +121,7 @@ export default function RowBuilderPanel() {
           onChange={e => setSpacingStr(e.target.value)}
           onBlur={blurSpacing}
           onKeyDown={e => e.stopPropagation()}
-          className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          className={`mt-0.5 w-full px-2 py-1 ${fieldClassName}`}
         />
       </label>
 
@@ -128,7 +130,7 @@ export default function RowBuilderPanel() {
         <select
           value={orientation}
           onChange={e => setOrientation(e.target.value as 'horizontal' | 'vertical' | 'curved')}
-          className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+          className={`mt-0.5 w-full px-2 py-1 ${fieldClassName}`}
         >
           <option value="horizontal">Horizontal</option>
           <option value="vertical">Vertical</option>
@@ -146,7 +148,7 @@ export default function RowBuilderPanel() {
               onChange={e => setCurveRadiusStr(e.target.value)}
               onBlur={blurCurveRadius}
               onKeyDown={e => e.stopPropagation()}
-              className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+              className={`mt-0.5 w-full px-2 py-1 ${fieldClassName}`}
             />
           </label>
 
@@ -155,7 +157,7 @@ export default function RowBuilderPanel() {
             <select
               value={curveDirection}
               onChange={e => setCurveDirection(e.target.value as 'clockwise' | 'counterclockwise')}
-              className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+              className={`mt-0.5 w-full px-2 py-1 ${fieldClassName}`}
             >
               <option value="counterclockwise">Counterclockwise</option>
               <option value="clockwise">Clockwise</option>
@@ -170,7 +172,7 @@ export default function RowBuilderPanel() {
           <select
             value={sectionId ?? ''}
             onChange={e => setSectionId((e.target.value || null) as SectionId | null)}
-            className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+            className={`mt-0.5 w-full px-2 py-1 ${fieldClassName}`}
           >
             <option value="">None</option>
             {sectionList.map(s => (

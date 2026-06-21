@@ -7,6 +7,8 @@ import { vendorDisplayName } from '@floorplanner/lib/vendor-resolution'
 import { selectVendors, useEditorStore } from '@floorplanner/store/index'
 
 export default function VendorQuickAdd() {
+  const fieldClassName =
+    'rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400'
   const vendors = useEditorStore(selectVendors)
   const addVendor = useEditorStore(s => s.addVendor)
   const updateVendor = useEditorStore(s => s.updateVendor)
@@ -87,7 +89,7 @@ export default function VendorQuickAdd() {
             if (e.key === 'Enter') handleSubmit()
           }}
           placeholder="Vendor name"
-          className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
+          className={`min-w-0 flex-1 ${fieldClassName}`}
         />
         <input
           type="number"
@@ -101,7 +103,7 @@ export default function VendorQuickAdd() {
             if (e.key === 'Enter') handleSubmit()
           }}
           aria-label="Tables needed"
-          className="w-16 rounded border border-slate-300 bg-white px-2 py-1.5 text-right text-sm text-slate-900"
+          className={`w-16 text-right ${fieldClassName}`}
         />
         <button
           onClick={handleSubmit}
@@ -127,7 +129,7 @@ export default function VendorQuickAdd() {
             min={0}
             value={cases}
             onChange={e => setCases(e.target.value)}
-            className="w-16 rounded border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900"
+            className="w-16 rounded border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 placeholder:text-slate-400"
             aria-label="Number of cases"
           />
         </label>

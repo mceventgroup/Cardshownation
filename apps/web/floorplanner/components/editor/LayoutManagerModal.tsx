@@ -38,6 +38,8 @@ function formatSavedAt(savedAt: string): string {
 }
 
 export default function LayoutManagerModal({ onClose, initialView = 'browser' }: Props) {
+  const darkFieldClassName =
+    'bg-gray-800 border border-gray-600 text-gray-100 placeholder:text-gray-400 rounded px-3 py-1.5 focus:outline-none focus:border-blue-500'
   const saveAs = useEditorStore(s => s.saveCurrentLayoutAs)
   const switchTo = useEditorStore(s => s.switchToLayout)
   const loadDocumentSlice = useEditorStore(s => s.loadDocumentSlice)
@@ -380,7 +382,7 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                         }}
                         onBlur={() => handleRename(l.id)}
                         onClick={e => e.stopPropagation()}
-                        className="bg-gray-700 border border-blue-500 text-white text-sm rounded px-2 py-0.5 w-full focus:outline-none"
+                        className="w-full rounded px-2 py-0.5 text-sm text-white placeholder:text-gray-400 bg-gray-700 border border-blue-500 focus:outline-none"
                       />
                     ) : (
                       <>
@@ -445,7 +447,7 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                     }}
                     type="password"
                     placeholder="Cloud admin password..."
-                    className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                    className={`flex-1 text-sm ${darkFieldClassName}`}
                   />
                   <button
                     onClick={() => void handleCloudSignIn()}
@@ -485,7 +487,7 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                             ? `Use title: ${title.trim()}`
                             : 'Cloud layout name...'
                       }
-                      className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                      className={`flex-1 text-sm ${darkFieldClassName}`}
                     />
                     <button
                       onClick={() => void handleCloudSave()}
@@ -573,7 +575,7 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                 e.stopPropagation()
               }}
               placeholder={title.trim() ? `Use title: ${title.trim()}` : 'New browser layout name...'}
-              className="flex-1 bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+              className={`flex-1 text-sm ${darkFieldClassName}`}
             />
             <button
               onClick={handleSaveNew}

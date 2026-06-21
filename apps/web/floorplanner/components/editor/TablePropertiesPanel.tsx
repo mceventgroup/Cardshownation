@@ -133,6 +133,8 @@ function TablePropertiesForm({
   onTogglePremium,
   dispatch,
 }: FormProps) {
+  const fieldClassName =
+    'mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400'
   const length = Math.max(width, height)
   const tableWidth = Math.min(width, height)
 
@@ -244,7 +246,7 @@ function TablePropertiesForm({
               value={lengthStr}
               onChange={e => setLengthStr(e.target.value)}
               onBlur={handleLengthBlur}
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+              className={fieldClassName}
             />
           </label>
           <label className="block">
@@ -258,7 +260,7 @@ function TablePropertiesForm({
               value={widthStr}
               onChange={e => setWidthStr(e.target.value)}
               onBlur={handleWidthBlur}
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+              className={fieldClassName}
             />
           </label>
           <label className="block">
@@ -279,7 +281,7 @@ function TablePropertiesForm({
                 value={rotationStr}
                 onChange={e => setRotationStr(e.target.value)}
                 onBlur={handleRotationBlur}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400"
               />
               <button
                 type="button"

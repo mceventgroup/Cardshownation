@@ -43,6 +43,8 @@ function sortSpatially(tables: TableObject[]): TableObject[] {
 }
 
 export default function NumberingPanel() {
+  const fieldClassName =
+    'bg-white border border-gray-300 text-slate-900 placeholder:text-slate-400 rounded'
   const tables      = useEditorStore(selectTables)
   const selectedIds = useEditorStore(selectSelectedIds)
   const rows        = useEditorStore(selectRows)
@@ -150,7 +152,7 @@ export default function NumberingPanel() {
           <select
             value={scope}
             onChange={e => setScope(e.target.value as Scope)}
-            className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+            className={`mt-0.5 w-full px-2 py-1 text-sm ${fieldClassName}`}
           >
             <option value="selected">Selected ({selectedTables.length})</option>
             {sharedRowId && <option value="row">Row ({rows[sharedRowId]?.tableCount ?? '?'} tables)</option>}
@@ -165,7 +167,7 @@ export default function NumberingPanel() {
           <select
             value={style}
             onChange={e => setStyle(e.target.value as NumberingStyle)}
-            className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+            className={`mt-0.5 w-full px-2 py-1 text-sm ${fieldClassName}`}
           >
             <option value="sequential">Sequential (1, 2, 3)</option>
             <option value="prefixed">Prefixed (A-1, A-2)</option>
@@ -181,7 +183,7 @@ export default function NumberingPanel() {
                 value={prefix}
                 onChange={e => setPrefix(e.target.value)}
                 placeholder="A"
-                className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                className={`mt-0.5 w-full px-2 py-1 text-sm ${fieldClassName}`}
               />
             </label>
             <label className="w-14">
@@ -189,7 +191,7 @@ export default function NumberingPanel() {
               <input
                 value={separator}
                 onChange={e => setSeparator(e.target.value)}
-                className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                className={`mt-0.5 w-full px-2 py-1 text-sm ${fieldClassName}`}
               />
             </label>
           </div>
@@ -204,7 +206,7 @@ export default function NumberingPanel() {
               min={0}
               value={startNumber}
               onChange={e => setStartNumber(parseInt(e.target.value) || 1)}
-              className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+              className={`mt-0.5 w-full px-2 py-1 text-sm ${fieldClassName}`}
             />
           </label>
           <label className="flex-1">
@@ -215,7 +217,7 @@ export default function NumberingPanel() {
               max={4}
               value={padToDigits}
               onChange={e => setPadToDigits(parseInt(e.target.value) || 0)}
-              className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+              className={`mt-0.5 w-full px-2 py-1 text-sm ${fieldClassName}`}
             />
           </label>
         </div>
@@ -226,7 +228,7 @@ export default function NumberingPanel() {
           <select
             value={direction}
             onChange={e => setDirection(e.target.value as 'ltr' | 'rtl')}
-            className="mt-0.5 w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+            className={`mt-0.5 w-full px-2 py-1 text-sm ${fieldClassName}`}
           >
             <option value="ltr">Left → Right</option>
             <option value="rtl">Right → Left</option>

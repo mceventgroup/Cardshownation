@@ -8,6 +8,8 @@ export default function SettingsPanel() {
   const gridVisible = useEditorStore(selectGridVisible)
   const dispatch = useEditorStore(s => s.dispatch)
   const setGridVisible = useEditorStore(s => s.setGridVisible)
+  const fieldClassName =
+    'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400'
 
   const wallSetbackFt = Math.round(settings.wallSetback / 12 * 10) / 10
   const wallThicknessIn = Math.round(settings.wallThickness)
@@ -39,7 +41,7 @@ export default function SettingsPanel() {
                   step={1}
                   value={canvasWidthFt}
                   onChange={e => updateSetting('canvasWidth', Math.max(120, (parseFloat(e.target.value) || canvasWidthFt) * 12))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClassName}
                 />
                 <span className="text-xs text-slate-500">ft</span>
               </div>
@@ -54,7 +56,7 @@ export default function SettingsPanel() {
                   step={1}
                   value={canvasHeightFt}
                   onChange={e => updateSetting('canvasHeight', Math.max(120, (parseFloat(e.target.value) || canvasHeightFt) * 12))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClassName}
                 />
                 <span className="text-xs text-slate-500">ft</span>
               </div>
@@ -111,7 +113,7 @@ export default function SettingsPanel() {
                 step={6}
                 value={settings.gridSize}
                 onChange={e => updateSetting('gridSize', Math.max(6, parseInt(e.target.value, 10) || 12))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={fieldClassName}
               />
               <span className="text-xs text-slate-500">in</span>
             </div>
@@ -126,7 +128,7 @@ export default function SettingsPanel() {
                 step={1}
                 value={wallThicknessIn}
                 onChange={e => updateSetting('wallThickness', Math.max(1, parseInt(e.target.value, 10) || 6))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={fieldClassName}
               />
               <span className="text-xs text-slate-500">in</span>
             </div>
@@ -142,7 +144,7 @@ export default function SettingsPanel() {
                 step={0.5}
                 value={wallSetbackFt}
                 onChange={e => updateSetting('wallSetback', Math.max(0, (parseFloat(e.target.value) || 0) * 12))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={fieldClassName}
               />
               <span className="text-xs text-slate-500">ft</span>
             </div>
@@ -175,7 +177,7 @@ export default function SettingsPanel() {
                 step={0.5}
                 value={tableLengthFt}
                 onChange={e => updateSetting('defaultTableWidth', Math.max(48, (parseFloat(e.target.value) || 6) * 12))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={fieldClassName}
               />
               <span className="text-xs text-slate-500">ft</span>
             </div>
@@ -190,7 +192,7 @@ export default function SettingsPanel() {
                 step={6}
                 value={settings.defaultTableHeight}
                 onChange={e => updateSetting('defaultTableHeight', Math.max(24, parseInt(e.target.value, 10) || 30))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={fieldClassName}
               />
               <span className="text-xs text-slate-500">in</span>
             </div>
@@ -207,7 +209,7 @@ export default function SettingsPanel() {
                 type="text"
                 value={settings.eventName}
                 onChange={e => updateSetting('eventName', e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={`mt-1 ${fieldClassName}`}
                 placeholder="Kansas Card Show"
               />
             </label>
@@ -217,7 +219,7 @@ export default function SettingsPanel() {
                 type="text"
                 value={settings.eventDate}
                 onChange={e => updateSetting('eventDate', e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={`mt-1 ${fieldClassName}`}
                 placeholder="June 14, 2026"
               />
             </label>
@@ -237,7 +239,7 @@ export default function SettingsPanel() {
                     type="text"
                     value={settings[dateKey as keyof typeof settings] as string}
                     onChange={e => updateSetting(dateKey as keyof typeof settings, e.target.value as never)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+                    className={`mt-1 ${fieldClassName}`}
                     placeholder="June 27"
                   />
                 </label>
@@ -247,7 +249,7 @@ export default function SettingsPanel() {
                     type="text"
                     value={settings[locationKey as keyof typeof settings] as string}
                     onChange={e => updateSetting(locationKey as keyof typeof settings, e.target.value as never)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"
+                    className={`mt-1 ${fieldClassName}`}
                     placeholder="Topeka"
                   />
                 </label>

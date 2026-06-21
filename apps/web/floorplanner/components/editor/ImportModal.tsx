@@ -99,6 +99,10 @@ function parseStructuredPaste(text: string): StructuredImportRow[] {
 }
 
 export default function ImportModal({ onClose }: Props) {
+  const darkFieldClassName =
+    'bg-gray-800 border border-gray-600 rounded text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-500'
+  const darkGridFieldClassName =
+    'bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500'
   const importSession = useEditorStore(s => s.importSession)
   const startImport = useEditorStore(s => s.startImportSession)
   const updateMapping = useEditorStore(s => s.updateImportMapping)
@@ -294,7 +298,7 @@ export default function ImportModal({ onClose }: Props) {
                     value={csvText}
                     onChange={e => setCsvText(e.target.value)}
                     placeholder={'Paste tab-separated data or CSV:\n\nFirst Name\tLast Name\tCompany (Billing)\tCategory\tQuantity\nAaron\tMursch\tSenpai Nation\tPremium\t1\nAlex\tSeyler\t\tPremium\t2\n\nOr with table assignments:\nTable #,First Name,Last Name,Company,Quantity\n1-2,Jane,Doe,Card Castle,2'}
-                    className="w-full h-48 bg-gray-800 border border-gray-600 rounded text-gray-200 text-xs font-mono p-3 resize-none focus:outline-none focus:border-blue-500"
+                    className={`w-full h-48 text-xs font-mono p-3 resize-none ${darkFieldClassName}`}
                   />
                 </>
               ) : (
@@ -343,7 +347,7 @@ export default function ImportModal({ onClose }: Props) {
                                   value={row[col.key]}
                                   onChange={e => handleStructuredCellChange(rowIndex, col.key, e.target.value)}
                                   placeholder={col.placeholder}
-                                  className="w-36 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                                  className={`w-36 ${darkGridFieldClassName}`}
                                 />
                               </td>
                             ))}
@@ -371,7 +375,7 @@ export default function ImportModal({ onClose }: Props) {
                     <select
                       value={importSession.fieldMapping[field] ?? ''}
                       onChange={e => handleMappingChange(field, e.target.value)}
-                      className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+                      className={`text-sm px-2 py-1 ${darkFieldClassName}`}
                     >
                       <option value="">(not mapped)</option>
                       {headers.map(h => (
@@ -446,7 +450,7 @@ export default function ImportModal({ onClose }: Props) {
                               <select
                                 value={row.conflict?.resolution ?? ''}
                                 onChange={e => handleResolve(row.rowIndex, e.target.value as ConflictResolution)}
-                                className="bg-gray-800 border border-gray-600 text-gray-200 text-xs rounded px-1 py-0.5 focus:outline-none focus:border-blue-500"
+                                className={`text-xs px-1 py-0.5 ${darkFieldClassName}`}
                               >
                                 <option value="">- choose -</option>
                                 {row.conflict?.type === 'already-assigned' && (

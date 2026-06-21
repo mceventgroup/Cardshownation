@@ -20,6 +20,8 @@ interface Props {
 }
 
 export default function ExportModal({ onClose }: Props) {
+  const darkFieldClassName =
+    'bg-gray-800 border border-gray-600 text-gray-100 placeholder:text-gray-400 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500'
   const tables      = useEditorStore(s => s.tables)
   const sections    = useEditorStore(s => s.sections)
   const vendors     = useEditorStore(s => s.vendors)
@@ -116,7 +118,7 @@ export default function ExportModal({ onClose }: Props) {
             <input
               value={title}
               onChange={e => setTitle(e.target.value)}
-              className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+              className={darkFieldClassName}
               placeholder="Floor Plan"
             />
           </div>
@@ -127,7 +129,7 @@ export default function ExportModal({ onClose }: Props) {
               <input
                 value={eventName}
                 onChange={e => setEventName(e.target.value)}
-                className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                className={darkFieldClassName}
                 placeholder="Card Show"
               />
             </div>
@@ -136,7 +138,7 @@ export default function ExportModal({ onClose }: Props) {
               <input
                 value={venue}
                 onChange={e => setVenue(e.target.value)}
-                className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                className={darkFieldClassName}
                 placeholder="Convention Center"
               />
             </div>
@@ -147,7 +149,7 @@ export default function ExportModal({ onClose }: Props) {
             <input
               value={eventDate}
               onChange={e => setEventDate(e.target.value)}
-              className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+              className={darkFieldClassName}
               placeholder="2026-05-01"
             />
           </div>

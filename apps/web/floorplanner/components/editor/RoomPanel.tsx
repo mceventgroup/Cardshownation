@@ -13,6 +13,10 @@ import { computeRoomBounds, computeRoomContour } from '@floorplanner/domain/room
 import { getRoomZones } from '@floorplanner/domain/room-numbering'
 
 export default function RoomPanel() {
+  const compactFieldClassName =
+    'rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-slate-900 placeholder:text-slate-400'
+  const smallFieldClassName =
+    'rounded border border-gray-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400'
   const room = useEditorStore(selectRoom)
   const settings = useEditorStore(selectSettings)
   const dispatch = useEditorStore(s => s.dispatch)
@@ -404,7 +408,7 @@ export default function RoomPanel() {
             max={500}
             value={roomWidthFt}
             onChange={e => setRoomWidthFt(Number(e.target.value))}
-            className="w-16 px-1.5 py-1 border border-gray-300 rounded text-xs"
+            className={`w-16 ${compactFieldClassName}`}
           />
           <label className="text-xs text-gray-500 w-8">D</label>
           <input
@@ -413,7 +417,7 @@ export default function RoomPanel() {
             max={500}
             value={roomHeightFt}
             onChange={e => setRoomHeightFt(Number(e.target.value))}
-            className="w-16 px-1.5 py-1 border border-gray-300 rounded text-xs"
+            className={`w-16 ${compactFieldClassName}`}
           />
           <span className="text-xs text-gray-400">ft</span>
         </div>
@@ -479,7 +483,7 @@ export default function RoomPanel() {
                   type="text"
                   value={zone.label}
                   onChange={e => handleRenameRoom(zone.id, e.target.value)}
-                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
+                  className={`flex-1 ${smallFieldClassName}`}
                   placeholder={zone.id}
                 />
               </label>
@@ -541,7 +545,7 @@ export default function RoomPanel() {
                         max={500}
                         value={editW}
                         onChange={e => setEditW(Number(e.target.value))}
-                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                        className="w-12 rounded border border-gray-300 bg-white px-1 py-0.5 text-xs text-slate-900"
                       />
                       <span className="text-xs text-gray-400 w-3">D</span>
                       <input
@@ -550,7 +554,7 @@ export default function RoomPanel() {
                         max={500}
                         value={editH}
                         onChange={e => setEditH(Number(e.target.value))}
-                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                        className="w-12 rounded border border-gray-300 bg-white px-1 py-0.5 text-xs text-slate-900"
                       />
                       <span className="text-xs text-gray-400">ft</span>
                     </div>
@@ -560,14 +564,14 @@ export default function RoomPanel() {
                         type="number"
                         value={editX}
                         onChange={e => setEditX(Number(e.target.value))}
-                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                        className="w-12 rounded border border-gray-300 bg-white px-1 py-0.5 text-xs text-slate-900"
                       />
                       <span className="text-xs text-gray-400 w-3">Y</span>
                       <input
                         type="number"
                         value={editY}
                         onChange={e => setEditY(Number(e.target.value))}
-                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                        className="w-12 rounded border border-gray-300 bg-white px-1 py-0.5 text-xs text-slate-900"
                       />
                       <span className="text-xs text-gray-400">ft</span>
                     </div>
@@ -657,7 +661,7 @@ export default function RoomPanel() {
                         max={500}
                         value={editCircleW}
                         onChange={e => setEditCircleW(Number(e.target.value))}
-                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                        className="w-12 rounded border border-gray-300 bg-white px-1 py-0.5 text-xs text-slate-900"
                       />
                       <span className="text-xs text-gray-400 w-3">D</span>
                       <input
@@ -666,7 +670,7 @@ export default function RoomPanel() {
                         max={500}
                         value={editCircleH}
                         onChange={e => setEditCircleH(Number(e.target.value))}
-                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                        className="w-12 rounded border border-gray-300 bg-white px-1 py-0.5 text-xs text-slate-900"
                       />
                       <span className="text-xs text-gray-400">ft</span>
                     </div>
@@ -676,14 +680,14 @@ export default function RoomPanel() {
                         type="number"
                         value={editCircleX}
                         onChange={e => setEditCircleX(Number(e.target.value))}
-                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                        className="w-12 rounded border border-gray-300 bg-white px-1 py-0.5 text-xs text-slate-900"
                       />
                       <span className="text-xs text-gray-400 w-3">Y</span>
                       <input
                         type="number"
                         value={editCircleY}
                         onChange={e => setEditCircleY(Number(e.target.value))}
-                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                        className="w-12 rounded border border-gray-300 bg-white px-1 py-0.5 text-xs text-slate-900"
                       />
                       <span className="text-xs text-gray-400">ft</span>
                     </div>
