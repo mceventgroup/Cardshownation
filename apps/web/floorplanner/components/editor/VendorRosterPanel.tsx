@@ -13,7 +13,20 @@ import type { Vendor } from '@floorplanner/domain/types'
 import { resolveVendorBuckets, vendorDisplayName } from '@floorplanner/lib/vendor-resolution'
 
 type VendorFilter = 'all' | 'open' | 'complete' | 'premium'
-type VendorSortKey = 'company' | 'premium' | 'cases' | 'need' | 'assigned' | 'open' | 'tables' | 'tableSize' | 'inventory'
+type VendorSortKey =
+  | 'company'
+  | 'email'
+  | 'category'
+  | 'paymentStatus'
+  | 'notes'
+  | 'premium'
+  | 'cases'
+  | 'need'
+  | 'assigned'
+  | 'open'
+  | 'tables'
+  | 'tableSize'
+  | 'inventory'
 type SortDirection = 'asc' | 'desc'
 type ColumnKey = 'select' | VendorSortKey | 'delete'
 
@@ -21,6 +34,10 @@ interface VendorSummary {
   key: string
   vendor: Vendor | null
   company: string
+  email: string
+  category: string
+  paymentStatus: string
+  notes: string
   cases: number
   need: number
   assigned: number
@@ -41,6 +58,10 @@ interface VendorRosterPanelProps {
 const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
   select: 52,
   company: 220,
+  email: 220,
+  category: 160,
+  paymentStatus: 140,
+  notes: 240,
   premium: 72,
   cases: 72,
   need: 64,
@@ -55,6 +76,10 @@ const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
 const MIN_COLUMN_WIDTHS: Record<ColumnKey, number> = {
   select: 44,
   company: 120,
+  email: 140,
+  category: 120,
+  paymentStatus: 120,
+  notes: 160,
   premium: 60,
   cases: 60,
   need: 44,
@@ -69,6 +94,10 @@ const MIN_COLUMN_WIDTHS: Record<ColumnKey, number> = {
 const COLUMN_DEFS: Array<{ key: ColumnKey; label: string; align: 'text-left' | 'text-right'; sortable?: boolean }> = [
   { key: 'select', label: 'Select', align: 'text-left', sortable: false },
   { key: 'company', label: 'Company', align: 'text-left' },
+  { key: 'email', label: 'Email', align: 'text-left' },
+  { key: 'category', label: 'Category', align: 'text-left' },
+  { key: 'paymentStatus', label: 'Payment', align: 'text-left' },
+  { key: 'notes', label: 'Notes', align: 'text-left' },
   { key: 'premium', label: 'Premium', align: 'text-left' },
   { key: 'cases', label: 'Cases', align: 'text-left' },
   { key: 'need', label: 'Need', align: 'text-right' },
@@ -168,6 +197,18 @@ function compareSummaries(a: VendorSummary, b: VendorSummary, sortKey: VendorSor
     case 'company':
       result = a.company.localeCompare(b.company, undefined, { sensitivity: 'base' })
       break
+    case 'email':
+      result = a.email.localeCompare(b.email, undefined, { sensitivity: 'base' })
+      break
+    case 'category':
+      result = a.category.localeCompare(b.category, undefined, { sensitivity: 'base' })
+      break
+    case 'paymentStatus':
+      result = a.paymentStatus.localeCompare(b.paymentStatus, undefined, { sensitivity: 'base' })
+      break
+    case 'notes':
+      result = a.notes.localeCompare(b.notes, undefined, { sensitivity: 'base' })
+      break
     case 'premium':
       result = Number(a.isPremium) - Number(b.isPremium)
       break
@@ -231,6 +272,10 @@ export function useVendorGridData(
         key: bucket.key,
         vendor: bucket.vendor,
         company: bucket.vendor?.companyName?.trim() || bucket.displayName,
+        email: bucket.vendor?.email?.trim() ?? '',
+        category: bucket.vendor?.category?.trim() ?? '',
+        paymentStatus: bucket.vendor?.paymentStatus?.trim() ?? '',
+        notes: bucket.vendor?.notes?.trim() ?? '',
         cases: bucket.vendor?.cases ?? 0,
         need,
         assigned,
@@ -256,6 +301,10 @@ export function useVendorGridData(
         return [
           summary.company,
           summary.vendor?.name ?? '',
+          summary.email,
+          summary.category,
+          summary.paymentStatus,
+          summary.notes,
           summary.tables.join(' '),
           summary.tableSize,
           summary.inventory,
@@ -326,7 +375,18 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
       return
     }
     setSortKey(nextKey)
-    setSortDirection(nextKey === 'company' || nextKey === 'tables' || nextKey === 'tableSize' || nextKey === 'inventory' ? 'asc' : 'desc')
+    setSortDirection(
+      nextKey === 'company'
+      || nextKey === 'email'
+      || nextKey === 'category'
+      || nextKey === 'paymentStatus'
+      || nextKey === 'notes'
+      || nextKey === 'tables'
+      || nextKey === 'tableSize'
+      || nextKey === 'inventory'
+        ? 'asc'
+        : 'desc',
+    )
   }
 
   function handleNeedChange(vendorId: Vendor['id'], rawValue: string) {
@@ -472,7 +532,11 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
   const keyboardVendorKey = keyboardVendor?.key ?? null
   const gridTemplateColumns = [
     `${columnWidths.select}px`,
-    `minmax(${columnWidths.company}px, 1fr)`,
+    `${columnWidths.company}px`,
+    `${columnWidths.email}px`,
+    `${columnWidths.category}px`,
+    `${columnWidths.paymentStatus}px`,
+    `${columnWidths.notes}px`,
     `${columnWidths.premium}px`,
     `${columnWidths.cases}px`,
     `${columnWidths.need}px`,
@@ -506,7 +570,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
           <input
             value={search}
             onChange={e => onSearchChange(e.target.value)}
-            placeholder="Search company or tables"
+            placeholder="Search company, email, category, notes, or tables"
             className={`min-w-0 flex-1 px-2 py-1 text-sm ${fieldClassName}`}
           />
           <div className="flex items-center gap-1">
@@ -641,6 +705,10 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
                     {settings.vendorColorCoding && summary.isPremium && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
                     <div className="truncate font-medium text-slate-900">{summary.company}</div>
                   </div>
+                  <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{summary.email || '-'}</div>
+                  <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{summary.category || '-'}</div>
+                  <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{summary.paymentStatus || '-'}</div>
+                  <div className={`${cellClass('text-left')} py-1 text-slate-600`}>{summary.notes || '-'}</div>
                   <div className={`${cellClass('text-left')} py-1 text-slate-700`}>
                     {summary.vendor ? (
                       <label className="flex items-center justify-center">
