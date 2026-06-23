@@ -5,6 +5,7 @@ import {
 } from "@/lib/auto-import-sources";
 import { ingestImportedShows, type ImportSourceSummary, type ImportedShow } from "@/lib/show-import-ingest";
 import { normalizeExternalUrl } from "@/lib/url";
+import { fetchPublicUrl, readResponseTextLimited } from "@/lib/safe-remote-fetch";
 
 const CARD_SHOW_PATTERN =
   /\b(card show|sports card show|trading card show|pokemon card show|card expo|sports card expo|collector show|collectibles show)\b/i;
@@ -310,19 +311,18 @@ export function extractShowsFromHtml(html: string, source: PublicImportSource): 
 }
 
 async function fetchSourceHtml(source: PublicImportSource) {
-  const response = await fetch(source.url, {
+  const response = await fetchPublicUrl(source.url, {
     headers: {
       "user-agent": "Card Show Nation Import Bot/1.0 (+https://cardshownation.com)",
       accept: "text/html,application/xhtml+xml",
     },
-    next: { revalidate: 0 },
-  });
+  }, 15_000);
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
 
-  return response.text();
+  return readResponseTextLimited(response, 2 * 1024 * 1024);
 }
 
 export async function runPublicSourceImports() {

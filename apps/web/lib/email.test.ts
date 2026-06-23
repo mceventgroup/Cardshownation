@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+
+process.env.EMAIL_SUPPRESSION_CHECK_DISABLED = "1";
 import {
   getEmailConfigStatus,
   getFromAddress,

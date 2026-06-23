@@ -10,7 +10,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "tsc --noEmit -p apps/web/tsconfig.json",
-    "test:web": "tsx --tsconfig apps/web/tsconfig.json --test apps/web/lib/moderation.test.ts apps/web/lib/flyers.test.ts apps/web/lib/users.test.ts apps/web/lib/email.test.ts",
+    "test:web": "tsx --tsconfig apps/web/tsconfig.json --test apps/web/lib/moderation.test.ts apps/web/lib/flyers.test.ts apps/web/lib/users.test.ts apps/web/lib/email.test.ts apps/web/lib/security.test.ts",
     "secrets:scan": "powershell -ExecutionPolicy Bypass -File ./scripts/scan-secrets.ps1",
     "db:generate": "turbo run db:generate",
     "db:push": "turbo run db:push",
@@ -39,12 +39,13 @@
     "react-dom": "19.2.0",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
-    "next": {
+    "next@15.5.19": {
       "postcss": "8.5.10"
     },
     "konva": "8.4.3",
     "react-reconciler": "0.33.0",
     "postcss": "8.5.10",
+    "undici": "6.27.0",
     "uuid": "14.0.0"
   },
   "packageManager": "npm@10.8.0",

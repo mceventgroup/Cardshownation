@@ -10,6 +10,7 @@ import { SHOW_CATEGORIES } from "@/lib/shows";
 import { US_STATES } from "@/lib/states";
 import { createShowSubmission } from "@/lib/submissions";
 import { normalizeExternalUrl } from "@/lib/url";
+import { hashOpaqueToken } from "@/lib/token-hash";
 
 export const metadata: Metadata = {
   title: "Submit a Card Show",
@@ -105,9 +106,16 @@ async function handleSubmission(formData: FormData) {
   if (!rateLimit.allowed) {
     redirect("/submit-show?error=rate");
   }
+  const submittedEmail = readRequiredString(formData, "submitterEmail", 320).toLowerCase();
+  const emailRateLimit = await consumeRateLimit("submit-show-email", hashOpaqueToken(submittedEmail), {
+    blockMs: 24 * 60 * 60 * 1000,
+    maxAttempts: 3,
+    windowMs: 24 * 60 * 60 * 1000,
+  });
+  if (!emailRateLimit.allowed) redirect("/submit-show?error=rate");
 
   try {
-    const submitterEmail = readRequiredString(formData, "submitterEmail", 320).toLowerCase();
+    const submitterEmail = submittedEmail;
     const submitterNameInput = readOptionalString(formData, "submitterName", 120);
     const showName = readRequiredString(formData, "showName", 160);
     const startDate = readRequiredString(formData, "startDate", 10);

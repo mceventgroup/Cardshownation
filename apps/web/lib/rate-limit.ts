@@ -72,66 +72,75 @@ export async function consumeRateLimit(scope: string, key: string, options: Rate
 
   const now = new Date();
 
-  return db.$transaction(async (tx) => {
-    const existing = await tx.rateLimitBucket.findUnique({
-      where: {
-        scope_key: {
-          scope,
-          key,
-        },
-      },
-    });
-
-    if (!existing) {
-      await tx.rateLimitBucket.create({
-        data: {
-          scope,
-          key,
-          attemptCount: 1,
-          windowStart: now,
-          blockedUntil: null,
+  try {
+    return await db.$transaction(async (tx) => {
+      const existing = await tx.rateLimitBucket.findUnique({
+        where: {
+          scope_key: {
+            scope,
+            key,
+          },
         },
       });
+
+      if (!existing) {
+        await tx.rateLimitBucket.create({
+          data: {
+            scope,
+            key,
+            attemptCount: 1,
+            windowStart: now,
+            blockedUntil: null,
+          },
+        });
+
+        return {
+          allowed: true,
+          retryAfterMs: 0,
+        };
+      }
+
+      if (existing.blockedUntil && existing.blockedUntil > now) {
+        return {
+          allowed: false,
+          retryAfterMs: existing.blockedUntil.getTime() - now.getTime(),
+        };
+      }
+
+      const windowExpiresAt = existing.windowStart.getTime() + options.windowMs;
+      const windowReset = windowExpiresAt <= now.getTime();
+      const nextAttemptCount = windowReset ? 1 : existing.attemptCount + 1;
+      const blockedUntil = nextAttemptCount > options.maxAttempts ? new Date(now.getTime() + options.blockMs) : null;
+
+      await tx.rateLimitBucket.update({
+        where: { id: existing.id },
+        data: {
+          attemptCount: nextAttemptCount,
+          windowStart: windowReset ? now : existing.windowStart,
+          blockedUntil,
+        },
+      });
+
+      if (blockedUntil) {
+        return {
+          allowed: false,
+          retryAfterMs: options.blockMs,
+        };
+      }
 
       return {
         allowed: true,
         retryAfterMs: 0,
       };
-    }
-
-    if (existing.blockedUntil && existing.blockedUntil > now) {
-      return {
-        allowed: false,
-        retryAfterMs: existing.blockedUntil.getTime() - now.getTime(),
-      };
-    }
-
-    const windowExpiresAt = existing.windowStart.getTime() + options.windowMs;
-    const windowReset = windowExpiresAt <= now.getTime();
-    const nextAttemptCount = windowReset ? 1 : existing.attemptCount + 1;
-    const blockedUntil = nextAttemptCount > options.maxAttempts ? new Date(now.getTime() + options.blockMs) : null;
-
-    await tx.rateLimitBucket.update({
-      where: { id: existing.id },
-      data: {
-        attemptCount: nextAttemptCount,
-        windowStart: windowReset ? now : existing.windowStart,
-        blockedUntil,
-      },
     });
-
-    if (blockedUntil) {
-      return {
-        allowed: false,
-        retryAfterMs: options.blockMs,
-      };
-    }
-
-    return {
-      allowed: true,
-      retryAfterMs: 0,
-    };
-  });
+  } catch (error) {
+    console.error("[rate-limit] database rate limit unavailable, falling back to memory store", {
+      scope,
+      key,
+      error,
+    });
+    return consumeMemoryRateLimit(scope, key, options);
+  }
 }
 
 export async function resetRateLimit(scope: string, key: string) {
@@ -140,10 +149,19 @@ export async function resetRateLimit(scope: string, key: string) {
     return;
   }
 
-  await db.rateLimitBucket.deleteMany({
-    where: {
+  try {
+    await db.rateLimitBucket.deleteMany({
+      where: {
+        scope,
+        key,
+      },
+    });
+  } catch (error) {
+    console.error("[rate-limit] failed to reset database rate limit bucket", {
       scope,
       key,
-    },
-  });
+      error,
+    });
+    getMemoryStore().delete(getBucketKey(scope, key));
+  }
 }

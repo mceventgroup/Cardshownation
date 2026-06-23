@@ -45,7 +45,7 @@ async function handleForgotPassword(formData: FormData) {
     }
   } catch (error) {
     rethrowIfRedirectError(error);
-    console.error("[account forgot-password] reset email failed", { email, error });
+    console.error("[account forgot-password] reset email failed", { error });
     redirect("/account/forgot-password?error=send");
   }
 

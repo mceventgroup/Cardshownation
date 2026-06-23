@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { logoutUser } from "@/app/account/actions";
+import { deleteMyAccount, logoutUser, unsubscribeAllEmail } from "@/app/account/actions";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
 import { US_STATES } from "@/lib/states";
 import { rethrowIfRedirectError } from "@/lib/next-control-flow";
@@ -131,7 +131,7 @@ async function savePassword(formData: FormData) {
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ updated?: string; profile?: string; password?: string; error?: string }>;
+  searchParams: Promise<{ updated?: string; profile?: string; password?: string; unsubscribed?: string; error?: string }>;
 }) {
   const [session, secret, secretStatus, sp] = await Promise.all([
     getUserSession(),
@@ -205,11 +205,15 @@ export default async function AccountPage({
         ? "Profile updated."
         : sp.password === "1"
           ? "Password updated."
+        : sp.unsubscribed === "1"
+          ? "You are unsubscribed from all state alert email."
         : sp.updated === "1"
           ? "State subscriptions updated."
           : null;
   const errorMessage =
-    sp.error === "password"
+    sp.error === "delete"
+      ? "Account deletion failed. Enter your current password and type DELETE exactly."
+      : sp.error === "password"
       ? `Password update failed. Check your current password and make sure the new one is at least ${MIN_PASSWORD_LENGTH} characters.`
       : sp.error ?? null;
 
@@ -512,6 +516,22 @@ export default async function AccountPage({
                 value={account.emailVerifiedAt ? "Verified" : "Needs verification"}
               />
             </div>
+          </section>
+          <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-6">
+            <h2 className="font-semibold text-slate-950">Email choices</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Stop all state alert email. You can re-enable states later.</p>
+            <form action={unsubscribeAllEmail} className="mt-4">
+              <button className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800">Unsubscribe from alerts</button>
+            </form>
+          </section>
+          <section className="rounded-[2rem] border border-red-200 bg-red-50 p-6">
+            <h2 className="font-semibold text-red-900">Delete account</h2>
+            <p className="mt-2 text-sm leading-6 text-red-800">This permanently deletes your profile, preferences, and saved shows. Type DELETE and enter your password.</p>
+            <form action={deleteMyAccount} className="mt-4 space-y-3">
+              <input name="deleteConfirmation" required placeholder="Type DELETE" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
+              <input name="deletePassword" type="password" required placeholder="Current password" autoComplete="current-password" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
+              <button className="rounded-full bg-red-700 px-4 py-2 text-sm font-semibold text-white">Permanently delete account</button>
+            </form>
           </section>
         </aside>
       </div>

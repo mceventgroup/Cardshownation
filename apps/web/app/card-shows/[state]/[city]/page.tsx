@@ -6,6 +6,7 @@ import { ShowListItem } from "@/components/shows/show-list-item";
 import { getShowsByCity, getCitiesWithShows } from "@/lib/shows";
 import { getStateBySlug } from "@/lib/states";
 import { slugify } from "@/lib/utils";
+import { serializeJsonLd } from "@/lib/safe-json-ld";
 
 export const revalidate = 3600;
 export const dynamic = "force-dynamic";
@@ -66,7 +67,7 @@ export default async function CityPage({ params }: Props) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <div className="container-wide py-10">

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { isIP } from "net";
 import { isHostedFlyerAssetUrl, persistFlyerAsset } from "@/lib/flyer-storage";
+import { fetchPublicUrl } from "@/lib/safe-remote-fetch";
 import { normalizeExternalUrl } from "@/lib/url";
 import {
   FLYER_MAX_SIZE_BYTES,
@@ -196,13 +197,11 @@ export async function saveRemoteFlyerImage(showName: string, sourceUrl: string) 
     throw new Error("Flyer URL host is not allowed.");
   }
 
-  const response = await fetch(normalizedSourceUrl, {
+  const response = await fetchPublicUrl(normalizedSourceUrl, {
     headers: {
       Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
     },
-    cache: "no-store",
-    redirect: "error",
-  });
+  }, 10_000);
 
   if (!response.ok) {
     throw new Error("Could not download the flyer image from that URL.");

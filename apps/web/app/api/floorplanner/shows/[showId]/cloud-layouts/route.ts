@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateDocumentSlice } from "@floorplanner/lib/document-schema";
+import { assertDocumentLimits, MAX_FLOORPLAN_NAME_LENGTH, MAX_FLOORPLAN_REQUEST_BYTES } from "@floorplanner/lib/document-limits";
+import { readJsonBodyLimited, RequestTooLargeError } from "@/lib/request-json";
 import { listShowFloorplans, saveShowFloorplan, ShowFloorplanRevisionConflictError } from "@/lib/floorplans";
 import { getFloorplanAccess, unauthorizedResponse } from "../shared";
 
@@ -47,18 +49,21 @@ export async function POST(
   };
 
   try {
-    body = (await request.json()) as typeof body;
-  } catch {
+    body = await readJsonBodyLimited<typeof body>(request, MAX_FLOORPLAN_REQUEST_BYTES);
+  } catch (error) {
+    if (error instanceof RequestTooLargeError) return NextResponse.json({ error: error.message }, { status: 413 });
     return badRequest("Invalid JSON body.");
   }
 
   if (typeof body.name !== "string" || !body.name.trim()) {
     return badRequest("Layout name is required.");
   }
+  if (body.name.trim().length > MAX_FLOORPLAN_NAME_LENGTH) return badRequest("Layout name is too long.");
 
   let data;
   try {
     data = validateDocumentSlice(body.data);
+    assertDocumentLimits(data);
   } catch (error) {
     return badRequest(error instanceof Error ? error.message : "Invalid floorplan data.");
   }

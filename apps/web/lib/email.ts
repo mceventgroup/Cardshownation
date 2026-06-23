@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import type { UserRole } from "@csn/db";
+import { db } from "@/lib/db";
 
 const DEFAULT_FROM_ADDRESS = "Card Show Nation <onboarding@resend.dev>";
 const PERSONAL_EMAIL_DOMAINS = new Set([
@@ -14,6 +15,12 @@ const PERSONAL_EMAIL_DOMAINS = new Set([
   "me.com",
   "aol.com",
 ]);
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character] ?? character);
+}
 
 function extractEmailAddress(input: string) {
   const trimmed = input.trim();
@@ -83,6 +90,11 @@ export function getFromAddress() {
 }
 
 async function sendEmail(input: Parameters<Resend["emails"]["send"]>[0]) {
+  const recipients = (Array.isArray(input.to) ? input.to : [input.to]).map((value) => value.toLowerCase());
+  if (process.env.EMAIL_SUPPRESSION_CHECK_DISABLED !== "1") {
+    const suppressed = await db.emailSuppression.findFirst({ where: { email: { in: recipients } } });
+    if (suppressed) throw new Error("Email recipient is suppressed.");
+  }
   const resend = getResend();
   const result = await resend.emails.send(input);
 
@@ -96,8 +108,6 @@ async function sendEmail(input: Parameters<Resend["emails"]["send"]>[0]) {
 
   console.info("[email] sent", {
     id: result.data.id,
-    to: input.to,
-    from: input.from,
     subject: input.subject,
   });
 
@@ -235,7 +245,7 @@ export async function sendFanEmailChangeVerificationEmail(
         </h1>
         <p style="color:#475569;font-size:15px;line-height:1.6;margin-bottom:24px">
           We received a request to change your Card Show Nation member email from
-          ${previousEmail} to this address. Verify this email to finish the update.
+          ${escapeHtml(previousEmail)} to this address. Verify this email to finish the update.
           This link expires in 24 hours.
         </p>
         <a href="${verifyUrl}"
@@ -260,7 +270,7 @@ export async function sendFanEmailChangeNotice(to: string, newEmail: string) {
           Your email was updated
         </h1>
         <p style="color:#475569;font-size:15px;line-height:1.6;margin-bottom:24px">
-          Your Card Show Nation member account email was changed to ${newEmail}.
+          Your Card Show Nation member account email was changed to ${escapeHtml(newEmail)}.
           If you made this change, no further action is required.
         </p>
         <p style="color:#94a3b8;font-size:13px;margin-top:24px">

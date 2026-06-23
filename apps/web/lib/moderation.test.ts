@@ -241,6 +241,7 @@ test("createPasswordResetToken stores a hashed token and consumePasswordResetTok
 });
 
 test("createVerificationToken stores a hashed token and consumeVerificationToken looks it up by hash", async () => {
+  const deleteManyMock = stubMethod(db.emailVerificationToken, "deleteMany", async (input) => input);
   const createMock = stubMethod(db.emailVerificationToken, "create", async (input) => input);
   const findUniqueMock = stubMethod(db.emailVerificationToken, "findUnique", async () => ({
     id: "verify-1",
@@ -255,6 +256,7 @@ test("createVerificationToken stores a hashed token and consumeVerificationToken
   const user = await consumeVerificationToken(token);
 
   assert.equal(createMock.mock.calls.length, 1);
+  assert.equal(deleteManyMock.mock.calls.length, 1);
   assert.equal(findUniqueMock.mock.calls.length, 1);
   assert.equal(deleteMock.mock.calls.length, 1);
   assert.equal(updateMock.mock.calls.length, 1);

@@ -4,6 +4,7 @@ import test, { afterEach, before, mock } from "node:test";
 process.env.DATABASE_URL ??= "postgresql://user@localhost:5432/csn_test";
 process.env.CSN_DATA_MODE = "live";
 process.env.NEXT_PUBLIC_APP_URL = "https://cardshownation.com";
+process.env.EMAIL_SUPPRESSION_CHECK_DISABLED = "1";
 
 let db: typeof import("./db").db;
 let usersModule: typeof import("./users");

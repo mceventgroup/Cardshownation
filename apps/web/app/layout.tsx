@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { GooglePageViewTracker } from "@/components/analytics/google-page-view-tracker";
 import { MetaPixelTracker } from "@/components/analytics/meta-pixel-tracker";
@@ -8,6 +9,7 @@ import { AppChrome } from "@/components/layout/app-chrome";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import "./globals.css";
+import { CookieConsent } from "@/components/privacy/cookie-consent";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -44,16 +46,19 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const consentValue = (await cookies()).get("csn_cookie_consent")?.value;
+  const consent = consentValue === "optional" || consentValue === "essential" ? consentValue : null;
+  const allowOptional = consent === "optional";
   return (
     <html lang="en" className={inter.variable}>
       <head>
         <meta charSet="utf-8" />
-        {GOOGLE_TAG_ID && (
+        {allowOptional && GOOGLE_TAG_ID && (
           <>
             <Script
               src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(
@@ -73,12 +78,12 @@ export default function RootLayout({
             </Script>
           </>
         )}
-        <Script
+        {allowOptional && <Script
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8982218628461022"
           strategy="afterInteractive"
           crossOrigin="anonymous"
-        />
-        {META_PIXEL_ID && (
+        />}
+        {allowOptional && META_PIXEL_ID && (
           <Script id="meta-pixel-init" strategy="afterInteractive">
             {`
               !function(f,b,e,v,n,t,s)
@@ -96,10 +101,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-slate-50 font-sans text-slate-950 antialiased">
         <Suspense fallback={null}>
-          {GOOGLE_TAG_ID && <GooglePageViewTracker />}
-          {META_PIXEL_ID && <MetaPixelTracker />}
+          {allowOptional && GOOGLE_TAG_ID && <GooglePageViewTracker />}
+          {allowOptional && META_PIXEL_ID && <MetaPixelTracker />}
         </Suspense>
-        {META_PIXEL_ID && (
+        {allowOptional && META_PIXEL_ID && (
           <noscript>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -116,6 +121,7 @@ export default function RootLayout({
         <AppChrome header={<Header />} footer={<Footer />}>
           {children}
         </AppChrome>
+        <CookieConsent initialConsent={consent} />
       </body>
     </html>
   );

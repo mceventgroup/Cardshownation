@@ -4,6 +4,7 @@ import { saveFlyerImage } from "@/lib/flyers";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
 import { createApprovedShowFromPayload, createShowSubmission } from "@/lib/submissions";
 import { SHOW_CATEGORIES } from "@/lib/shows";
+import { hasOrganizerFloorplanEnabledColumn } from "@/lib/organizer-schema";
 import { normalizeExternalUrl } from "@/lib/url";
 
 type RegisterPromoterInput = {
@@ -180,6 +181,7 @@ export async function registerPromoterAccount(input: RegisterPromoterInput) {
   // show submission), link the new user to it rather than creating a duplicate.
   const existingOrganizer = await db.organizer.findFirst({
     where: { email, userId: null },
+    select: { id: true },
   });
 
   if (existingOrganizer) {
@@ -229,7 +231,20 @@ export async function authenticatePromoter(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const user = await db.user.findUnique({
     where: { email: normalizedEmail },
-    include: { organizer: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      passwordHash: true,
+      role: true,
+      emailVerifiedAt: true,
+      sessionVersion: true,
+      organizer: {
+        select: {
+          id: true,
+        },
+      },
+    },
   });
 
   if (!user?.organizer || user.role !== "ORGANIZER") {
@@ -245,23 +260,67 @@ export async function authenticatePromoter(email: string, password: string) {
 }
 
 export async function getPromoterDashboardData(userId: string) {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    include: {
-      organizer: {
-        include: {
-          approvals: {
-            where: { autoApprove: true },
-            orderBy: [{ state: "asc" }, { city: "asc" }],
-          },
-          shows: {
-            orderBy: [{ startDate: "desc" }],
-            take: 20,
+  const hasFloorplanEnabledColumn = await hasOrganizerFloorplanEnabledColumn();
+  const user = hasFloorplanEnabledColumn
+    ? await db.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          emailVerifiedAt: true,
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              websiteUrl: true,
+              facebookUrl: true,
+              instagramUrl: true,
+              verified: true,
+              floorplanEnabled: true,
+              approvals: {
+                where: { autoApprove: true },
+                orderBy: [{ state: "asc" }, { city: "asc" }],
+              },
+              shows: {
+                orderBy: [{ startDate: "desc" }],
+                take: 20,
+              },
+            },
           },
         },
-      },
-    },
-  });
+      })
+    : await db.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          emailVerifiedAt: true,
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              websiteUrl: true,
+              facebookUrl: true,
+              instagramUrl: true,
+              verified: true,
+              approvals: {
+                where: { autoApprove: true },
+                orderBy: [{ state: "asc" }, { city: "asc" }],
+              },
+              shows: {
+                orderBy: [{ startDate: "desc" }],
+                take: 20,
+              },
+            },
+          },
+        },
+      });
 
   if (!user?.organizer) {
     return null;
@@ -273,7 +332,13 @@ export async function getPromoterDashboardData(userId: string) {
 
   return {
     user,
-    organizer: user.organizer,
+    organizer: {
+      ...user.organizer,
+      floorplanEnabled:
+        hasFloorplanEnabledColumn && "floorplanEnabled" in user.organizer
+          ? user.organizer.floorplanEnabled
+          : false,
+    },
     approvals: user.organizer.approvals,
     shows: user.organizer.shows,
     showCount,
@@ -283,7 +348,13 @@ export async function getPromoterDashboardData(userId: string) {
 export async function getPromoterShowDefaults(userId: string, showId: string) {
   const user = await db.user.findUnique({
     where: { id: userId },
-    include: { organizer: true },
+    select: {
+      organizer: {
+        select: {
+          id: true,
+        },
+      },
+    },
   });
 
   if (!user?.organizer) {
@@ -330,7 +401,20 @@ export async function getPromoterShowDefaults(userId: string, showId: string) {
 export async function createPromoterShow(userId: string, input: PromoterShowInput) {
   const user = await db.user.findUnique({
     where: { id: userId },
-    include: { organizer: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      organizer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          websiteUrl: true,
+          facebookUrl: true,
+        },
+      },
+    },
   });
 
   if (!user?.organizer) {
@@ -434,7 +518,20 @@ export async function bulkCreatePromoterShows(
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    include: { organizer: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      organizer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          websiteUrl: true,
+          facebookUrl: true,
+        },
+      },
+    },
   });
 
   if (!user?.organizer) {

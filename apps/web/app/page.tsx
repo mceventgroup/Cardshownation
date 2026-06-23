@@ -8,6 +8,7 @@ import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
 import { US_STATES } from "@/lib/states";
+import { serializeJsonLd } from "@/lib/safe-json-ld";
 
 export const revalidate = 3600;
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export default async function HomePage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Hero */}

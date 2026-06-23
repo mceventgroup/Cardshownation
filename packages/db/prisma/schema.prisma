@@ -102,6 +102,14 @@ model RateLimitBucket {
   @@index([blockedUntil])
 }
 
+model EmailSuppression {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  reason    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Organizer {
   id           String   @id @default(cuid())
   name         String

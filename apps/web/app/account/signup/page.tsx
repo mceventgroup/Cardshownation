@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { US_STATES } from "@/lib/states";
 import { getRequestIp } from "@/lib/request-ip";
-import { consumeRateLimit, resetRateLimit } from "@/lib/rate-limit";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { hashOpaqueToken } from "@/lib/token-hash";
 import { rethrowIfRedirectError } from "@/lib/next-control-flow";
 import {
   getUserSession,
@@ -71,6 +72,12 @@ async function handleSignup(formData: FormData) {
   if (!rateLimit.allowed) {
     redirect("/account/signup?error=rate");
   }
+  const emailRateLimit = await consumeRateLimit("user-signup-email", hashOpaqueToken(email), {
+    blockMs: 24 * 60 * 60 * 1000,
+    maxAttempts: 3,
+    windowMs: 24 * 60 * 60 * 1000,
+  });
+  if (!emailRateLimit.allowed) redirect("/account/signup?error=rate");
 
   if (!sessionSecret) {
     redirect("/account/signup?error=disabled");
@@ -88,7 +95,6 @@ async function handleSignup(formData: FormData) {
       stateCodes,
       organizerIds,
     });
-    await resetRateLimit("user-signup", ip);
     const token = await createVerificationToken(user.id);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
     const verifyUrl = `${appUrl}/account/verify?token=${token}`;

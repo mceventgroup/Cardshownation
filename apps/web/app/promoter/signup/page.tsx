@@ -7,7 +7,8 @@ import {
 } from "@/lib/promoter-auth";
 import { registerPromoterAccount } from "@/lib/promoters";
 import { getRequestIp } from "@/lib/request-ip";
-import { consumeRateLimit, resetRateLimit } from "@/lib/rate-limit";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { hashOpaqueToken } from "@/lib/token-hash";
 import { rethrowIfRedirectError } from "@/lib/next-control-flow";
 import { createVerificationToken } from "@/lib/verification-token";
 import { sendPromoterVerificationEmail } from "@/lib/email";
@@ -75,6 +76,12 @@ async function handleSignup(formData: FormData) {
   if (!rateLimit.allowed) {
     redirect("/promoter/signup?error=rate");
   }
+  const emailRateLimit = await consumeRateLimit("promoter-signup-email", hashOpaqueToken(email), {
+    blockMs: 24 * 60 * 60 * 1000,
+    maxAttempts: 3,
+    windowMs: 24 * 60 * 60 * 1000,
+  });
+  if (!emailRateLimit.allowed) redirect("/promoter/signup?error=rate");
 
   if (!sessionSecret) {
     redirect("/promoter/signup?error=disabled");
@@ -102,7 +109,6 @@ async function handleSignup(formData: FormData) {
       facebookUrl,
       instagramUrl,
     });
-    await resetRateLimit("promoter-signup", ip);
 
     const token = await createVerificationToken(user.id);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";

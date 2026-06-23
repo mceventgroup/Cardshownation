@@ -18,6 +18,7 @@ import { getStateByCode } from "@/lib/states";
 import { ensureManagedShowFlyerImage, getShowBySlug } from "@/lib/shows";
 import { normalizeExternalUrl } from "@/lib/url";
 import { formatShowDate, stateCodeToSlug } from "@/lib/utils";
+import { serializeJsonLd } from "@/lib/safe-json-ld";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -211,11 +212,11 @@ export default async function ShowDetailPage({ params }: Props) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(eventJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(eventJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
       />
 
       <div className="container-wide py-6 sm:py-10">

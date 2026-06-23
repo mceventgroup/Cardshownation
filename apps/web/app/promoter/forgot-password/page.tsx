@@ -36,7 +36,15 @@ async function handleForgotPassword(formData: FormData) {
   try {
     const user = await db.user.findUnique({
       where: { email },
-      include: { organizer: true },
+      select: {
+        id: true,
+        role: true,
+        organizer: {
+          select: {
+            id: true,
+          },
+        },
+      },
     });
 
     if (user?.organizer && user.role === "ORGANIZER") {
@@ -47,7 +55,7 @@ async function handleForgotPassword(formData: FormData) {
     }
   } catch (error) {
     rethrowIfRedirectError(error);
-    console.error("[promoter forgot-password] reset email failed", { email, error });
+    console.error("[promoter forgot-password] reset email failed", { error });
     redirect("/promoter/forgot-password?error=send");
   }
 

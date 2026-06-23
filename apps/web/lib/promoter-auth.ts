@@ -7,6 +7,7 @@ import {
   PROMOTER_SESSION_MAX_AGE_SECONDS,
   verifyPromoterSessionToken,
 } from "@/lib/promoter-session";
+import { hasOrganizerFloorplanEnabledColumn } from "@/lib/organizer-schema";
 import { sanitizeLocalRedirectTarget } from "@/lib/url";
 
 export const MIN_PROMOTER_SESSION_SECRET_LENGTH = 32;
@@ -44,18 +45,53 @@ export async function getPromoterSession() {
     return null;
   }
 
-  const user = await db.user.findUnique({
-    where: { id: payload.uid },
-    include: {
-      organizer: {
-        include: {
-          approvals: {
-            orderBy: [{ state: "asc" }, { city: "asc" }],
+  const hasFloorplanEnabledColumn = await hasOrganizerFloorplanEnabledColumn();
+  const user = hasFloorplanEnabledColumn
+    ? await db.user.findUnique({
+        where: { id: payload.uid },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          emailVerifiedAt: true,
+          sessionVersion: true,
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              websiteUrl: true,
+              facebookUrl: true,
+              instagramUrl: true,
+              verified: true,
+              floorplanEnabled: true,
+            },
           },
         },
-      },
-    },
-  });
+      })
+    : await db.user.findUnique({
+        where: { id: payload.uid },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          emailVerifiedAt: true,
+          sessionVersion: true,
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              websiteUrl: true,
+              facebookUrl: true,
+              instagramUrl: true,
+              verified: true,
+            },
+          },
+        },
+      });
 
   if (
     !user?.organizer ||
@@ -68,7 +104,13 @@ export async function getPromoterSession() {
 
   return {
     user,
-    organizer: user.organizer,
+    organizer: {
+      ...user.organizer,
+      floorplanEnabled:
+        hasFloorplanEnabledColumn && "floorplanEnabled" in user.organizer
+          ? user.organizer.floorplanEnabled
+          : false,
+    },
   };
 }
 

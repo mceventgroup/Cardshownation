@@ -71,6 +71,12 @@ export function Footer() {
             <Link href="/submit-show" className="transition-colors hover:text-slate-800">
               Submit a show
             </Link>
+            <Link href="/privacy" className="transition-colors hover:text-slate-800">
+              Privacy
+            </Link>
+            <Link href="/terms" className="transition-colors hover:text-slate-800">
+              Terms
+            </Link>
             <Link href="/admin" className="transition-colors hover:text-slate-800">
               Admin
             </Link>
