@@ -433,6 +433,41 @@ export function sortTablesForRoom<T extends Pick<TableObject, 'x' | 'y' | 'width
   return [...clockwisePerimeter, ...clockwiseInterior]
 }
 
+function buildRectZoneFromTables<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+  tables: T[],
+): Pick<RoomZone, 'bounds' | 'polygon'> | null {
+  if (tables.length === 0) return null
+
+  const bounds = getTableBounds(tables)
+  return {
+    bounds,
+    polygon: [
+      { x: bounds.x, y: bounds.y },
+      { x: bounds.x + bounds.width, y: bounds.y },
+      { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+      { x: bounds.x, y: bounds.y + bounds.height },
+    ],
+  }
+}
+
+function sortTablesForRenumbering<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+  tables: T[],
+  direction: TableNumberingDirection,
+  zone?: Pick<RoomZone, 'bounds' | 'polygon'> | null,
+): T[] {
+  if (direction === 'cw') {
+    return sortTablesForRoom(tables, zone ?? buildRectZoneFromTables(tables))
+  }
+
+  if (direction === 'ccw') {
+    const clockwise = sortTablesForRoom(tables, zone ?? buildRectZoneFromTables(tables))
+    if (clockwise.length <= 1) return clockwise
+    return [clockwise[0], ...clockwise.slice(1).reverse()]
+  }
+
+  return sortTablesByDirection(tables, direction)
+}
+
 function createRenumberChange(
   table: TableObject,
   nextDisplayId: string,
@@ -459,8 +494,9 @@ function createRenumberChange(
 function getRoomBuckets(
   tables: TableObject[],
   room: CompositeRoom | null,
-): Array<{ id: string; prefix: string; tables: TableObject[] }> {
+): Array<{ id: string; prefix: string; tables: TableObject[]; zone: RoomZone | null }> {
   const roomZones = getRoomZones(room)
+  const roomZonesById = new Map(roomZones.map(zone => [zone.id, zone]))
   const roomIds = roomZones.map(zone => zone.id)
   const firstRoomId = roomIds[0] ?? 'R1'
   const grouped = new Map<string, TableObject[]>()
@@ -482,6 +518,7 @@ function getRoomBuckets(
     id,
     prefix: getRoomLabel(room, id),
     tables: roomTables,
+    zone: roomZonesById.get(id) ?? null,
   }))
 }
 
@@ -495,7 +532,7 @@ export function buildSectionRenumberChanges(
   if (!section) return []
 
   const sectionTables = Object.values(tables).filter(table => table.sectionId === sectionId)
-  const ordered = sortTablesByDirection(sectionTables, direction)
+  const ordered = sortTablesForRenumbering(sectionTables, direction, buildRectZoneFromTables(sectionTables))
   const prefix = getSectionPrefix(section.name)
 
   return ordered.map((table, index) =>
@@ -517,7 +554,7 @@ export function buildAllSectionRenumberChanges(
 
   for (const section of sectionList) {
     const sectionTables = allTables.filter(table => table.sectionId === section.id)
-    const ordered = sortTablesByDirection(sectionTables, direction)
+    const ordered = sortTablesForRenumbering(sectionTables, direction, buildRectZoneFromTables(sectionTables))
     const prefix = getSectionPrefix(section.name)
     ordered.forEach((table, index) => {
       changes.push(createRenumberChange(table, formatScopedDisplayId(prefix, index + 1), index + 1, preserveLabelOverride))
@@ -526,7 +563,7 @@ export function buildAllSectionRenumberChanges(
 
   const unsectioned = allTables.filter(table => !table.sectionId || !sectionIds.has(table.sectionId))
   for (const bucket of getRoomBuckets(unsectioned, room)) {
-    const ordered = sortTablesByDirection(bucket.tables, direction)
+    const ordered = sortTablesForRenumbering(bucket.tables, direction, bucket.zone)
     ordered.forEach((table, index) => {
       changes.push(createRenumberChange(table, formatScopedDisplayId(bucket.prefix, index + 1), index + 1, preserveLabelOverride))
     })
