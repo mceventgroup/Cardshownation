@@ -578,12 +578,24 @@ export function printShowModeSheet(
 
   const listMarkup = rows.length === 0
     ? '<div class="empty">No vendors have tables assigned yet.</div>'
-    : rows.map(row => `
-      <div class="vendor-row">
-        <div class="vendor-name">${esc(row.name)}</div>
-        <div class="vendor-tables">${esc(formatAssignedTableList(row.labels))}</div>
-      </div>
-    `).join('')
+    : `
+      <table class="vendor-table">
+        <thead>
+          <tr>
+            <th>Vendor</th>
+            <th>Tables</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => `
+            <tr>
+              <td class="vendor-name-cell">${esc(row.name)}</td>
+              <td class="vendor-tables-cell">${esc(formatAssignedTableList(row.labels))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
 
   const html = `<!DOCTYPE html>
 <html>
@@ -593,8 +605,28 @@ export function printShowModeSheet(
   <title>${esc(title || 'Show Sheet')}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #0f172a; }
-    .page { padding: 20px 24px; }
+    body { background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #0f172a; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .page {
+      padding: 20px 24px;
+      page-break-after: always;
+      break-after: page;
+    }
+    .page:last-of-type {
+      page-break-after: auto;
+      break-after: auto;
+    }
     .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
     .title { font-size: 20px; font-weight: 700; }
     .subtitle { margin-top: 4px; font-size: 12px; color: #64748b; }
@@ -603,17 +635,12 @@ export function printShowModeSheet(
       padding: 8px 14px; background: #2563eb; color: white; border: none; border-radius: 999px;
       cursor: pointer; font-size: 13px; font-weight: 600;
     }
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 2.15fr) minmax(260px, 1fr);
-      gap: 18px;
-      align-items: start;
-    }
     .map-panel, .list-panel {
       border: 1px solid #cbd5e1;
       border-radius: 18px;
-      overflow: hidden;
       background: #fff;
+      overflow: hidden;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
     }
     .panel-head {
       padding: 10px 14px;
@@ -625,55 +652,135 @@ export function printShowModeSheet(
       color: #64748b;
       background: #f8fafc;
     }
-    .map-wrap { padding: 12px; }
-    .map-wrap svg { width: 100%; height: auto; display: block; }
-    .list-wrap { max-height: 920px; overflow: hidden; }
-    .vendor-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
-      gap: 12px;
-      padding: 8px 14px;
+    .map-page .map-panel {
+      width: 100%;
+    }
+    .map-wrap {
+      padding: 14px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+    .map-wrap svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      max-height: calc(100vh - 220px);
+      margin: 0 auto;
+    }
+    .list-wrap {
+      padding: 0;
+    }
+    .vendor-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .vendor-table th,
+    .vendor-table td {
+      padding: 9px 14px;
       border-bottom: 1px solid #e2e8f0;
       font-size: 13px;
+      vertical-align: top;
     }
-    .vendor-row:last-child { border-bottom: none; }
-    .vendor-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .vendor-tables { text-align: right; font-weight: 600; color: #334155; overflow-wrap: anywhere; }
+    .vendor-table th {
+      background: #f8fafc;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .vendor-name-cell {
+      width: 58%;
+      font-weight: 600;
+      color: #0f172a;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .vendor-tables-cell {
+      width: 42%;
+      text-align: right;
+      font-weight: 600;
+      color: #334155;
+      overflow-wrap: anywhere;
+    }
     .empty { padding: 18px 14px; font-size: 13px; color: #64748b; }
     @media print {
       .no-print { display: none !important; }
-      @page { size: landscape; margin: 0.35in; }
+      @page { size: ${document.orientation}; margin: 0.4in; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .page { padding: 0; }
+      body { background: #fff; }
+      .toolbar {
+        display: none !important;
+      }
+      .page {
+        padding: 0;
+      }
+      .map-panel, .list-panel {
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .map-wrap {
+        padding: 10px;
+      }
+      .map-wrap svg {
+        max-height: none;
+      }
+      .vendor-table thead {
+        display: table-header-group;
+      }
+      .vendor-table tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="page">
+  <div class="toolbar no-print">
+    <div>
+      <div class="title">${esc(title || 'Show Sheet')}</div>
+      <div class="subtitle">${rows.length} vendors | ${Object.keys(assignments).length} assigned tables | ${new Date().toLocaleDateString()}</div>
+    </div>
+    <div class="actions">
+      <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+    </div>
+  </div>
+
+  <section class="page map-page">
     <div class="header">
       <div>
         <div class="title">${esc(title || 'Show Sheet')}</div>
-        <div class="subtitle">${rows.length} vendors | ${Object.keys(assignments).length} assigned tables | ${new Date().toLocaleDateString()}</div>
-      </div>
-      <div class="actions no-print">
-        <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+        <div class="subtitle">Map | ${Object.keys(assignments).length} assigned tables | ${new Date().toLocaleDateString()} | ${document.orientation}</div>
       </div>
     </div>
-    <div class="layout">
-      <section class="map-panel">
-        <div class="panel-head">Map</div>
-        <div class="map-wrap">${document.svg}</div>
-      </section>
-      <section class="list-panel">
-        <div class="panel-head">Vendor List</div>
-        <div class="list-wrap">${listMarkup}</div>
-      </section>
+    <section class="map-panel">
+      <div class="panel-head">Map</div>
+      <div class="map-wrap">${document.svg}</div>
+    </section>
+  </section>
+
+  <section class="page list-page">
+    <div class="header">
+      <div>
+        <div class="title">${esc(title || 'Show Sheet')}</div>
+        <div class="subtitle">Vendor List | ${rows.length} assigned vendors</div>
+      </div>
     </div>
-  </div>
+    <section class="list-panel">
+      <div class="panel-head">Vendor List</div>
+      <div class="list-wrap">${listMarkup}</div>
+    </section>
+  </section>
 </body>
 </html>`
 
-  openPrintWindow(html, 1200, 850, true)
+  openPrintWindow(
+    html,
+    document.orientation === 'landscape' ? 1200 : 900,
+    document.orientation === 'landscape' ? 850 : 1100,
+    true,
+  )
 }
 
 export function printVendorManifest(
