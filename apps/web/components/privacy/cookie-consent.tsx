@@ -6,9 +6,14 @@ type Consent = "essential" | "optional";
 
 export function CookieConsent({ initialConsent }: { initialConsent: Consent | null }) {
   const [visible, setVisible] = useState(initialConsent === null);
-  if (!visible) return <button type="button" onClick={() => setVisible(true)} className="fixed bottom-3 left-3 z-[90] rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow">Cookie settings</button>;
+  const [hasSavedChoice, setHasSavedChoice] = useState(initialConsent !== null);
+  if (!visible) {
+    if (hasSavedChoice) return null;
+    return <button type="button" onClick={() => setVisible(true)} className="fixed bottom-3 left-3 z-[90] rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow">Cookie settings</button>;
+  }
   function choose(value: Consent) {
     document.cookie = `csn_cookie_consent=${value}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
+    setHasSavedChoice(true);
     setVisible(false);
     if (value === "optional") window.location.reload();
   }

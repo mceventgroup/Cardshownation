@@ -6,14 +6,15 @@
 // Three-column layout: LeftSidebar | Canvas | RightSidebar
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useKeyboardShortcuts } from '@floorplanner/hooks/useKeyboardShortcuts'
-import { useEditorStore, selectShowCaseHighlights, selectShowMode, selectShowSectionColors } from '@floorplanner/store/index'
+import { useEditorStore, selectShowCaseHighlights, selectShowInventoryKey, selectShowMode, selectShowSectionColors } from '@floorplanner/store/index'
 import { exportFloorplanImage, exportVendorAssignmentsCsv, exportVendorListImage, printShowModeSheet, printVendorManifest, printVendorTableAssignments } from '@floorplanner/lib/export'
 import { hasPendingEditorChanges } from '@floorplanner/lib/editor-save-state'
 import { loadFromLocalStorage, type DocumentSlice } from '@floorplanner/lib/persistence'
 import { configureFloorplannerRuntime } from '@floorplanner/lib/runtime'
+import { buildShowInventoryOptions } from '@floorplanner/lib/show-inventory'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar from './LeftSidebar'
@@ -97,9 +98,11 @@ export default function EditorShell({
   const showMode = useEditorStore(selectShowMode)
   const showCaseHighlights = useEditorStore(selectShowCaseHighlights)
   const showSectionColors = useEditorStore(selectShowSectionColors)
+  const showInventoryKey = useEditorStore(selectShowInventoryKey)
   const setShowMode = useEditorStore(s => s.setShowMode)
   const setShowCaseHighlights = useEditorStore(s => s.setShowCaseHighlights)
   const setShowSectionColors = useEditorStore(s => s.setShowSectionColors)
+  const setShowInventoryKey = useEditorStore(s => s.setShowInventoryKey)
   const saveStatus = useEditorStore(s => s.saveStatus)
   const saveError = useEditorStore(s => s.saveError)
   const activeDocumentSource = useEditorStore(s => s.activeDocumentSource)
@@ -114,6 +117,11 @@ export default function EditorShell({
   const doors = useEditorStore(s => s.doors)
   const backgroundImages = useEditorStore(s => s.backgroundImages)
   const settings = useEditorStore(s => s.settings)
+  const inventoryOptions = useMemo(() => buildShowInventoryOptions(vendors), [vendors])
+  const selectedInventoryOption = useMemo(
+    () => inventoryOptions.find(option => option.key === showInventoryKey) ?? null,
+    [inventoryOptions, showInventoryKey],
+  )
   const [showHelp, setShowHelp] = useState(false)
   const [showFirstRun, setShowFirstRun] = useState(false)
   const [activeTab, setActiveTab] = useState<'layout' | 'vendors' | 'settings'>('layout')
@@ -186,6 +194,16 @@ export default function EditorShell({
     setTheme(readEditorThemePreference())
   }, [])
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.body.classList.remove('fp-theme-light', 'fp-theme-dark')
+    document.body.classList.add(`fp-theme-${theme}`)
+
+    return () => {
+      document.body.classList.remove('fp-theme-light', 'fp-theme-dark')
+    }
+  }, [theme])
+
   const persistBypass = useCallback((skipNextTime: boolean) => {
     if (typeof window === 'undefined') return
     writeBypassPreference(skipNextTime)
@@ -215,13 +233,26 @@ export default function EditorShell({
   }, [])
 
   return (
-    <div className={`fp-theme-root fp-theme-${theme} flex h-full w-full flex-col bg-slate-100`}>
+    <div className={`fp-theme-root fp-theme-${theme} flex h-full w-full flex-col ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-950'}`}>
       {!showMode && <Toolbar theme={theme} onToggleTheme={handleToggleTheme} />}
       <div className="flex-1 overflow-hidden">
         <div className="flex h-full flex-row overflow-hidden">
           {showMode ? (
             <ShowModeSidebar
-              onPrintShowSheet={() => printShowModeSheet(tables, sections, vendors, assignments, room, 'Show Sheet', doors, backgroundImages)}
+              onPrintShowSheet={() => printShowModeSheet(
+                tables,
+                sections,
+                vendors,
+                assignments,
+                room,
+                'Print Sheet',
+                doors,
+                backgroundImages,
+                {
+                  showSectionColors,
+                  showInventoryKey,
+                },
+              )}
               onSaveFloorplanImage={() => exportFloorplanImage(
                 tables,
                 sections,
@@ -229,7 +260,13 @@ export default function EditorShell({
                 assignments,
                 room,
                 doors,
-                { showVendorNames: false, showPaymentStatus: false, title: 'Floor Plan' },
+                {
+                  showVendorNames: false,
+                  showPaymentStatus: false,
+                  title: 'Floor Plan',
+                  showSectionColors,
+                  showInventoryKey,
+                },
                 backgroundImages,
                 'floorplan.png',
               )}
@@ -242,6 +279,10 @@ export default function EditorShell({
               onToggleCaseHighlights={setShowCaseHighlights}
               showSectionColors={showSectionColors}
               onToggleSectionColors={setShowSectionColors}
+              inventoryOptions={inventoryOptions}
+              selectedInventoryKey={showInventoryKey}
+              selectedInventoryLabel={selectedInventoryOption?.label ?? null}
+              onSelectInventoryKey={setShowInventoryKey}
               onExitShowMode={() => setShowMode(false)}
             />
           ) : (

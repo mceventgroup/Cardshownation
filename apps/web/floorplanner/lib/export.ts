@@ -15,6 +15,7 @@ import { getStage } from './stage'
 import { vendorColor } from './defaults'
 import { resolveVendorBuckets, vendorDisplayName } from './vendor-resolution'
 import { compressTableLabels } from './table-ranges'
+import { buildShowInventoryOptions, vendorHasInventory } from './show-inventory'
 
 function abbreviateAssignedTablePrefix(value: string): string {
   return value
@@ -68,6 +69,8 @@ export interface PrintOptions {
   colorMode?: ExportColorMode
   metadata?: ExportMetadata
   includeVendorAssignmentsPage?: boolean
+  showSectionColors?: boolean
+  showInventoryKey?: string | null
 }
 
 const OUTER_PAD = 28
@@ -548,6 +551,7 @@ export function printShowModeSheet(
   title: string,
   doors: Record<string, Door>,
   backgroundImages?: Record<string, BackgroundImage>,
+  options?: Pick<PrintOptions, 'showSectionColors' | 'showInventoryKey'>,
 ): void {
   const tableList = Object.values(tables)
   if (tableList.length === 0 && !room) {
@@ -562,18 +566,25 @@ export function printShowModeSheet(
     assignments,
     room,
     Object.values(doors),
-    { showVendorNames: false, showPaymentStatus: false, title },
+    { showVendorNames: false, showPaymentStatus: false, title, ...options },
     backgroundImages,
   )
+
+  const selectedInventoryKey = options?.showInventoryKey ?? null
+  const selectedInventoryOption = selectedInventoryKey
+    ? buildShowInventoryOptions(vendors).find(option => option.key === selectedInventoryKey) ?? null
+    : null
 
   const rows = resolveVendorBuckets(vendors, assignments)
     .map(bucket => ({
       name: bucket.displayName,
+      inventoryMatch: vendorHasInventory(bucket.vendor, selectedInventoryKey),
       labels: bucket.assignments
         .map(assignment => tables[assignment.tableId]?.displayId ?? tables[assignment.tableId]?.label ?? assignment.tableId)
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     }))
     .filter(row => row.labels.length > 0)
+    .filter(row => !selectedInventoryKey || row.inventoryMatch)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 
   const listMarkup = rows.length === 0
@@ -740,7 +751,7 @@ export function printShowModeSheet(
   <div class="toolbar no-print">
     <div>
       <div class="title">${esc(title || 'Show Sheet')}</div>
-      <div class="subtitle">${rows.length} vendors | ${Object.keys(assignments).length} assigned tables | ${new Date().toLocaleDateString()}</div>
+      <div class="subtitle">${rows.length} vendors${selectedInventoryOption ? ` | View: ${esc(selectedInventoryOption.label)}` : ''} | ${Object.keys(assignments).length} assigned tables | ${new Date().toLocaleDateString()}</div>
     </div>
     <div class="actions">
       <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
@@ -751,7 +762,7 @@ export function printShowModeSheet(
     <div class="header">
       <div>
         <div class="title">${esc(title || 'Show Sheet')}</div>
-        <div class="subtitle">Map | ${Object.keys(assignments).length} assigned tables | ${new Date().toLocaleDateString()} | ${document.orientation}</div>
+        <div class="subtitle">Map | ${Object.keys(assignments).length} assigned tables${selectedInventoryOption ? ` | ${esc(selectedInventoryOption.label)}` : ''} | ${new Date().toLocaleDateString()} | ${document.orientation}</div>
       </div>
     </div>
     <section class="map-panel">
@@ -764,7 +775,7 @@ export function printShowModeSheet(
     <div class="header">
       <div>
         <div class="title">${esc(title || 'Show Sheet')}</div>
-        <div class="subtitle">Vendor List | ${rows.length} assigned vendors</div>
+        <div class="subtitle">Vendor List | ${rows.length} assigned vendors${selectedInventoryOption ? ` | ${esc(selectedInventoryOption.label)}` : ''}</div>
       </div>
     </div>
     <section class="list-panel">
@@ -977,12 +988,11 @@ export function printVendorTableAssignments(
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
-  <title>Vendor Table Assignments</title>
+  <title>Table Assignment Flyers</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; background: #f5f5f5; font-family: "Helvetica Neue", Arial, sans-serif; color: #111827; }
-    .header { padding: 12px 24px; border-bottom: 1px solid #d1d5db; display: flex; justify-content: space-between; align-items: center; background: #fff; position: sticky; top: 0; }
-    .title { font-size: 18px; font-weight: 700; }
+    .print-action { position: fixed; top: 16px; right: 20px; z-index: 20; padding: 8px 16px; background: #111827; color: #fff; border: none; border-radius: 999px; cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18); }
     .assignment-page { min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 24px; page-break-after: always; }
     .assignment-page:last-child { page-break-after: auto; }
     .sheet { width: 100%; max-width: 850px; min-height: 1040px; border: 2px solid #111827; background: #fff; padding: 40px 44px; display: flex; flex-direction: column; }
@@ -1009,10 +1019,7 @@ export function printVendorTableAssignments(
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="title">Vendor Table Assignments</div>
-    <button class="no-print" onclick="window.print()" style="padding:8px 16px;background:#111827;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Print / Save PDF</button>
-  </div>
+  <button class="print-action no-print" onclick="window.print()">Print / Save PDF</button>
   ${pages}
 </body>
 </html>`
@@ -1031,9 +1038,16 @@ function buildSVG(
   backgroundImages?: Record<string, BackgroundImage>,
 ): ExportDocument {
   const colorMode = options.colorMode ?? 'color'
+  const showInventoryKey = options.showInventoryKey ?? null
+  const showSectionColors = Boolean(options.showSectionColors)
   const metadata = getEffectiveMetadata(options)
   const byTable = new Map<string, VendorAssignment>()
   for (const assignment of Object.values(assignments)) byTable.set(assignment.tableId, assignment)
+  const inventoryOptions = buildShowInventoryOptions(vendors)
+  const inventoryColorMap = new Map(inventoryOptions.map(option => [option.key, option.color]))
+  const selectedInventoryOption = showInventoryKey
+    ? inventoryOptions.find(option => option.key === showInventoryKey) ?? null
+    : null
 
   const roomSections = getRoomSections(tables, room, backgroundImages)
   const context = createRenderContext(roomSections, doors)
@@ -1056,15 +1070,21 @@ function buildSVG(
   ]
 
   const legendX = pageWidth - OUTER_PAD - LEGEND_ITEM_WIDTH * 3
-  const legendItems = [
-    { label: 'Assigned', fill: colorMode === 'bw' ? '#d1d5db' : '#dbeafe', stroke: '#334155' },
-    { label: 'Available', fill: colorMode === 'bw' ? '#ffffff' : '#f3f4f6', stroke: '#64748b' },
-    { label: 'Premium', fill: colorMode === 'bw' ? '#ffffff' : '#fef3c7', stroke: '#92400e' },
-  ]
+  const legendItems = showInventoryKey
+    ? [
+        { label: selectedInventoryOption?.label ?? 'Matching Inventory', fill: colorMode === 'bw' ? '#d1d5db' : (selectedInventoryOption?.color ?? '#2563eb'), stroke: '#334155' },
+        { label: 'Other Vendors', fill: colorMode === 'bw' ? '#ffffff' : '#e2e8f0', stroke: '#64748b' },
+        { label: 'Open Tables', fill: colorMode === 'bw' ? '#ffffff' : '#f8fafc', stroke: '#94a3b8' },
+      ]
+    : [
+        { label: 'Assigned', fill: colorMode === 'bw' ? '#d1d5db' : '#dbeafe', stroke: '#334155' },
+        { label: 'Available', fill: colorMode === 'bw' ? '#ffffff' : '#f3f4f6', stroke: '#64748b' },
+        { label: 'Premium', fill: colorMode === 'bw' ? '#ffffff' : '#fef3c7', stroke: '#92400e' },
+      ]
   legendItems.forEach((item, index) => {
     const x = legendX + index * LEGEND_ITEM_WIDTH
     parts.push(`<rect x="${x}" y="26" width="18" height="18" rx="4" fill="${item.fill}" stroke="${item.stroke}" stroke-width="${index === 2 ? 2 : 1.2}" />`)
-    if (index === 2) {
+    if (!showInventoryKey && index === 2) {
       parts.push(`<text x="${x + 9}" y="39" text-anchor="middle" font-size="10" font-family="system-ui, sans-serif" fill="${item.stroke}" font-weight="700">P</text>`)
     }
     parts.push(`<text x="${x + 26}" y="39" font-size="12" font-family="system-ui, sans-serif" fill="#334155">${esc(item.label)}</text>`)
@@ -1099,10 +1119,22 @@ function buildSVG(
     for (const table of section.tables) {
       const assignment = byTable.get(table.id)
       const vendor = assignment ? vendors[assignment.vendorId] : null
+      const inventoryMatch = vendorHasInventory(vendor, showInventoryKey)
+      const inventoryColor = showInventoryKey ? inventoryColorMap.get(showInventoryKey) ?? '#2563eb' : null
       const caseCount = vendor?.cases ?? 0
       const isCaseHighlighted = caseCount > 0
       const sectionColor = table.sectionId ? sections[table.sectionId]?.color : null
-      const baseFill = assignment?.colorOverride ?? sectionColor ?? (assignment ? vendorColor(assignment.vendorId) : '#e5e7eb')
+      const baseFill = showInventoryKey
+        ? assignment
+          ? inventoryMatch
+            ? inventoryColor ?? '#2563eb'
+            : '#e2e8f0'
+          : '#f8fafc'
+        : showSectionColors
+          ? assignment?.colorOverride ?? sectionColor ?? '#e5e7eb'
+          : assignment
+            ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
+            : sectionColor ?? '#e5e7eb'
       const fill = colorMode === 'bw'
         ? (assignment ? '#d1d5db' : '#ffffff')
         : sanitizeColor(baseFill)
@@ -1195,23 +1227,23 @@ function buildVendorListSVG(
 
   const width = 1200
   const rowHeight = 34
-  const headerHeight = 86
+  const headerHeight = 96
   const footerPad = 24
   const height = Math.max(220, headerHeight + rows.length * rowHeight + footerPad)
   const parts: string[] = [
     `<rect width="${width}" height="${height}" fill="#ffffff" />`,
-    `<text x="48" y="42" font-size="30" font-family="system-ui, sans-serif" font-weight="700" fill="#0f172a">${esc(title || 'Vendor List')}</text>`,
-    `<text x="48" y="68" font-size="16" font-family="system-ui, sans-serif" fill="#64748b">${rows.length} vendors with assigned tables</text>`,
+    `<text x="48" y="22" font-size="30" font-family="Arial, Helvetica, sans-serif" font-weight="700" fill="#0f172a" dominant-baseline="hanging">${esc(title || 'Vendor List')}</text>`,
+    `<text x="48" y="58" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#64748b" dominant-baseline="hanging">${rows.length} vendors with assigned tables</text>`,
     `<line x1="48" y1="${headerHeight}" x2="${width - 48}" y2="${headerHeight}" stroke="#cbd5e1" stroke-width="1" />`,
-    `<text x="48" y="${headerHeight - 14}" font-size="13" font-family="system-ui, sans-serif" font-weight="700" fill="#64748b">Vendor</text>`,
-    `<text x="${width - 48}" y="${headerHeight - 14}" text-anchor="end" font-size="13" font-family="system-ui, sans-serif" font-weight="700" fill="#64748b">Tables</text>`,
+    `<text x="48" y="${headerHeight - 24}" font-size="13" font-family="Arial, Helvetica, sans-serif" font-weight="700" fill="#64748b" dominant-baseline="hanging">Vendor</text>`,
+    `<text x="${width - 48}" y="${headerHeight - 24}" text-anchor="end" font-size="13" font-family="Arial, Helvetica, sans-serif" font-weight="700" fill="#64748b" dominant-baseline="hanging">Tables</text>`,
   ]
 
   rows.forEach((row, index) => {
     const y = headerHeight + index * rowHeight
     parts.push(`<line x1="48" y1="${y + rowHeight}" x2="${width - 48}" y2="${y + rowHeight}" stroke="#e2e8f0" stroke-width="1" />`)
-    parts.push(`<text x="48" y="${y + 22}" font-size="18" font-family="system-ui, sans-serif" font-weight="600" fill="#0f172a">${esc(row.name)}</text>`)
-    parts.push(`<text x="${width - 48}" y="${y + 22}" text-anchor="end" font-size="18" font-family="system-ui, sans-serif" font-weight="600" fill="#334155">${esc(formatAssignedTableList(row.tables))}</text>`)
+    parts.push(`<text x="48" y="${y + 8}" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="600" fill="#0f172a" dominant-baseline="hanging">${esc(row.name)}</text>`)
+    parts.push(`<text x="${width - 48}" y="${y + 8}" text-anchor="end" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="600" fill="#334155" dominant-baseline="hanging">${esc(formatAssignedTableList(row.tables))}</text>`)
   })
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`

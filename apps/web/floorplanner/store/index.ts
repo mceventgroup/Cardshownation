@@ -74,6 +74,7 @@ function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): vo
   state.showMode = false
   state.showCaseHighlights = false
   state.showSectionColors = false
+  state.showInventoryKey = null
   state.reviewUnassignedTables = false
   state.history = { ...EMPTY_HISTORY, past: [], future: [] }
 }
@@ -132,6 +133,7 @@ export interface EditorState {
   showMode: boolean
   showCaseHighlights: boolean
   showSectionColors: boolean
+  showInventoryKey: string | null
   reviewUnassignedTables: boolean
   stageScale: number
   stagePosition: Point
@@ -161,6 +163,7 @@ export interface EditorState {
   setShowMode: (visible: boolean) => void
   setShowCaseHighlights: (visible: boolean) => void
   setShowSectionColors: (visible: boolean) => void
+  setShowInventoryKey: (key: string | null) => void
   setReviewUnassignedTables: (visible: boolean) => void
 
   // ── Builder config actions ─────────────────────────────────────────────
@@ -260,6 +263,7 @@ export const useEditorStore = create<EditorState>()(
     showMode: false,
     showCaseHighlights: false,
     showSectionColors: false,
+    showInventoryKey: null,
     reviewUnassignedTables: false,
     stageScale:    1,
     stagePosition: { x: 0, y: 0 },
@@ -445,6 +449,7 @@ export const useEditorStore = create<EditorState>()(
         } else {
           state.showCaseHighlights = false
           state.showSectionColors = false
+          state.showInventoryKey = null
         }
       })
     },
@@ -458,6 +463,12 @@ export const useEditorStore = create<EditorState>()(
     setShowSectionColors(visible) {
       set(state => {
         state.showSectionColors = visible
+      })
+    },
+
+    setShowInventoryKey(key) {
+      set(state => {
+        state.showInventoryKey = key
       })
     },
 
@@ -1005,6 +1016,7 @@ export const selectGridVisible = (s: EditorState) => s.gridVisible
 export const selectShowMode = (s: EditorState) => s.showMode
 export const selectShowCaseHighlights = (s: EditorState) => s.showCaseHighlights
 export const selectShowSectionColors = (s: EditorState) => s.showSectionColors
+export const selectShowInventoryKey = (s: EditorState) => s.showInventoryKey
 export const selectReviewUnassignedTables = (s: EditorState) => s.reviewUnassignedTables
 
 /** Derives the RowId when all selected tables share the same row, else null. */

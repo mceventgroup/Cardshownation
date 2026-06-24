@@ -358,7 +358,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
               onClick={() => setShowMode(true)}
               className="rounded-full border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:px-4"
             >
-              Show Mode
+              Print
             </button>
 
             <button

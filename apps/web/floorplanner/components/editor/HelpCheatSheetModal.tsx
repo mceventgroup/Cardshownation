@@ -13,7 +13,7 @@ const SECTIONS = [
       'Use `Place Table` to drop single tables and `Place Row` to lay out repeated runs fast.',
       'Use `Ctrl+A` to select every table in the layout.',
       'With 2 or more tables selected, use the bulk edit panel in the left sidebar to change dimensions.',
-      'Use `Show Mode` when you want a clean event-floor view without editing controls.',
+      'Use `Print` when you want a clean event-floor view without editing controls.',
     ],
   },
   {

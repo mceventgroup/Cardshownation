@@ -31,7 +31,7 @@ import { Stage, Layer, Rect, Line, Ellipse } from 'react-konva/lib/ReactKonvaCor
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Point, TableId, DoorId, DoorSide, DoorKind } from '@floorplanner/domain/types'
-import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectHoveredVendorId, selectVendorAssignments, selectVendors, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages, selectGridVisible, selectShowMode, selectShowCaseHighlights, selectShowSectionColors, selectActiveRoomId } from '@floorplanner/store/index'
+import { useEditorStore, selectTables, selectSelectedIds, selectSettings, selectActiveTool, selectSections, selectDuplicateTableIds, selectAssignmentMap, selectActiveVendorId, selectHoveredVendorId, selectVendorAssignments, selectVendors, selectRoom, selectDoors, selectSelectedDoorId, selectSelectedSegmentId, selectBackgroundImages, selectGridVisible, selectShowMode, selectShowCaseHighlights, selectShowSectionColors, selectShowInventoryKey, selectActiveRoomId } from '@floorplanner/store/index'
 import { snapping } from '@floorplanner/domain/snapping.impl'
 import { geometry } from '@floorplanner/domain/geometry.impl'
 import { rowModule } from '@floorplanner/domain/rows.impl'
@@ -56,6 +56,7 @@ import { warningsModule } from '@floorplanner/domain/warnings.impl'
 import type { WarningSeverity } from '@floorplanner/domain/warnings'
 import { getDefaultRoomId, getRoomIdForPoint, getRoomZones } from '@floorplanner/domain/room-numbering'
 import { applyRoomSplit, buildRoomSplitPreview, findRoomSegmentAtPoint } from '@floorplanner/domain/room-splitting'
+import { buildShowInventoryOptions, vendorHasInventory } from '@floorplanner/lib/show-inventory'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -119,6 +120,7 @@ export default function KonvaCanvas() {
   const showMode          = useEditorStore(selectShowMode)
   const showCaseHighlights = useEditorStore(selectShowCaseHighlights)
   const showSectionColors = useEditorStore(selectShowSectionColors)
+  const showInventoryKey = useEditorStore(selectShowInventoryKey)
 
   // Store actions
   const dispatch      = useEditorStore(s => s.dispatch)
@@ -1540,6 +1542,10 @@ export default function KonvaCanvas() {
   // ── Background image list ──────────────────────────────────────────────────
 
   const bgImageList = useMemo(() => Object.values(bgImagesRecord), [bgImagesRecord])
+  const inventoryColorMap = useMemo(
+    () => new Map(buildShowInventoryOptions(vendorsRecord).map(option => [option.key, option.color])),
+    [vendorsRecord],
+  )
   const vendorRemainingMap = useMemo(() => {
     const currentRoomTableIds = new Set<string>(
       Object.values(tables)
@@ -1752,17 +1758,25 @@ export default function KonvaCanvas() {
             const isSuggestedTarget = !assignment && hoveredVendorNeedsTables
             const isSuggestedPremiumTarget = isSuggestedTarget && table.premium
             const assignedVendor = assignment ? vendorsRecord[assignment.vendorId] : null
+            const inventoryMatch = vendorHasInventory(assignedVendor, showInventoryKey)
+            const inventoryColor = showInventoryKey ? inventoryColorMap.get(showInventoryKey) ?? '#2563eb' : null
             const isCaseHighlighted = Boolean(showMode && showCaseHighlights && (assignedVendor?.cases ?? 0) > 0)
             const caseCount = assignedVendor?.cases ?? 0
             const caseHighlightColor = showMode && showSectionColors ? '#ea580c' : '#2563eb'
             const fillColor = showMode
-              ? assignment
-                ? showSectionColors
-                  ? sectionColor ?? OPEN_TABLE_FILL
-                  : settings.vendorColorCoding
-                    ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
-                    : sectionColor ?? OPEN_TABLE_FILL
-                : '#fca5a5'
+              ? showInventoryKey
+                ? assignment
+                  ? inventoryMatch
+                    ? inventoryColor ?? '#2563eb'
+                    : '#e2e8f0'
+                  : '#f8fafc'
+                : assignment
+                  ? showSectionColors
+                    ? sectionColor ?? OPEN_TABLE_FILL
+                    : settings.vendorColorCoding
+                      ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
+                      : sectionColor ?? OPEN_TABLE_FILL
+                  : '#fca5a5'
               : assignment
                 ? settings.vendorColorCoding
                   ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
