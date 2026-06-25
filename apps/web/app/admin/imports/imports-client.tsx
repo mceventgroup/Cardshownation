@@ -180,7 +180,7 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Auto-Import</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Runs daily at 6 AM automatically via Vercel Cron. Imported shows land in{" "}
+            Runs automatically every Monday at 6 AM via Vercel Cron. Imported shows land in{" "}
             <Link href="/admin/submissions" className="font-medium text-brand-600 hover:underline">
               Submissions
             </Link>{" "}
@@ -228,7 +228,7 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
               </div>
             </div>
           ))}
-          {sources.activeSources.length === 1 && (
+          {sources.activeSources.length === 2 && (
             <div className="px-5 py-4 text-xs text-slate-500">
               Add <code className="rounded bg-slate-100 px-1">PUBLIC_SHOW_IMPORT_SOURCES_JSON</code>{" "}
               to import from public websites or public Facebook URLs.

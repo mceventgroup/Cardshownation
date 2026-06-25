@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePublicImportSources } from "./auto-import-sources";
-import { extractShowsFromHtml } from "./public-show-import";
+import { extractCandidateEventUrls, extractShowsFromHtml } from "./public-show-import";
 
 test("extractShowsFromHtml maps JSON-LD events from a public page", () => {
   const html = `
@@ -75,6 +75,78 @@ test("extractShowsFromHtml falls back to page-level heuristics with configured c
   assert.equal(shows[0]?.city, "Wichita Falls");
   assert.equal(shows[0]?.state, "TX");
   assert.equal(shows[0]?.facebookUrl, "https://www.facebook.com/some-public-post");
+});
+
+test("extractShowsFromHtml infers city/state from detail page text when source fallback is missing", () => {
+  const html = `
+    <html>
+      <head>
+        <title>Beckett Sports Card Show</title>
+        <meta name="description" content="Join us July 12, 2026 for a great card show in Tulsa, Oklahoma.">
+      </head>
+      <body>
+        <article>
+          <h1>Beckett Sports Card Show</h1>
+          <p>July 12, 2026</p>
+          <p>Tulsa, Oklahoma</p>
+        </article>
+      </body>
+    </html>
+  `;
+
+  const shows = extractShowsFromHtml(html, {
+    name: "Beckett",
+    url: "https://example.com/beckett-show",
+  });
+
+  assert.equal(shows.length, 1);
+  assert.equal(shows[0]?.city, "Tulsa");
+  assert.equal(shows[0]?.state, "OK");
+});
+
+test("extractShowsFromHtml uses Beckett adapter for structured event blocks", () => {
+  const html = `
+    <html>
+      <body>
+        <article class="event-card">
+          <h2><a href="/news/tulsa-card-show">Tulsa Sports Card Show</a></h2>
+          <p>July 12, 2026</p>
+          <p>Tulsa, Oklahoma</p>
+          <p>Join collectors for sports cards and Pokemon.</p>
+        </article>
+      </body>
+    </html>
+  `;
+
+  const shows = extractShowsFromHtml(html, {
+    name: "Beckett Event Calendar",
+    url: "https://example.com/beckett-calendar",
+  });
+
+  assert.equal(shows.length, 1);
+  assert.equal(shows[0]?.title, "Tulsa Sports Card Show");
+  assert.equal(shows[0]?.city, "Tulsa");
+  assert.equal(shows[0]?.state, "OK");
+  assert.equal(shows[0]?.websiteUrl, "https://example.com/news/tulsa-card-show");
+});
+
+test("extractCandidateEventUrls finds likely same-host event detail pages", () => {
+  const html = `
+    <html>
+      <body>
+        <a href="/events/tulsa-card-show">Tulsa Card Show</a>
+        <a href="/about">About</a>
+        <a href="https://external.example.com/card-show">External card show</a>
+      </body>
+    </html>
+  `;
+
+  const urls = extractCandidateEventUrls(html, {
+    name: "Example",
+    url: "https://example.com/calendar",
+  });
+
+  assert.deepEqual(urls, ["https://example.com/events/tulsa-card-show"]);
 });
 
 test("parsePublicImportSources ignores invalid entries and normalizes valid ones", () => {

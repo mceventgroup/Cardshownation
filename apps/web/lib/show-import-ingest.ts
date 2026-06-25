@@ -1,3 +1,4 @@
+import { Prisma } from "@csn/db";
 import { db } from "@/lib/db";
 import { getCityCoords } from "@/lib/city-coords";
 import { slugify } from "@/lib/utils";
@@ -33,6 +34,42 @@ export type ImportSourceSummary = {
   errors: string[];
 };
 
+function chunkValues<T>(values: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function getExistingImportedExternalIds(source: string, externalIds: string[]) {
+  const uniqueExternalIds = [...new Set(externalIds.filter(Boolean))];
+  if (uniqueExternalIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const existing = new Set<string>();
+
+  for (const batch of chunkValues(uniqueExternalIds, 250)) {
+    const batchRows = await db.$queryRaw<Array<{ externalId: string | null }>>(
+      Prisma.sql`
+        SELECT "payloadJson"->>'externalId' AS "externalId"
+        FROM "ShowSubmission"
+        WHERE "payloadJson"->>'source' = ${source}
+          AND "payloadJson"->>'externalId' IN (${Prisma.join(batch.map((value) => Prisma.sql`${value}`))})
+      `
+    );
+
+    for (const row of batchRows) {
+      if (row.externalId) {
+        existing.add(row.externalId);
+      }
+    }
+  }
+
+  return existing;
+}
+
 export async function ingestImportedShows(input: {
   source: string;
   label: string;
@@ -43,18 +80,26 @@ export async function ingestImportedShows(input: {
   let imported = 0;
   let skipped = 0;
   const errors: string[] = [];
+  const uniqueShows = new Map<string, ImportedShow>();
 
   for (const show of input.shows) {
+    if (!show.externalId) {
+      continue;
+    }
+
+    if (uniqueShows.has(show.externalId)) {
+      skipped++;
+      continue;
+    }
+
+    uniqueShows.set(show.externalId, show);
+  }
+
+  const existingExternalIds = await getExistingImportedExternalIds(input.source, [...uniqueShows.keys()]);
+
+  for (const show of uniqueShows.values()) {
     try {
-      const existing = await db.showSubmission.findFirst({
-        where: {
-          payloadJson: {
-            path: ["externalId"],
-            equals: show.externalId,
-          },
-        },
-      });
-      if (existing) {
+      if (existingExternalIds.has(show.externalId)) {
         skipped++;
         continue;
       }

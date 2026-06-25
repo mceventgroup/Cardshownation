@@ -1,5 +1,7 @@
 import { runEventbriteImport } from "@/lib/eventbrite-import";
-import { getAllPublicImportSources, getDatabaseAutoImportSources, parsePublicImportSources } from "@/lib/auto-import-sources";
+import { runTcdbImport } from "@/lib/tcdb-import";
+import { getTcdbImportStateLabels } from "@/lib/tcdb";
+import { getAllPublicImportSources, getBuiltInPublicImportSources, getDatabaseAutoImportSources, parsePublicImportSources } from "@/lib/auto-import-sources";
 import { runPublicSourceImports } from "@/lib/public-show-import";
 import type { ImportSourceSummary } from "@/lib/show-import-ingest";
 
@@ -12,16 +14,18 @@ export type ScheduledImportRunResult = {
 
 export async function getAutoImportSourceSummaries() {
   const databaseSources = await getDatabaseAutoImportSources();
+  const builtInSources = getBuiltInPublicImportSources();
   const environmentSources = parsePublicImportSources().filter(
     (envSource) =>
-      !databaseSources.some((dbSource) => dbSource.url.toLowerCase() === envSource.url.toLowerCase())
+      !databaseSources.some((dbSource) => dbSource.url.toLowerCase() === envSource.url.toLowerCase()) &&
+      !builtInSources.some((builtInSource) => builtInSource.url.toLowerCase() === envSource.url.toLowerCase())
   );
   const activeSources = await getAllPublicImportSources();
   const publicSources = activeSources.map((source) => ({
     key: `public:${source.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
     label: source.name,
     type: /facebook\.com/i.test(source.url) ? "Facebook/Public Page" : "Website",
-    scheduleLabel: "Daily 6 AM",
+    scheduleLabel: "Mondays 6 AM",
     url: source.url,
     origin: source.origin ?? "database",
     active: source.active !== false,
@@ -30,10 +34,19 @@ export async function getAutoImportSourceSummaries() {
   return {
     activeSources: [
       {
+        key: "tcdb",
+        label: "Trading Card Database",
+        type: `State calendar scrape (${getTcdbImportStateLabels().length} states)`,
+        scheduleLabel: "Mondays 6 AM",
+        url: "https://www.tcdb.com/CardShowCalendar.cfm",
+        origin: "environment" as const,
+        active: true,
+      },
+      {
         key: "eventbrite",
         label: "Eventbrite",
         type: "Public events API",
-        scheduleLabel: "Daily 6 AM",
+        scheduleLabel: "Mondays 6 AM",
         url: "https://www.eventbrite.com/",
         origin: "environment" as const,
         active: true,
@@ -56,6 +69,9 @@ function combineResults(results: ImportSourceSummary[]): ScheduledImportRunResul
 
 export async function runScheduledImports() {
   const results: ImportSourceSummary[] = [];
+
+  const tcdbResult = await runTcdbImport();
+  results.push(tcdbResult);
 
   const eventbriteResult = await runEventbriteImport();
   if (!("error" in eventbriteResult)) {

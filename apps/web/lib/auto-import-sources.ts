@@ -25,6 +25,17 @@ export type AutoImportSourceInput = {
   active?: boolean;
 };
 
+const BUILT_IN_PUBLIC_IMPORT_SOURCES: PublicImportSource[] = [
+  {
+    name: "Beckett Card Shows",
+    url: "https://www.beckett.com/news/?s=card+show",
+    organizerName: "Beckett",
+    categories: ["Sports Cards", "Pokemon", "TCG"],
+    active: true,
+    origin: "environment",
+  },
+];
+
 export function isMissingAutoImportSourceTableError(error: unknown) {
   if (!(error instanceof Error)) {
     return false;
@@ -103,6 +114,10 @@ export function parsePublicImportSources(raw = process.env.PUBLIC_SHOW_IMPORT_SO
   }
 }
 
+export function getBuiltInPublicImportSources() {
+  return BUILT_IN_PUBLIC_IMPORT_SOURCES;
+}
+
 export function validateAutoImportSourceInput(input: AutoImportSourceInput) {
   const name = readTrimmedString(input.name);
   const url = normalizeExternalUrl(readTrimmedString(input.url));
@@ -169,9 +184,14 @@ export async function getDatabaseAutoImportSources() {
 
 export async function getAllPublicImportSources() {
   const databaseSources = await getDatabaseAutoImportSources();
+  const builtInSources = getBuiltInPublicImportSources();
   const environmentSources = parsePublicImportSources();
 
   const merged = new Map<string, PublicImportSource>();
+
+  for (const source of builtInSources) {
+    merged.set(source.url.toLowerCase(), source);
+  }
 
   for (const source of environmentSources) {
     merged.set(source.url.toLowerCase(), source);

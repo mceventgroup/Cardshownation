@@ -4,6 +4,7 @@ import {
   type PublicImportSource,
 } from "@/lib/auto-import-sources";
 import { ingestImportedShows, type ImportSourceSummary, type ImportedShow } from "@/lib/show-import-ingest";
+import { getStateByCode, US_STATES } from "@/lib/states";
 import { normalizeExternalUrl } from "@/lib/url";
 import { fetchPublicUrl, readResponseTextLimited } from "@/lib/safe-remote-fetch";
 
@@ -12,8 +13,13 @@ const CARD_SHOW_PATTERN =
 
 const DATE_RANGE_PATTERN =
   /\b([A-Z][a-z]+ \d{1,2}, \d{4})(?:\s*(?:-|to|through)\s*([A-Z][a-z]+ \d{1,2}, \d{4}))?\b/;
+const DATE_RANGE_WITH_OPTIONAL_YEAR_PATTERN =
+  /\b([A-Z][a-z]+ \d{1,2}(?:,\s*\d{4})?)(?:\s*(?:-|to|through)\s*([A-Z][a-z]+ \d{1,2}(?:,\s*\d{4})?))?\b/;
 
 type JsonLdNode = Record<string, unknown>;
+type SourceAdapter = {
+  extractShows: (html: string, source: PublicImportSource) => ImportedShow[];
+};
 
 function decodeHtmlEntities(value: string) {
   return value
@@ -33,6 +39,17 @@ function stripHtml(html: string) {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim()
+  );
+}
+
+function stripHtmlPreserveLines(html: string) {
+  return decodeHtmlEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<(?:br|\/p|\/div|\/li|\/tr|\/h[1-6]|\/ul|\/ol|\/section|\/article)>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\r/g, "")
   );
 }
 
@@ -258,15 +275,179 @@ function parseLooseDate(text: string) {
   return { startDate, endDate };
 }
 
+function normalizeDateYear(text: string) {
+  return /\d{4}/.test(text) ? text : `${text}, ${new Date().getFullYear()}`;
+}
+
+function parseLooseDateFlexible(text: string) {
+  const match = text.match(DATE_RANGE_WITH_OPTIONAL_YEAR_PATTERN);
+  if (!match) return null;
+
+  const startDate = new Date(normalizeDateYear(match[1]));
+  if (Number.isNaN(startDate.getTime())) {
+    return null;
+  }
+
+  const endDate = match[2] ? new Date(normalizeDateYear(match[2])) : startDate;
+  if (Number.isNaN(endDate.getTime())) {
+    return null;
+  }
+
+  if (endDate < startDate) {
+    endDate.setFullYear(startDate.getFullYear());
+  }
+
+  return { startDate, endDate };
+}
+
+function extractCityStateFromText(text: string) {
+  const compactText = text.replace(/\s+/g, " ").trim();
+  const stateCodeMatch = compactText.match(/\b([A-Za-z .'-]+),\s*([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?\b/);
+  if (stateCodeMatch && getStateByCode(stateCodeMatch[2])) {
+    return {
+      city: stateCodeMatch[1].trim(),
+      state: stateCodeMatch[2].trim(),
+    };
+  }
+
+  for (const state of US_STATES) {
+    const stateNamePattern = new RegExp(`\\b([A-Za-z .'-]+),\\s*${state.name}\\b`, "i");
+    const stateNameMatch = compactText.match(stateNamePattern);
+    if (stateNameMatch) {
+      return {
+        city: stateNameMatch[1].trim(),
+        state: state.code,
+      };
+    }
+  }
+
+  return { city: null, state: null };
+}
+
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function buildImportedShowFromBlock(input: {
+  source: PublicImportSource;
+  title: string | null;
+  description: string | null;
+  dateText: string | null;
+  locationText: string | null;
+  url: string | null;
+}) {
+  if (!input.title) {
+    return null;
+  }
+
+  const parsedDates = input.dateText ? parseLooseDateFlexible(input.dateText) : null;
+  if (!parsedDates) {
+    return null;
+  }
+
+  const location = extractCityStateFromText(input.locationText ?? input.description ?? "");
+  const city = input.source.city ?? location.city;
+  const state = input.source.state?.toUpperCase() ?? location.state;
+  if (!city || !state) {
+    return null;
+  }
+
+  const normalizedUrl = input.url ? normalizeExternalUrl(input.url) : input.source.url;
+  const externalId = [
+    "public",
+    input.source.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    normalizedUrl ?? input.source.url,
+    input.title.trim().toLowerCase(),
+    parsedDates.startDate.toISOString().slice(0, 10),
+  ].join(":");
+
+  return {
+    externalId,
+    title: input.title,
+    description: input.description,
+    startDate: parsedDates.startDate,
+    endDate: parsedDates.endDate,
+    city,
+    state,
+    venueName: null,
+    venueAddress: null,
+    venueLat: null,
+    venueLng: null,
+    isFree: false,
+    admissionPrice: null,
+    websiteUrl: normalizedUrl,
+    facebookUrl: input.source.facebookUrl ?? null,
+    categories: inferCategories(input.title, input.description, input.source.categories),
+    organizerName: input.source.organizerName ?? "Beckett",
+    sourceUrl: input.source.url,
+  } satisfies ImportedShow;
+}
+
+function extractBeckettShowsFromHtml(html: string, source: PublicImportSource) {
+  const articlePattern =
+    /<(article|div)[^>]*class=["'][^"']*(?:post|event|item|entry|row|card)[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi;
+  const matches = html.matchAll(articlePattern);
+  const shows = new Map<string, ImportedShow>();
+
+  for (const match of matches) {
+    const blockHtml = match[2] ?? "";
+    const blockText = stripHtmlPreserveLines(blockHtml);
+    const compactText = normalizeWhitespace(blockText);
+    if (!/card|show|event|collect/i.test(compactText)) {
+      continue;
+    }
+
+    const linkMatch = blockHtml.match(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+    const title =
+      linkMatch?.[2] ? normalizeWhitespace(stripHtml(linkMatch[2])) : extractTitle(blockHtml) ?? null;
+    const dateText = compactText.match(DATE_RANGE_WITH_OPTIONAL_YEAR_PATTERN)?.[0] ?? null;
+    const locationLine =
+      blockText
+        .split("\n")
+        .map((line) => normalizeWhitespace(line))
+        .find((line) => Boolean(extractCityStateFromText(line).state)) ?? null;
+
+    const show = buildImportedShowFromBlock({
+      source,
+      title,
+      description: compactText.slice(0, 1000) || null,
+      dateText,
+      locationText: locationLine,
+      url: linkMatch?.[1] ? toAbsoluteUrl(source.url, decodeHtmlEntities(linkMatch[1])) : source.url,
+    });
+
+    if (show) {
+      shows.set(show.externalId, show);
+    }
+  }
+
+  return [...shows.values()];
+}
+
+function resolveSourceAdapter(source: PublicImportSource): SourceAdapter | null {
+  const text = `${source.name} ${source.url}`.toLowerCase();
+  if (text.includes("beckett")) {
+    return {
+      extractShows: extractBeckettShowsFromHtml,
+    };
+  }
+
+  return null;
+}
+
 function mapHeuristicShow(html: string, source: PublicImportSource): ImportedShow | null {
   const title = extractTitle(html);
-  const description = extractMetaContent(html, "description") ?? stripHtml(html).slice(0, 1000);
+  const text = stripHtmlPreserveLines(html);
+  const description = extractMetaContent(html, "description") ?? stripHtml(text).slice(0, 1000);
   if (!title || !isLikelyCardShow(title, description)) {
     return null;
   }
 
-  const parsedDates = parseLooseDate(stripHtml(html));
-  if (!parsedDates || !source.city || !source.state) {
+  const parsedDates = parseLooseDate(stripHtml(text));
+  const inferredLocation = extractCityStateFromText(text);
+  const city = source.city ?? inferredLocation.city;
+  const state = source.state?.toUpperCase() ?? inferredLocation.state;
+  if (!parsedDates || !city || !state) {
     return null;
   }
 
@@ -276,8 +457,8 @@ function mapHeuristicShow(html: string, source: PublicImportSource): ImportedSho
     description,
     startDate: parsedDates.startDate,
     endDate: parsedDates.endDate,
-    city: source.city,
-    state: source.state.toUpperCase(),
+    city,
+    state,
     venueName: null,
     venueAddress: null,
     venueLat: null,
@@ -292,7 +473,60 @@ function mapHeuristicShow(html: string, source: PublicImportSource): ImportedSho
   };
 }
 
+function toAbsoluteUrl(baseUrl: string, href: string) {
+  try {
+    return new URL(href, baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function isLikelyEventLink(url: URL, linkText: string) {
+  const text = `${url.pathname} ${url.search} ${linkText}`.toLowerCase();
+  return /card|show|event|calendar|schedule|convention|expo|collect/i.test(text);
+}
+
+export function extractCandidateEventUrls(html: string, source: PublicImportSource) {
+  const baseUrl = new URL(source.url);
+  const matches = html.matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  const urls = new Set<string>();
+
+  for (const match of matches) {
+    const href = match[1]?.trim();
+    if (!href) continue;
+
+    const absoluteUrl = toAbsoluteUrl(source.url, decodeHtmlEntities(href));
+    if (!absoluteUrl) continue;
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(absoluteUrl);
+    } catch {
+      continue;
+    }
+
+    if (parsedUrl.origin !== baseUrl.origin) continue;
+    if (parsedUrl.toString() === source.url) continue;
+    if (!/^https?:$/i.test(parsedUrl.protocol)) continue;
+
+    const linkText = stripHtml(match[2] ?? "");
+    if (!isLikelyEventLink(parsedUrl, linkText)) continue;
+
+    urls.add(parsedUrl.toString());
+    if (urls.size >= 12) {
+      break;
+    }
+  }
+
+  return [...urls];
+}
+
 export function extractShowsFromHtml(html: string, source: PublicImportSource): ImportedShow[] {
+  const adapterShows = resolveSourceAdapter(source)?.extractShows(html, source) ?? [];
+  if (adapterShows.length > 0) {
+    return adapterShows;
+  }
+
   const jsonLdShows = getJsonLdNodes(html)
     .filter((node) => isEventNode(node))
     .map((node) => mapJsonLdEvent(node, source, source.url))
@@ -325,6 +559,25 @@ async function fetchSourceHtml(source: PublicImportSource) {
   return readResponseTextLimited(response, 2 * 1024 * 1024);
 }
 
+async function crawlLinkedEventPages(source: PublicImportSource, sourceHtml: string) {
+  const candidateUrls = extractCandidateEventUrls(sourceHtml, source);
+  const collected = new Map<string, ImportedShow>();
+
+  for (const url of candidateUrls) {
+    try {
+      const html = await fetchSourceHtml({ ...source, url });
+      const shows = extractShowsFromHtml(html, { ...source, url });
+      for (const show of shows) {
+        collected.set(show.externalId, show);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return [...collected.values()];
+}
+
 export async function runPublicSourceImports() {
   const sources = await getAllPublicImportSources();
   const results: ImportSourceSummary[] = [];
@@ -332,7 +585,13 @@ export async function runPublicSourceImports() {
   for (const source of sources) {
     try {
       const html = await fetchSourceHtml(source);
-      const shows = extractShowsFromHtml(html, source);
+      const directShows = extractShowsFromHtml(html, source);
+      const linkedShows = await crawlLinkedEventPages(source, html);
+      const showMap = new Map<string, ImportedShow>();
+      for (const show of [...directShows, ...linkedShows]) {
+        showMap.set(show.externalId, show);
+      }
+      const shows = [...showMap.values()];
       const result = await ingestImportedShows({
         source: `public:${source.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
         label: source.name,
