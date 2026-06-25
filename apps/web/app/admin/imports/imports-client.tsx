@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { RunDatabasePullsButton } from "@/components/admin/run-database-pulls-button";
 import type { PublicImportSource } from "@/lib/auto-import-sources";
-import { createAutoImportSource, deleteAutoImportSource, triggerAutoImports, updateAutoImportSource } from "./actions";
+import { createAutoImportSource, deleteAutoImportSource, updateAutoImportSource } from "./actions";
 
 type SourceSummary = {
   key: string;
@@ -95,7 +96,6 @@ function Field({
 
 export function ImportsClient({ sources }: { sources: SourceData }) {
   const router = useRouter();
-  const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -108,20 +108,6 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
         .map((source) => [source.id as string, toEditableSource(source)])
     )
   );
-
-  async function triggerRun() {
-    setRunning(true);
-    setResult(null);
-    setError(null);
-    try {
-      const data = await triggerAutoImports();
-      setResult(data as RunResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRunning(false);
-    }
-  }
 
   async function handleCreateSource() {
     setSavingId("new");
@@ -187,13 +173,19 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
             as Pending for review before publishing.
           </p>
         </div>
-        <button
-          onClick={triggerRun}
-          disabled={running}
-          className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
-        >
-          {running ? "Running..." : "Run now"}
-        </button>
+        <div className="flex w-full justify-start sm:w-auto sm:justify-end">
+          <RunDatabasePullsButton
+            label="Run database pulls"
+            onComplete={(data) => {
+              setResult(data);
+              setError(null);
+            }}
+            onError={(message) => {
+              setError(message);
+            }}
+            className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+          />
+        </div>
       </div>
 
       <div className="mb-8 overflow-hidden rounded-xl border border-slate-200 bg-white">

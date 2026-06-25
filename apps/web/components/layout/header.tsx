@@ -10,14 +10,14 @@ export async function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="container-wide py-3">
-        <div className="flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Link href="/" className="flex items-center gap-3 self-start">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
               <MapPin className="h-4 w-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-base font-semibold leading-none text-slate-950">
+                <p className="text-sm font-semibold leading-tight text-slate-950 sm:text-base sm:leading-none">
                   Card Show Nation
                 </p>
                 {isFixtureMode() && (
@@ -32,10 +32,10 @@ export async function Header() {
             </div>
           </Link>
 
-          <nav className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+          <nav className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3">
             <Link
               href="/card-shows"
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 sm:flex-none"
             >
               <Search className="h-4 w-4" />
               <span className="hidden sm:inline">Browse Shows</span>
@@ -43,7 +43,7 @@ export async function Header() {
             </Link>
             <Link
               href={portalLink.href}
-              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800"
+              className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800 sm:flex-none"
             >
               <span className="hidden sm:inline">{portalLink.label}</span>
               <span className="sm:hidden">{portalLink.shortLabel}</span>
@@ -51,7 +51,7 @@ export async function Header() {
             {showGuestCta && (
               <Link
                 href="/account/signup"
-                className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100 sm:px-4"
+                className="inline-flex flex-1 items-center justify-center rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100 sm:flex-none sm:px-4"
               >
                 <span className="hidden sm:inline">Create Account</span>
                 <span className="sm:hidden">Create</span>
@@ -59,7 +59,7 @@ export async function Header() {
             )}
             <Link
               href="/submit-show"
-              className="inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+              className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:w-auto"
             >
               Submit a Show
             </Link>

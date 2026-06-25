@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { Check } from "lucide-react";
 import { SubmitShowFormSteps } from "@/components/submit/submit-show-form-steps";
 import { rethrowIfRedirectError } from "@/lib/next-control-flow";
 import { consumeRateLimit } from "@/lib/rate-limit";
@@ -254,15 +255,15 @@ export default async function SubmitShowPage({
         </p>
         <ul className="mt-5 grid gap-2 text-sm text-slate-700 sm:grid-cols-3">
           <li className="flex items-center gap-2">
-            <span aria-hidden className="text-brand-600">&check;</span>
+            <Check aria-hidden className="h-4 w-4 text-brand-600" />
             Free listing
           </li>
           <li className="flex items-center gap-2">
-            <span aria-hidden className="text-brand-600">&check;</span>
+            <Check aria-hidden className="h-4 w-4 text-brand-600" />
             Live within 24 hours
           </li>
           <li className="flex items-center gap-2">
-            <span aria-hidden className="text-brand-600">&check;</span>
+            <Check aria-hidden className="h-4 w-4 text-brand-600" />
             No account needed
           </li>
         </ul>
