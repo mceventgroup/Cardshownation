@@ -42,12 +42,12 @@ export function PromoterUploadForm() {
             </p>
           </div>
           <a
-            href="/promoter-show-upload-template.csv"
+            href="/show-upload-template.csv"
             download
             className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
           >
             <Download className="h-4 w-4" />
-            Download example CSV
+            Download CSV template
           </a>
         </div>
 
