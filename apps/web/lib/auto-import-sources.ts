@@ -155,9 +155,32 @@ export function validateAutoImportSourceInput(input: AutoImportSourceInput) {
 }
 
 export async function getDatabaseAutoImportSources() {
+  const autoImportSourceModel = (db as typeof db & {
+    autoImportSource?: {
+      findMany: (args: {
+        orderBy: Array<{ active: "desc" } | { createdAt: "asc" }>;
+      }) => Promise<Array<{
+        id: string;
+        name: string;
+        url: string;
+        city: string | null;
+        state: string | null;
+        organizerName: string | null;
+        categories: string[];
+        facebookUrl: string | null;
+        active: boolean;
+      }>>;
+    };
+  }).autoImportSource;
+
+  if (!autoImportSourceModel) {
+    console.warn("[auto-import] AutoImportSource model is unavailable; returning no managed sources.");
+    return [];
+  }
+
   let rows;
   try {
-    rows = await db.autoImportSource.findMany({
+    rows = await autoImportSourceModel.findMany({
       orderBy: [{ active: "desc" }, { createdAt: "asc" }],
     });
   } catch (error) {
