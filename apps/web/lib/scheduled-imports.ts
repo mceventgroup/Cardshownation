@@ -76,8 +76,18 @@ export async function runScheduledImportsForSource(selectedSource: string) {
   const results: ImportSourceSummary[] = [];
 
   if (selectedSource === "all" || selectedSource === "tcdb") {
-    const tcdbResult = await runTcdbImport();
-    results.push(tcdbResult);
+    try {
+      const tcdbResult = await runTcdbImport();
+      results.push(tcdbResult);
+    } catch (error) {
+      results.push({
+        source: "tcdb",
+        label: "Trading Card Database",
+        imported: 0,
+        skipped: 0,
+        errors: [error instanceof Error ? error.message : String(error)],
+      });
+    }
   }
 
   if (selectedSource === "all" || selectedSource === "eventbrite") {
