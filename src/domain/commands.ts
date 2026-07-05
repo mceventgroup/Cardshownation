@@ -326,6 +326,14 @@ export interface ResizeDoorCommand extends CommandBase {
   readonly nextWidth: number
 }
 
+/** Update editable door metadata such as label or type. */
+export interface UpdateDoorCommand extends CommandBase {
+  readonly type: 'UPDATE_DOOR'
+  readonly doorId: DoorId
+  readonly prev: Pick<Door, 'label' | 'kind'>
+  readonly next: Pick<Door, 'label' | 'kind'>
+}
+
 /** Delete a door. Stores full snapshot for undo. */
 export interface DeleteDoorCommand extends CommandBase {
   readonly type: 'DELETE_DOOR'
@@ -375,6 +383,7 @@ export type LayoutCommand =
   | PlaceDoorCommand
   | MoveDoorCommand
   | ResizeDoorCommand
+  | UpdateDoorCommand
   | DeleteDoorCommand
   | UpdateSettingsCommand
 

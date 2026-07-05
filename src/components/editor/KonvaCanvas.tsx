@@ -402,6 +402,7 @@ export default function KonvaCanvas() {
     updateSelectionState(null)
     const currentRoom = useEditorStore.getState().room
     const roomId = getRoomIdForPoint(currentRoom, canvasPos) ?? activeRoomId ?? getDefaultRoomId(currentRoom) ?? 'R1'
+    const targetRoomZone = getRoomZones(currentRoom).find(zone => zone.id === roomId) ?? null
     if (roomId !== activeRoomId) setActiveRoomId(roomId)
 
     const snapped = snapping.snapToGrid(canvasPos, settings.gridSize)
@@ -481,11 +482,38 @@ export default function KonvaCanvas() {
       )
     )
 
+    const fitStraightRowToRoomZone = (rowTables: ReturnType<typeof buildRowWithSpacing>['tables']) => {
+      if (!targetRoomZone || cfg.orientation === 'curved') return rowTables
+
+      const rowBounds = rowModule.getRowBounds(rowTables)
+      const minX = targetRoomZone.bounds.x + effectiveWallSetback
+      const minY = targetRoomZone.bounds.y + effectiveWallSetback
+      const maxX = targetRoomZone.bounds.x + targetRoomZone.bounds.width - effectiveWallSetback - rowBounds.width
+      const maxY = targetRoomZone.bounds.y + targetRoomZone.bounds.height - effectiveWallSetback - rowBounds.height
+
+      if (maxX < minX || maxY < minY) return rowTables
+
+      const nextX = Math.min(Math.max(rowBounds.x, minX), maxX)
+      const nextY = Math.min(Math.max(rowBounds.y, minY), maxY)
+      const shiftX = nextX - rowBounds.x
+      const shiftY = nextY - rowBounds.y
+
+      if (shiftX === 0 && shiftY === 0) return rowTables
+
+      return rowTables.map(table => ({
+        ...table,
+        x: table.x + shiftX,
+        y: table.y + shiftY,
+      }))
+    }
+
     let built = buildRowWithSpacing(cfg.spacing)
+    built = { ...built, tables: fitStraightRowToRoomZone(built.tables) }
     if (!rowFitsSetback(built.tables) && autoFitSpacing && cfg.orientation === 'curved') {
       const spacingStep = Math.max(1, settings.gridSize)
       for (let spacing = cfg.spacing - spacingStep; spacing >= 0; spacing -= spacingStep) {
         built = buildRowWithSpacing(spacing)
+        built = { ...built, tables: fitStraightRowToRoomZone(built.tables) }
         if (rowFitsSetback(built.tables)) break
       }
     }
@@ -621,7 +649,7 @@ export default function KonvaCanvas() {
   const placeDoorAt = useCallback((canvasPos: Point) => {
     const cfg = useEditorStore.getState().doorPlacementConfig
     const widthIn = cfg?.widthIn ?? 72
-    const kind = cfg?.kind ?? 'door'
+    const kind: DoorKind = 'door'
     const snap = computeDoorSnap(canvasPos, widthIn)
     if (!snap) return
     const existingCount = Object.values(useEditorStore.getState().doors).filter(door => door.kind === kind).length
@@ -629,7 +657,7 @@ export default function KonvaCanvas() {
       type: 'PLACE_DOOR',
       door: {
         id: createDoorId(),
-        label: kind === 'entrance' ? `Entrance ${existingCount + 1}` : `Door ${existingCount + 1}`,
+        label: `Door ${existingCount + 1}`,
         x: snap.x,
         y: snap.y,
         width: snap.width,
@@ -1189,7 +1217,7 @@ export default function KonvaCanvas() {
       const cfg = useEditorStore.getState().doorPlacementConfig
       const widthIn = cfg?.widthIn ?? 72
       const snap = computeDoorSnap(canvasPos, widthIn)
-      setDoorPlacementPreview(snap ? { ...snap, kind: cfg?.kind ?? 'door' } : null)
+      setDoorPlacementPreview(snap ? { ...snap, kind: 'door' } : null)
       return
     }
 

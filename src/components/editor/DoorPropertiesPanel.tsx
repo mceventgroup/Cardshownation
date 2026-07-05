@@ -7,8 +7,8 @@ import {
   selectRoom,
   selectSelectedDoorId,
 } from '@/store/index'
-import type { DoorId } from '@/domain/types'
-import { computeRoomBounds } from '@/domain/room-contour'
+import type { DoorId, DoorKind } from '@/domain/types'
+import { findBoundaryEdgeForDoor, getRoomBoundaryEdges } from '@/domain/room-contour'
 import { formatDimension } from '@/lib/units'
 
 export default function DoorPropertiesPanel() {
@@ -19,31 +19,36 @@ export default function DoorPropertiesPanel() {
   const setSelectedDoor = useEditorStore(s => s.setSelectedDoor)
 
   const door = selectedDoorId ? doors[selectedDoorId] : null
-  const bounds = room ? computeRoomBounds(room) : null
+  const boundaryEdge = room && door ? findBoundaryEdgeForDoor(door, getRoomBoundaryEdges(room)) : null
 
   // Local state for editing — in feet
+  const [label, setLabel] = useState('')
+  const [kind, setKind] = useState<DoorKind>('door')
   const [widthFt, setWidthFt] = useState(0)
   const [positionFt, setPositionFt] = useState(0)
 
   // Sync local state when selection changes
   useEffect(() => {
-    if (!door || !bounds) return
+    if (!door || !boundaryEdge) return
+    setLabel(door.label)
+    setKind(door.kind)
     setWidthFt(Math.round(door.width / 12 * 10) / 10)
-    // Position is distance from wall start to door start
     if (door.side === 'top' || door.side === 'bottom') {
-      setPositionFt(Math.round((door.x - bounds.x) / 12 * 10) / 10)
+      const wallStart = Math.min(boundaryEdge.x1, boundaryEdge.x2)
+      setPositionFt(Math.round((door.x - wallStart) / 12 * 10) / 10)
     } else {
-      setPositionFt(Math.round((door.y - bounds.y) / 12 * 10) / 10)
+      const wallStart = Math.min(boundaryEdge.y1, boundaryEdge.y2)
+      setPositionFt(Math.round((door.y - wallStart) / 12 * 10) / 10)
     }
-  }, [door, bounds])
+  }, [door, boundaryEdge])
 
-  if (!door || !bounds) return null
+  if (!door || !boundaryEdge) return null
 
   function applyChanges() {
-    if (!door || !bounds) return
+    if (!door || !boundaryEdge) return
     const wallLength = door.side === 'top' || door.side === 'bottom'
-      ? bounds.width
-      : bounds.height
+      ? Math.abs(boundaryEdge.x2 - boundaryEdge.x1)
+      : Math.abs(boundaryEdge.y2 - boundaryEdge.y1)
     const newWidth = Math.max(12, Math.min(wallLength, widthFt * 12))
     const newPos = Math.max(0, Math.min(wallLength - newWidth, positionFt * 12))
 
@@ -51,11 +56,11 @@ export default function DoorPropertiesPanel() {
     let newY = door.y
 
     if (door.side === 'top' || door.side === 'bottom') {
-      newX = bounds.x + newPos
-      newY = door.side === 'top' ? bounds.y : bounds.y + bounds.height
+      newX = Math.min(boundaryEdge.x1, boundaryEdge.x2) + newPos
+      newY = boundaryEdge.y1
     } else {
-      newX = door.side === 'left' ? bounds.x : bounds.x + bounds.width
-      newY = bounds.y + newPos
+      newX = boundaryEdge.x1
+      newY = Math.min(boundaryEdge.y1, boundaryEdge.y2) + newPos
     }
 
     if (newX !== door.x || newY !== door.y) {
@@ -78,12 +83,23 @@ export default function DoorPropertiesPanel() {
         timestamp: Date.now(),
       })
     }
+
+    const trimmedLabel = label.trim() || (kind === 'entrance' ? 'Entrance' : 'Door')
+    if (trimmedLabel !== door.label || kind !== door.kind) {
+      dispatch({
+        type: 'UPDATE_DOOR',
+        doorId: door.id as DoorId,
+        prev: { label: door.label, kind: door.kind },
+        next: { label: trimmedLabel, kind },
+        timestamp: Date.now(),
+      })
+    }
   }
 
   // Wall length for reference
   const wallLength = (door.side === 'top' || door.side === 'bottom')
-    ? bounds.width
-    : bounds.height
+    ? Math.abs(boundaryEdge.x2 - boundaryEdge.x1)
+    : Math.abs(boundaryEdge.y2 - boundaryEdge.y1)
 
   return (
     <div className="px-3 py-2 space-y-2 text-sm border-t border-gray-200">
@@ -98,6 +114,28 @@ export default function DoorPropertiesPanel() {
       </div>
 
       {/* Wall side */}
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-gray-500 w-16">Type</label>
+        <select
+          value={kind}
+          onChange={e => setKind(e.target.value as DoorKind)}
+          className="flex-1 px-1.5 py-1 border border-gray-300 rounded text-xs"
+        >
+          <option value="door">Door</option>
+          <option value="entrance">Entrance</option>
+        </select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-gray-500 w-16">Label</label>
+        <input
+          type="text"
+          value={label}
+          onChange={e => setLabel(e.target.value)}
+          className="flex-1 px-1.5 py-1 border border-gray-300 rounded text-xs"
+        />
+      </div>
+
       <div className="flex items-center gap-2">
         <label className="text-xs text-gray-500 w-16">Wall</label>
         <div className="flex-1 px-1.5 py-1 border border-gray-200 bg-gray-50 rounded text-xs text-gray-600 capitalize">

@@ -7,7 +7,7 @@ import type {
 import type {
   PlaceTableCommand, MoveTablesCommand, DeleteTablesCommand,
   AssignVendorCommand, ClearVendorAssignmentCommand, ApplyImportCommand,
-  PlaceDoorCommand, DeleteDoorCommand,
+  PlaceDoorCommand, DeleteDoorCommand, UpdateDoorCommand,
 } from '@/domain/commands'
 import { DEFAULT_SETTINGS } from '@/lib/defaults'
 
@@ -269,5 +269,26 @@ describe('Door commands', () => {
     reverseCommand(state, cmd)
     expect(state.doors['d1']).toBeDefined()
     expect(state.doors['d1'].label).toBe('Main')
+  })
+
+  it('updates then restores door metadata', () => {
+    const state = emptyState()
+    state.doors['d1'] = { ...door }
+
+    const cmd: UpdateDoorCommand = {
+      type: 'UPDATE_DOOR',
+      timestamp: ts,
+      doorId: 'd1' as DoorId,
+      prev: { label: 'Main', kind: 'door' },
+      next: { label: 'Entrance', kind: 'entrance' },
+    }
+
+    applyCommand(state, cmd)
+    expect(state.doors['d1'].label).toBe('Entrance')
+    expect(state.doors['d1'].kind).toBe('entrance')
+
+    reverseCommand(state, cmd)
+    expect(state.doors['d1'].label).toBe('Main')
+    expect(state.doors['d1'].kind).toBe('door')
   })
 })

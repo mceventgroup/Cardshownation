@@ -316,6 +316,15 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
       break
     }
 
+    case 'UPDATE_DOOR': {
+      const d = state.doors[command.doorId]
+      if (d) {
+        d.label = command.next.label
+        d.kind = command.next.kind
+      }
+      break
+    }
+
     case 'DELETE_DOOR': {
       delete state.doors[command.door.id]
       break
@@ -578,6 +587,15 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
     case 'RESIZE_DOOR': {
       const d = state.doors[command.doorId]
       if (d) d.width = command.prevWidth
+      break
+    }
+
+    case 'UPDATE_DOOR': {
+      const d = state.doors[command.doorId]
+      if (d) {
+        d.label = command.prev.label
+        d.kind = command.prev.kind
+      }
       break
     }
 

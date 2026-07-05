@@ -129,7 +129,7 @@ export interface EditorState {
   // ── Builder configs (read by canvas mouse handlers) ────────────────────
   tableBuilderConfig: { tableWidth: number; tableHeight: number } | null
   rowBuilderConfig: RowBuilderState | null
-  doorPlacementConfig: { widthIn: number; kind: 'door' | 'entrance' } | null
+  doorPlacementConfig: { widthIn: number } | null
 
   // ── Canvas actions ───────────────────────────────────────────────────────
   dispatch: (command: LayoutCommand) => void
@@ -156,7 +156,7 @@ export interface EditorState {
   // ── Builder config actions ─────────────────────────────────────────────
   setTableBuilderConfig: (config: { tableWidth: number; tableHeight: number } | null) => void
   setRowBuilderConfig: (config: RowBuilderState | null) => void
-  setDoorPlacementConfig: (config: { widthIn: number; kind: 'door' | 'entrance' } | null) => void
+  setDoorPlacementConfig: (config: { widthIn: number } | null) => void
 
   // ── Stage transform actions ──────────────────────────────────────────────
   setStageTransform: (scale: number, position: Point) => void

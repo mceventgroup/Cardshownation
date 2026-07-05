@@ -8,6 +8,7 @@ import {
   selectDoors,
   selectSettings,
   selectActiveTool,
+  selectSelectedDoorId,
 } from '@/store/index'
 import { formatDimension } from '@/lib/units'
 
@@ -16,24 +17,20 @@ export default function DoorsPanel() {
   const doors       = useEditorStore(selectDoors)
   const settings    = useEditorStore(selectSettings)
   const activeTool  = useEditorStore(selectActiveTool)
+  const selectedDoorId = useEditorStore(selectSelectedDoorId)
   const dispatch    = useEditorStore(s => s.dispatch)
   const setActiveTool = useEditorStore(s => s.setActiveTool)
   const setDoorPlacementConfig = useEditorStore(s => s.setDoorPlacementConfig)
+  const setSelectedDoor = useEditorStore(s => s.setSelectedDoor)
 
   const doorList = Object.values(doors)
 
   const [newDoorWidthFt, setNewDoorWidthFt] = useState(6)
-  const [newEntranceWidthFt, setNewEntranceWidthFt] = useState(8)
 
   const placing = activeTool === 'place-door'
 
   function handleStartPlacing() {
-    setDoorPlacementConfig({ widthIn: newDoorWidthFt * 12, kind: 'door' })
-    setActiveTool('place-door')
-  }
-
-  function handleStartPlacingEntrance() {
-    setDoorPlacementConfig({ widthIn: newEntranceWidthFt * 12, kind: 'entrance' })
+    setDoorPlacementConfig({ widthIn: newDoorWidthFt * 12 })
     setActiveTool('place-door')
   }
 
@@ -46,6 +43,9 @@ export default function DoorsPanel() {
     const door = doors[doorId]
     if (door) {
       dispatch({ type: 'DELETE_DOOR', door, timestamp: Date.now() })
+      if (selectedDoorId === doorId) {
+        setSelectedDoor(null)
+      }
     }
   }
 
@@ -117,27 +117,6 @@ export default function DoorsPanel() {
             </button>
           )}
         </div>
-        <div>
-          <div className="font-medium text-gray-700 mb-1">Add Entrance Marker</div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500">Width</label>
-            <input
-              type="number" min={2} max={30} value={newEntranceWidthFt}
-              onChange={e => setNewEntranceWidthFt(Number(e.target.value))}
-              disabled={placing}
-              className="w-14 px-1.5 py-1 border border-gray-300 rounded text-xs disabled:bg-gray-100"
-            />
-            <span className="text-xs text-gray-400">ft</span>
-          </div>
-          {!placing && (
-            <button
-              onClick={handleStartPlacingEntrance}
-              className="mt-1.5 w-full px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
-            >
-              Place Entrance
-            </button>
-          )}
-        </div>
         </>
       ) : (
         <div className="text-xs text-gray-400">Set a room first to add doors.</div>
@@ -149,19 +128,38 @@ export default function DoorsPanel() {
           <div className="font-medium text-gray-700 mb-1">Doors ({doorList.length})</div>
           <div className="space-y-1">
             {doorList.map(door => (
-              <div key={door.id} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1">
-                <div>
+              <div
+                key={door.id}
+                className={`flex items-center justify-between rounded px-2 py-1 ${
+                  selectedDoorId === door.id ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-gray-50'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedDoor(door.id)}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <span className="text-xs font-medium">{door.label}</span>
                   <span className="text-xs text-gray-400 ml-1.5">
                     {door.kind === 'entrance' ? 'entrance' : door.side} &middot; {formatDimension(door.width)}
                   </span>
-                </div>
-                <button
-                  onClick={() => handleDeleteDoor(door.id)}
-                  className="text-xs text-red-500 hover:text-red-700"
-                >
-                  Delete
                 </button>
+                <div className="ml-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDoor(door.id)}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    {selectedDoorId === door.id ? 'Selected' : 'Edit'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDoor(door.id)}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
