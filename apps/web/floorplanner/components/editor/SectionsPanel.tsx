@@ -125,7 +125,7 @@ export default function SectionsPanel() {
     dispatchRenumberChanges(
       'section',
       sectionId,
-      buildSectionRenumberChanges(tables, sections, sectionId, numberingDirection),
+      buildSectionRenumberChanges(tables, sections, sectionId, numberingDirection, room),
     )
   }
 

@@ -527,17 +527,36 @@ export function buildSectionRenumberChanges(
   sections: Record<string, Section>,
   sectionId: string,
   direction: TableNumberingDirection,
+  room: CompositeRoom | null = null,
 ): TableRenumberChange[] {
   const section = sections[sectionId]
   if (!section) return []
 
   const sectionTables = Object.values(tables).filter(table => table.sectionId === sectionId)
-  const ordered = sortTablesForRenumbering(sectionTables, direction, buildRectZoneFromTables(sectionTables))
   const prefix = getSectionPrefix(section.name)
+  const changes: TableRenumberChange[] = []
+  let nextTableNumber = 1
 
-  return ordered.map((table, index) =>
-    createRenumberChange(table, formatScopedDisplayId(prefix, index + 1), index + 1, false),
-  )
+  for (const bucket of getRoomBuckets(sectionTables, room)) {
+    const ordered = sortTablesForRenumbering(
+      bucket.tables,
+      direction,
+      bucket.zone ?? buildRectZoneFromTables(bucket.tables),
+    )
+    ordered.forEach(table => {
+      changes.push(
+        createRenumberChange(
+          table,
+          formatScopedDisplayId(prefix, nextTableNumber),
+          nextTableNumber,
+          false,
+        ),
+      )
+      nextTableNumber++
+    })
+  }
+
+  return changes
 }
 
 export function buildAllSectionRenumberChanges(
@@ -554,11 +573,26 @@ export function buildAllSectionRenumberChanges(
 
   for (const section of sectionList) {
     const sectionTables = allTables.filter(table => table.sectionId === section.id)
-    const ordered = sortTablesForRenumbering(sectionTables, direction, buildRectZoneFromTables(sectionTables))
     const prefix = getSectionPrefix(section.name)
-    ordered.forEach((table, index) => {
-      changes.push(createRenumberChange(table, formatScopedDisplayId(prefix, index + 1), index + 1, preserveLabelOverride))
-    })
+    let nextTableNumber = 1
+    for (const bucket of getRoomBuckets(sectionTables, room)) {
+      const ordered = sortTablesForRenumbering(
+        bucket.tables,
+        direction,
+        bucket.zone ?? buildRectZoneFromTables(bucket.tables),
+      )
+      ordered.forEach(table => {
+        changes.push(
+          createRenumberChange(
+            table,
+            formatScopedDisplayId(prefix, nextTableNumber),
+            nextTableNumber,
+            preserveLabelOverride,
+          ),
+        )
+        nextTableNumber++
+      })
+    }
   }
 
   const unsectioned = allTables.filter(table => !table.sectionId || !sectionIds.has(table.sectionId))
