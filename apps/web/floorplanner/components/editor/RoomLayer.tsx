@@ -4,6 +4,7 @@ import React, { memo, useMemo } from 'react'
 import { Group, Line, Rect } from 'react-konva/lib/ReactKonvaCore'
 import type { CompositeRoom, Door, Point, RoomSegmentId } from '@floorplanner/domain/types'
 import { computeRoomContour } from '@floorplanner/domain/room-contour'
+import { getRoomZones } from '@floorplanner/domain/room-numbering'
 
 interface RoomLayerProps {
   room: CompositeRoom | null
@@ -12,6 +13,7 @@ interface RoomLayerProps {
   wallThickness: number
   wallSetback: number
   showWallSetback: boolean
+  activeRoomId?: string | null
   selectedSegmentId?: RoomSegmentId | null
 }
 
@@ -22,9 +24,15 @@ const RoomLayer = memo(function RoomLayer({
   wallThickness,
   wallSetback,
   showWallSetback,
+  activeRoomId,
   selectedSegmentId,
 }: RoomLayerProps) {
   const contours = useMemo(() => (room ? computeRoomContour(room) : []), [room])
+  const roomZones = useMemo(() => getRoomZones(room), [room])
+  const activeRoomZone = useMemo(
+    () => roomZones.find(zone => zone.id === activeRoomId) ?? null,
+    [activeRoomId, roomZones],
+  )
 
   if (!room || contours.length === 0) return null
 
@@ -63,6 +71,18 @@ const RoomLayer = memo(function RoomLayer({
           contours={contours}
           wallThickness={wallThickness}
           wallSetback={wallSetback}
+        />
+      )}
+
+      {activeRoomZone && (
+        <Line
+          points={activeRoomZone.polygon.flatMap(point => [point.x, point.y])}
+          closed
+          stroke="#2563eb"
+          strokeWidth={3}
+          dash={[10, 6]}
+          opacity={0.85}
+          listening={false}
         />
       )}
 

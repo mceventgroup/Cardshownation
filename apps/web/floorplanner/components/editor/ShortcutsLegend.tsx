@@ -59,8 +59,10 @@ const SECTIONS = [
     title: 'Navigation',
     shortcuts: [
       { keys: 'Scroll', desc: 'Zoom in/out' },
+      { keys: 'H', desc: 'Toggle sticky hand-pan mode' },
       { keys: 'Space+Drag', desc: 'Pan canvas' },
       { keys: 'Middle Drag', desc: 'Pan canvas' },
+      { keys: 'Mini Map Click', desc: 'Jump view to that area' },
     ],
   },
 ]

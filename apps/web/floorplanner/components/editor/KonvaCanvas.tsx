@@ -54,7 +54,7 @@ import { isPointInRoom } from '@floorplanner/domain/room-contour'
 import { useWarnings } from '@floorplanner/hooks/useWarnings'
 import { warningsModule } from '@floorplanner/domain/warnings.impl'
 import type { WarningSeverity } from '@floorplanner/domain/warnings'
-import { getDefaultRoomId, getRoomIdForPoint, getRoomZones } from '@floorplanner/domain/room-numbering'
+import { getDefaultRoomId, getRoomIdForPoint, getRoomLabel, getRoomZones } from '@floorplanner/domain/room-numbering'
 import { applyRoomSplit, buildRoomSplitPreview, findRoomSegmentAtPoint } from '@floorplanner/domain/room-splitting'
 import { buildShowInventoryOptions, vendorHasInventory } from '@floorplanner/lib/show-inventory'
 
@@ -150,6 +150,7 @@ export default function KonvaCanvas() {
   const [hoveredTableId, setHoveredTableId] = useState<string | null>(null)
   const [controlsCollapsed, setControlsCollapsed] = useState(false)
   const [controlsPos, setControlsPos] = useState<Point>({ x: 16, y: 16 })
+  const [panLocked, setPanLocked] = useState(false)
   const controlsDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null)
   const [recentlyAssignedTableIds, setRecentlyAssignedTableIds] = useState<Set<string>>(new Set())
   const [assignmentHint, setAssignmentHint] = useState<string | null>(null)
@@ -185,6 +186,9 @@ export default function KonvaCanvas() {
       if (e.key === '0') {
         setStageScaleLocal(1)
         setStagePosLocal({ x: 0, y: 0 })
+      }
+      if (e.key.toLowerCase() === 'h') {
+        setPanLocked(prev => !prev)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -745,6 +749,37 @@ export default function KonvaCanvas() {
     setStageTransform(newScale, newPos)
   }, [stageScale, stagePos, setStageTransform])
 
+  const clampStagePosition = useCallback((nextPos: Point, scale: number) => {
+    const scaledCanvasWidth = settings.canvasWidth * scale
+    const scaledCanvasHeight = settings.canvasHeight * scale
+    const minX = Math.min(0, stageSize.width - scaledCanvasWidth)
+    const minY = Math.min(0, stageSize.height - scaledCanvasHeight)
+    const maxX = scaledCanvasWidth <= stageSize.width
+      ? (stageSize.width - scaledCanvasWidth) / 2
+      : 0
+    const maxY = scaledCanvasHeight <= stageSize.height
+      ? (stageSize.height - scaledCanvasHeight) / 2
+      : 0
+
+    return {
+      x: Math.min(maxX, Math.max(minX, nextPos.x)),
+      y: Math.min(maxY, Math.max(minY, nextPos.y)),
+    }
+  }, [settings.canvasHeight, settings.canvasWidth, stageSize.height, stageSize.width])
+
+  const setViewPosition = useCallback((nextPos: Point) => {
+    const clamped = clampStagePosition(nextPos, stageScale)
+    setStagePosLocal(clamped)
+    setStageTransform(stageScale, clamped)
+  }, [clampStagePosition, setStageTransform, stageScale])
+
+  const centerViewOnCanvasPoint = useCallback((canvasPoint: Point) => {
+    setViewPosition({
+      x: stageSize.width / 2 - canvasPoint.x * stageScale,
+      y: stageSize.height / 2 - canvasPoint.y * stageScale,
+    })
+  }, [setViewPosition, stageScale, stageSize.height, stageSize.width])
+
   // ── Mouse down ─────────────────────────────────────────────────────────────
 
   const handleMouseDown = useCallback((e: KonvaEventObject<MouseEvent>) => {
@@ -755,7 +790,7 @@ export default function KonvaCanvas() {
     if (!pointer) return
 
     // Middle mouse button or space+drag = pan
-    if (e.evt.button === 1 || spaceHeldRef.current) {
+    if (e.evt.button === 1 || spaceHeldRef.current || panLocked) {
       e.evt.preventDefault()
       isPanningRef.current = true
       panStartRef.current  = { pointer, stagePos }
@@ -784,11 +819,17 @@ export default function KonvaCanvas() {
     const target    = e.target
     const isTable   = target.hasName('table-rect')
     const tableId   = isTable ? (target.id() as string) : null
+    const clickedTable = tableId ? tables[tableId] ?? null : null
+    const interactionRoomId = clickedTable?.roomId ?? activeRoomId
     const currentVisibleTableIds = new Set<string>(
       Object.values(useEditorStore.getState().tables)
-        .filter(table => !activeRoomId || table.roomId === activeRoomId)
+        .filter(table => !interactionRoomId || table.roomId === interactionRoomId)
         .map(table => table.id),
     )
+
+    if (clickedTable?.roomId && clickedTable.roomId !== activeRoomId) {
+      setActiveRoomId(clickedTable.roomId)
+    }
 
     if (activeTool === 'place-table') {
       if (!isTable) {
@@ -905,6 +946,9 @@ export default function KonvaCanvas() {
       const clickedCircleId = findContainingCircleId(canvasPos)
       const zoneId = getRoomIdForPoint(room, canvasPos)
       if (zoneId) {
+        if (zoneId !== activeRoomId) {
+          setActiveRoomId(zoneId)
+        }
         const segmentIds = new Set(
           room.segments
             .filter(segment => getRoomIdForPoint(room, {
@@ -1012,7 +1056,7 @@ export default function KonvaCanvas() {
         currentY: canvasPos.y,
       })
     }
-  }, [activeRoomId, activeTool, assignmentMap, selectedIds, tables, settings, toCanvas, findContainingCircleId, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, placeDoorAt, dispatch, room, doorsRecord])
+  }, [activeRoomId, activeTool, assignmentMap, selectedIds, tables, settings, toCanvas, findContainingCircleId, setSelected, toggleSelected, clearSelected, setSelectedSegmentId, stagePos, placeTableAt, placeRowAt, placeDoorAt, dispatch, room, doorsRecord, panLocked, setActiveRoomId])
 
   // ── Mouse move ─────────────────────────────────────────────────────────────
 
@@ -1448,7 +1492,7 @@ export default function KonvaCanvas() {
 
   const cursorClass = isPanningRef.current
     ? 'canvas-panning'
-    : spaceHeldRef.current
+    : (spaceHeldRef.current || panLocked)
       ? 'canvas-pan'
       : (activeTool === 'place-table' || activeTool === 'place-row' || activeTool === 'place-door')
         ? 'canvas-place'
@@ -1642,6 +1686,25 @@ export default function KonvaCanvas() {
     }
     return { width, height, scale, viewport }
   }, [settings.canvasWidth, settings.canvasHeight, stagePos.x, stagePos.y, stageScale, stageSize.width, stageSize.height])
+  const roomZones = useMemo(() => getRoomZones(displayRoom), [displayRoom])
+  const activeRoomZone = useMemo(
+    () => roomZones.find(zone => zone.id === activeRoomId) ?? null,
+    [activeRoomId, roomZones],
+  )
+  const activeRoomLabel = useMemo(
+    () => (activeRoomId ? getRoomLabel(displayRoom, activeRoomId) : null),
+    [activeRoomId, displayRoom],
+  )
+
+  const handleMiniMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const miniX = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+    const miniY = Math.max(0, Math.min(rect.height, e.clientY - rect.top))
+    centerViewOnCanvasPoint({
+      x: miniX / miniMap.scale,
+      y: miniY / miniMap.scale,
+    })
+  }, [centerViewOnCanvasPoint, miniMap.scale])
 
   const handleVendorDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -1743,6 +1806,7 @@ export default function KonvaCanvas() {
             wallThickness={settings.wallThickness}
             wallSetback={settings.wallSetback}
             showWallSetback={settings.showWallSetback}
+            activeRoomId={activeRoomId}
             selectedSegmentId={selectedSegmentId}
           />
         </Layer>
@@ -1979,6 +2043,12 @@ export default function KonvaCanvas() {
                   <button onClick={() => zoomBy(1 / ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">-</button>
                   <button onClick={resetView} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">Reset</button>
                   <button
+                    onClick={() => setPanLocked(prev => !prev)}
+                    className={`rounded-xl px-3 py-2 text-xs font-semibold ${panLocked ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  >
+                    Hand {panLocked ? 'On' : 'Off'}
+                  </button>
+                  <button
                     onClick={() => setGridVisible(!gridVisible)}
                     className={`rounded-xl px-3 py-2 text-xs font-semibold ${gridVisible ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                   >
@@ -1986,8 +2056,13 @@ export default function KonvaCanvas() {
                   </button>
                 </div>
                 <div className="mt-2 text-xs text-slate-500">
-                  Pan with space + drag. Drag a box to multi-select. Drop vendors directly on tables to assign.
+                  Pan with space + drag, middle drag, or turn Hand on with `H`. Click the mini map to jump the view.
                 </div>
+                {activeRoomId && (
+                  <div className="mt-2 inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                    Active room: {activeRoomLabel ?? activeRoomId}
+                  </div>
+                )}
                 {assignmentHint && (
                   <div className="mt-2 rounded-xl bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700">
                     {assignmentHint}
@@ -1999,7 +2074,12 @@ export default function KonvaCanvas() {
 
           <div className="absolute right-4 top-4 z-20 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Mini Map</div>
-            <div className="relative overflow-hidden rounded-xl bg-slate-100" style={{ width: miniMap.width, height: miniMap.height }}>
+            <div
+              className="relative overflow-hidden rounded-xl bg-slate-100 cursor-pointer"
+              style={{ width: miniMap.width, height: miniMap.height }}
+              onPointerDown={handleMiniMapPointerDown}
+              title="Click to center the canvas here"
+            >
               {tableList.map(table => (
                 <div
                   key={`mini-${table.id}`}
@@ -2013,6 +2093,17 @@ export default function KonvaCanvas() {
                   }}
                 />
               ))}
+              {activeRoomZone && (
+                <div
+                  className="absolute rounded-md border-2 border-amber-500/90 bg-amber-400/10"
+                  style={{
+                    left: activeRoomZone.bounds.x * miniMap.scale,
+                    top: activeRoomZone.bounds.y * miniMap.scale,
+                    width: Math.max(4, activeRoomZone.bounds.width * miniMap.scale),
+                    height: Math.max(4, activeRoomZone.bounds.height * miniMap.scale),
+                  }}
+                />
+              )}
               <div
                 className="absolute rounded-md border-2 border-blue-500/90 bg-blue-500/10"
                 style={{

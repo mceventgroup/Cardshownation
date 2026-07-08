@@ -27,7 +27,7 @@ import {
 } from '@floorplanner/lib/persistence'
 import { getFloorplannerStorageNamespace } from '@floorplanner/lib/runtime'
 import { csvImportModule, expandTableNumbers } from '@floorplanner/domain/csv-import.impl'
-import { getDefaultRoomId, syncRoomFieldsForTables } from '@floorplanner/domain/room-numbering'
+import { getDefaultRoomId, getRoomZones, syncRoomFieldsForTables } from '@floorplanner/domain/room-numbering'
 import { createImportSessionId, createAssignmentId, createVendorId } from '@floorplanner/lib/id'
 import { applyCommand, reverseCommand } from './executor'
 
@@ -328,7 +328,7 @@ export const useEditorStore = create<EditorState>()(
         // Apply the command to document state
         applyCommand(state, command)
         state.tables = syncRoomFieldsForTables(state.tables, state.room, state.sections)
-        if (!state.activeRoomId || !Object.values(state.tables).some(table => table.roomId === state.activeRoomId)) {
+        if (!state.activeRoomId || !getRoomZones(state.room).some(zone => zone.id === state.activeRoomId)) {
           state.activeRoomId = getDefaultRoomId(state.room)
         }
 

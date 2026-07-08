@@ -5,6 +5,7 @@ import {
   selectSettings,
   selectSelectedSegmentId,
   selectActiveTool,
+  selectActiveRoomId,
 } from '@floorplanner/store/index'
 import type { CompositeRoom, RoomCircle, RoomSegment, RoomSegmentId } from '@floorplanner/domain/types'
 import { createRoomCircleId, createRoomSegmentId } from '@floorplanner/lib/id'
@@ -22,7 +23,9 @@ export default function RoomPanel() {
   const dispatch = useEditorStore(s => s.dispatch)
   const selectedSegmentId = useEditorStore(selectSelectedSegmentId)
   const activeTool = useEditorStore(selectActiveTool)
+  const activeRoomId = useEditorStore(selectActiveRoomId)
   const setActiveTool = useEditorStore(s => s.setActiveTool)
+  const setActiveRoomId = useEditorStore(s => s.setActiveRoomId)
 
   const [roomWidthFt, setRoomWidthFt] = useState(80)
   const [roomHeightFt, setRoomHeightFt] = useState(60)
@@ -88,6 +91,7 @@ export default function RoomPanel() {
         timestamp: Date.now(),
       })
     }
+
   }
 
   function handleAddSeparateRoom() {
@@ -124,6 +128,8 @@ export default function RoomPanel() {
         timestamp: Date.now(),
       })
     }
+
+    setActiveRoomId(`R${roomCount + 1}`)
   }
 
   function handleCreateFirstRoom() {
@@ -479,6 +485,17 @@ export default function RoomPanel() {
             {roomZones.map(zone => (
               <label key={zone.id} className="flex items-center gap-2">
                 <span className="w-12 text-xs text-gray-500">{zone.id}</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveRoomId(zone.id)}
+                  className={`rounded px-2 py-1 text-[11px] font-medium ${
+                    activeRoomId === zone.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {activeRoomId === zone.id ? 'Active' : 'Use'}
+                </button>
                 <input
                   type="text"
                   value={zone.label}
