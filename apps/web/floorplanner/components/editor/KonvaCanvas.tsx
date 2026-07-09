@@ -675,18 +675,9 @@ export default function KonvaCanvas() {
   const assignVendorToTableIds = useCallback((vendorId: string, tableIds: string[]) => {
     const state = useEditorStore.getState()
     const vendor = state.vendors[vendorId as import('@floorplanner/domain/types').VendorId]
-    const currentActiveRoomId = state.activeRoomId
-    const currentVisibleTableIds = new Set<string>(
-      Object.values(state.tables)
-        .filter(table => !currentActiveRoomId || table.roomId === currentActiveRoomId)
-        .map(table => table.id),
-    )
     if (!vendor || tableIds.length === 0) return
 
     const prioritizedTableIds = [...tableIds].sort((a, b) => {
-      const aVisible = currentVisibleTableIds.has(a) ? 1 : 0
-      const bVisible = currentVisibleTableIds.has(b) ? 1 : 0
-      if (aVisible !== bVisible) return bVisible - aVisible
       const aPremium = tables[a]?.premium ? 1 : 0
       const bPremium = tables[b]?.premium ? 1 : 0
       if (aPremium !== bPremium) return bPremium - aPremium
@@ -695,7 +686,7 @@ export default function KonvaCanvas() {
         undefined,
         { numeric: true },
       )
-    }).filter(tableId => currentVisibleTableIds.has(tableId))
+    }).filter(tableId => Boolean(state.tables[tableId]))
 
     for (const tableId of prioritizedTableIds) {
       const existing = Object.values(useEditorStore.getState().vendorAssignments).find(a => a.tableId === tableId)
@@ -820,12 +811,6 @@ export default function KonvaCanvas() {
     const isTable   = target.hasName('table-rect')
     const tableId   = isTable ? (target.id() as string) : null
     const clickedTable = tableId ? tables[tableId] ?? null : null
-    const interactionRoomId = clickedTable?.roomId ?? activeRoomId
-    const currentVisibleTableIds = new Set<string>(
-      Object.values(useEditorStore.getState().tables)
-        .filter(table => !interactionRoomId || table.roomId === interactionRoomId)
-        .map(table => table.id),
-    )
 
     if (clickedTable?.roomId && clickedTable.roomId !== activeRoomId) {
       setActiveRoomId(clickedTable.roomId)
@@ -889,7 +874,6 @@ export default function KonvaCanvas() {
 
     // ── Active vendor assignment: click table to assign ──────────────────
     if (activeVendorRef.current && isTable && tableId) {
-      if (!currentVisibleTableIds.has(tableId)) return
       const vid = activeVendorRef.current
       const vendor = useEditorStore.getState().vendors[vid]
       if (vendor) {
@@ -929,10 +913,10 @@ export default function KonvaCanvas() {
       return
     }
 
-    if (!activeVendorRef.current && isTable && tableId && currentVisibleTableIds.has(tableId) && !assignmentMap.has(tableId)) {
-      setAssignmentHint(`Select a vendor from the roster, then click open tables in ${activeRoomId ?? 'this room'} to assign.`)
+    if (!activeVendorRef.current && isTable && tableId && !assignmentMap.has(tableId)) {
+      setAssignmentHint('Select a vendor from the roster, then click any open table to assign.')
       window.setTimeout(() => setAssignmentHint(current =>
-        current === `Select a vendor from the roster, then click open tables in ${activeRoomId ?? 'this room'} to assign.` ? null : current,
+        current === 'Select a vendor from the roster, then click any open table to assign.' ? null : current,
       ), 1800)
     }
 
@@ -1719,12 +1703,11 @@ export default function KonvaCanvas() {
         canvasPos.y <= table.y + table.height,
       )
       if (!droppedTable) return
-      if (!activeRoomTableIds.has(droppedTable.id)) return
       const targetIds = selectedIds.has(droppedTable.id) && selectedIds.size > 0
-        ? [...selectedIds].filter(tableId => activeRoomTableIds.has(tableId))
+        ? [...selectedIds].filter(tableId => Boolean(tables[tableId]))
         : [droppedTable.id]
       assignVendorToTableIds(vendorId, targetIds)
-  }, [activeRoomTableIds, assignVendorToTableIds, selectedIds, showMode, tableList, toCanvas])
+  }, [assignVendorToTableIds, selectedIds, showMode, tableList, tables, toCanvas])
 
   const handleControlsDragStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('button')) return
