@@ -1004,17 +1004,17 @@ export function printVendorTableAssignments(
     .download-action { background: #2563eb; }
     .assignment-page { min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 24px; page-break-after: always; }
     .assignment-page:last-child { page-break-after: auto; }
-    .sheet { width: 100%; max-width: 850px; min-height: 1040px; border: 2px solid #111827; background: #fff; padding: 40px 44px; display: flex; flex-direction: column; }
-    .sheet-head { border-bottom: 1px solid #d1d5db; padding-bottom: 18px; }
+    .sheet { width: 100%; max-width: 850px; min-height: 1040px; background: #fff; padding: 32px 36px; display: flex; flex-direction: column; }
+    .sheet-head { padding-bottom: 14px; }
     .event-name { font-size: 28px; font-weight: 700; letter-spacing: 0.02em; }
-    .vendor-block { margin-top: 56px; }
-    .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.18em; color: #6b7280; }
+    .vendor-block { margin-top: 44px; }
+    .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.18em; color: #374151; }
     .vendor-name { margin-top: 10px; font-size: 34px; font-weight: 700; line-height: 1.08; }
-    .assignment-block { margin-top: 70px; border: 3px solid #111827; padding: 30px 26px; text-align: center; }
-    .assignment-value { margin-top: 16px; font-size: 72px; font-weight: 800; letter-spacing: 0.04em; line-height: 1; }
-    .footer-block { margin-top: auto; padding-top: 48px; border-top: 1px solid #d1d5db; }
-    .shows-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: #4b5563; }
-    .show-line { margin-top: 8px; font-size: 18px; }
+    .assignment-block { margin-top: 52px; padding: 20px 18px; text-align: center; }
+    .assignment-value { margin-top: 12px; font-size: 68px; font-weight: 700; letter-spacing: 0.03em; line-height: 1; }
+    .footer-block { margin-top: auto; padding-top: 36px; }
+    .shows-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: #374151; }
+    .show-line { margin-top: 6px; font-size: 18px; }
     .muted { color: #9ca3af; }
     @media print {
       .no-print { display: none !important; }
