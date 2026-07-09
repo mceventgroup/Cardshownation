@@ -82,6 +82,8 @@ const EXPORT_MIN_TABLE_WIDTH = 44
 const EXPORT_MIN_TABLE_HEIGHT = 28
 const ROOM_LABEL_HEIGHT = 28
 const ROOM_LABEL_OFFSET = 10
+const PNG_EXPORT_MAX_AREA_FOR_5X = 12_000_000
+const PNG_EXPORT_MAX_AREA_FOR_4X = 28_000_000
 const PNG_EXPORT_MAX_AREA_FOR_3X = 18_000_000
 const PNG_EXPORT_MAX_CANVAS_DIMENSION = 16_384
 const PNG_EXPORT_MAX_CANVAS_AREA = 268_000_000
@@ -1461,7 +1463,14 @@ async function downloadSvgAsPng(svg: string, width: number, height: number, file
 
   try {
     const image = await loadImage(url)
-    const preferredPixelRatio = width * height <= PNG_EXPORT_MAX_AREA_FOR_3X ? 3 : 2
+    const area = width * height
+    const preferredPixelRatio = area <= PNG_EXPORT_MAX_AREA_FOR_5X
+      ? 5
+      : area <= PNG_EXPORT_MAX_AREA_FOR_4X
+        ? 4
+        : area <= PNG_EXPORT_MAX_AREA_FOR_3X
+          ? 3
+          : 2
     const dimensionRatioLimit = Math.min(
       PNG_EXPORT_MAX_CANVAS_DIMENSION / Math.max(width, 1),
       PNG_EXPORT_MAX_CANVAS_DIMENSION / Math.max(height, 1),
