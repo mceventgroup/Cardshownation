@@ -10,7 +10,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "tsc --noEmit -p apps/web/tsconfig.json",
-    "test:web": "tsx --tsconfig apps/web/tsconfig.json --test apps/web/lib/moderation.test.ts apps/web/lib/flyers.test.ts apps/web/lib/users.test.ts apps/web/lib/email.test.ts apps/web/lib/security.test.ts",
+    "test:web": "tsx --tsconfig apps/web/tsconfig.json --test apps/web/lib/moderation.test.ts apps/web/lib/flyers.test.ts apps/web/lib/users.test.ts apps/web/lib/email.test.ts apps/web/lib/security.test.ts apps/web/floorplanner/lib/floorplan-detection.test.ts",
     "secrets:scan": "powershell -ExecutionPolicy Bypass -File ./scripts/scan-secrets.ps1",
     "db:generate": "turbo run db:generate",
     "db:push": "turbo run db:push",

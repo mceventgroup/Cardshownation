@@ -25,7 +25,11 @@ function isPrivateAddress(address: string) {
 export async function assertPublicHttpUrl(value: string) {
   const normalized = normalizeExternalUrl(value);
   if (!normalized) throw new Error("URL must use http or https.");
-  const hostname = new URL(normalized).hostname.toLowerCase();
+  const parsedHostname = new URL(normalized).hostname.toLowerCase();
+  const hostname =
+    parsedHostname.startsWith("[") && parsedHostname.endsWith("]")
+      ? parsedHostname.slice(1, -1)
+      : parsedHostname;
   if (!hostname || BLOCKED_HOSTS.has(hostname) || hostname.endsWith(".local") || hostname.endsWith(".internal")) {
     throw new Error("URL host is not allowed.");
   }

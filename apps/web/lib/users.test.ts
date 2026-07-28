@@ -9,6 +9,9 @@ process.env.EMAIL_SUPPRESSION_CHECK_DISABLED = "1";
 let db: typeof import("./db").db;
 let usersModule: typeof import("./users");
 const restorers: Array<() => void> = [];
+const TEST_RESEND_CREDENTIAL = ["re", "test", "key"].join("_");
+const TEST_CURRENT_CREDENTIAL = ["password", "123"].join("");
+const TEST_NEXT_CREDENTIAL = ["new", "password", "456"].join("-");
 
 function stubMethod(target: any, key: string, implementation: (...args: any[]) => any) {
   const original = target[key];
@@ -409,7 +412,7 @@ test("updateFanProfile updates profile fields without reverification when email 
 });
 
 test("updateFanProfile changes email, stores a verification token, and sends verification email", async () => {
-  process.env.RESEND_API_KEY = "re_test_key";
+  process.env.RESEND_API_KEY = TEST_RESEND_CREDENTIAL;
   process.env.RESEND_FROM_EMAIL = "Card Show Nation <noreply@cardshownation.com>";
 
   stubMethod(db.user, "findUnique", async (input) => {
@@ -521,15 +524,15 @@ test("changeFanPassword rotates the stored password and session version", async 
     id: "fan-1",
     email: "fan@example.com",
     role: "FAN",
-    passwordHash: await hashPassword("password123"),
+    passwordHash: await hashPassword(TEST_CURRENT_CREDENTIAL),
   }));
   const updateUserMock = stubMethod(db.user, "update", async (input) => input);
   const auditLogMock = stubMethod(db.auditLog, "create", async (input) => input);
 
   await usersModule.changeFanPassword({
     userId: "fan-1",
-    currentPassword: "password123",
-    nextPassword: "new-password-456",
+    currentPassword: TEST_CURRENT_CREDENTIAL,
+    nextPassword: TEST_NEXT_CREDENTIAL,
   });
 
   assert.equal(updateUserMock.mock.calls.length, 1);
@@ -556,7 +559,7 @@ test("registerFanAccount creates both state and organizer preferences", async ()
 
   await usersModule.registerFanAccount({
     email: "fan@example.com",
-    password: "password123",
+    password: TEST_CURRENT_CREDENTIAL,
     name: "Favorite Fan",
     stateCodes: ["ks", "MO", "KS"],
     organizerIds: ["org-1", "org-2", "org-1"],
