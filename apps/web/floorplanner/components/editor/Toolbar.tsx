@@ -8,9 +8,11 @@ import ImportModal from './ImportModal'
 import ExportModal from './ExportModal'
 import LayoutManagerModal from './LayoutManagerModal'
 import HelpCheatSheetModal from './HelpCheatSheetModal'
+import BackgroundImageModal from './BackgroundImageModal'
 
 const OPEN_HELP_EVENT = 'floorplanner:open-help'
 const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
+const OPEN_FLOORPLAN_IMPORT_EVENT = 'floorplanner:open-floorplan-import'
 
 interface MenuItem {
   label: string
@@ -31,6 +33,7 @@ function useMenuItems(
   openFilePicker: () => void,
   saveToCloud: () => void,
   saveToFile: () => void,
+  openFloorPlanImport: () => void,
   openExport: () => void,
   openHelp: () => void,
 ): Record<string, MenuItem[]> {
@@ -68,6 +71,10 @@ function useMenuItems(
       {
         label: 'Save to File...',
         action: saveToFile,
+      },
+      {
+        label: 'Set Up from PDF / Image...',
+        action: openFloorPlanImport,
       },
       { label: 'Export...', action: openExport },
     ],
@@ -126,6 +133,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
   const tables = useEditorStore(selectTables)
 
   const [showImport, setShowImport] = useState(false)
+  const [showFloorPlanImport, setShowFloorPlanImport] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showLayouts, setShowLayouts] = useState(false)
   const [layoutView, setLayoutView] = useState<'browser' | 'cloud'>('browser')
@@ -210,6 +218,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
     openFilePicker,
     saveToCloud,
     saveToFile,
+    () => { setShowFloorPlanImport(true); setOpenMenu(null) },
     () => { setShowExport(true); setOpenMenu(null) },
     openHelp,
   )
@@ -247,16 +256,25 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
       }, 0)
     }
 
+    function handleOpenFloorPlanImport() {
+      setOpenMenu(null)
+      window.setTimeout(() => {
+        setShowFloorPlanImport(true)
+      }, 0)
+    }
+
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('keydown', handleEscape)
     window.addEventListener(OPEN_HELP_EVENT, handleOpenHelp)
     window.addEventListener(OPEN_VENDOR_IMPORT_EVENT, handleOpenVendorImport)
+    window.addEventListener(OPEN_FLOORPLAN_IMPORT_EVENT, handleOpenFloorPlanImport)
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
       window.removeEventListener(OPEN_HELP_EVENT, handleOpenHelp)
       window.removeEventListener(OPEN_VENDOR_IMPORT_EVENT, handleOpenVendorImport)
+      window.removeEventListener(OPEN_FLOORPLAN_IMPORT_EVENT, handleOpenFloorPlanImport)
     }
   }, [openHelp])
 
@@ -429,6 +447,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
       )}
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showFloorPlanImport && <BackgroundImageModal onClose={() => setShowFloorPlanImport(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
       {showLayouts && <LayoutManagerModal initialView={layoutView} onClose={() => setShowLayouts(false)} />}
       {showHelp && <HelpCheatSheetModal onClose={() => setShowHelp(false)} />}

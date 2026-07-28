@@ -1,24 +1,20 @@
 'use client'
-// ─────────────────────────────────────────────────────────────────────────────
-// BACKGROUND IMAGE MODAL
-//
-// Upload one or more floor plan images to use as a reference layer behind
-// tables. Supports multiple images that can be positioned side-by-side
-// (e.g. two halves of a hotel ballroom).
-//
-// Flow:
-//   1. Upload images (file picker or drag-drop)
-//   2. Set positioning: side-by-side or stacked
-//   3. Adjust opacity and confirm
-// ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useRef, useCallback, useEffect } from 'react'
-import NextImage from 'next/image'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '@floorplanner/store/index'
-import { createBackgroundImageId } from '@floorplanner/lib/id'
-import type { BackgroundImage } from '@floorplanner/domain/types'
-// pdfjs-dist is loaded dynamically to avoid SSR issues
+import { createBackgroundImageId, createTableId } from '@floorplanner/lib/id'
+import { getNextLabelNumberForRoom } from '@floorplanner/lib/labels'
+import { getDefaultRoomId, getRoomIdForPoint } from '@floorplanner/domain/room-numbering'
+import type { BackgroundImage, TableObject } from '@floorplanner/domain/types'
+import {
+  detectTableRectangles,
+  medianLongSide,
+  type FloorplanRectangle,
+} from '@floorplanner/lib/floorplan-detection'
+import FloorplanPageReview from './FloorplanPageReview'
+
 let pdfjsReady: Promise<typeof import('pdfjs-dist')> | null = null
+
 function getPdfJs() {
   if (!pdfjsReady) {
     pdfjsReady = import('pdfjs-dist').then(lib => {
@@ -36,172 +32,322 @@ interface Props {
   onClose: () => void
 }
 
-type Arrangement = 'side-by-side' | 'stacked' | 'manual'
+type Arrangement = 'side-by-side' | 'stacked' | 'separate'
 
 interface PendingImage {
   name: string
   dataUrl: string
   naturalWidth: number
   naturalHeight: number
+  rectangles: FloorplanRectangle[]
 }
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB per file (PDFs can be larger)
+interface PageLayout {
+  image: PendingImage
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleX: number
+  scaleY: number
+}
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf']
+const PAGE_GAP = 24
+const PLAN_MARGIN = 24
 
 export default function BackgroundImageModal({ onClose }: Props) {
-  const addBackgroundImage = useEditorStore(s => s.addBackgroundImage)
-  const settings = useEditorStore(s => s.settings)
+  const addBackgroundImage = useEditorStore(state => state.addBackgroundImage)
+  const dispatch = useEditorStore(state => state.dispatch)
+  const setSelected = useEditorStore(state => state.setSelected)
+  const setActiveTool = useEditorStore(state => state.setActiveTool)
+  const settings = useEditorStore(state => state.settings)
 
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [arrangement, setArrangement] = useState<Arrangement>('side-by-side')
-  const [opacity, setOpacity] = useState(0.7)
+  const [opacity, setOpacity] = useState(0.45)
+  const [targetTableLength, setTargetTableLength] = useState(settings.defaultTableWidth)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
-  const dropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose])
+
+  const analyzeImage = useCallback(async (
+    image: Omit<PendingImage, 'rectangles'>,
+  ): Promise<PendingImage> => {
+    const rectangles = await detectRectanglesInDataUrl(
+      image.dataUrl,
+      image.naturalWidth,
+      image.naturalHeight,
+    )
+    return { ...image, rectangles }
   }, [])
 
   const processFiles = useCallback(async (files: FileList | File[]) => {
     setError('')
-    setLoading(true)
-    const results: PendingImage[] = []
+    setLoadingMessage('Reading floor plan...')
 
-    for (const file of Array.from(files)) {
-      // Allow PDF or common image types; also accept empty type for drag-drop PDFs
-      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-      if (!isPdf && !ALLOWED_TYPES.includes(file.type)) {
-        setError(`Unsupported file type: ${file.name}. Use PNG, JPEG, WebP, or PDF.`)
-        setLoading(false)
-        return
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        setError(`File too large: ${file.name}. Max 20 MB per file.`)
-        setLoading(false)
-        return
+    try {
+      const results: PendingImage[] = []
+
+      for (const file of Array.from(files)) {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+        if (!isPdf && !ALLOWED_TYPES.includes(file.type)) {
+          throw new Error(`Unsupported file type: ${file.name}. Use PNG, JPEG, WebP, or PDF.`)
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          throw new Error(`File too large: ${file.name}. Maximum size is 20 MB per file.`)
+        }
+
+        const renderedImages = isPdf
+          ? await renderPdfToImages(file)
+          : [await renderImageFile(file)]
+
+        for (const renderedImage of renderedImages) {
+          setLoadingMessage(`Finding table rectangles on ${renderedImage.name}...`)
+          results.push(await analyzeImage(renderedImage))
+        }
       }
 
-      if (isPdf) {
-        const pdfImages = await renderPdfToImages(file)
-        results.push(...pdfImages)
+      setPendingImages(current => [...current, ...results])
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The floor plan could not be read.')
+    } finally {
+      setLoadingMessage('')
+    }
+  }, [analyzeImage])
+
+  const resetDetection = useCallback(async (index: number) => {
+    const image = pendingImages[index]
+    if (!image) return
+    setError('')
+    setLoadingMessage(`Finding table rectangles on ${image.name}...`)
+    try {
+      const rectangles = await detectRectanglesInDataUrl(
+        image.dataUrl,
+        image.naturalWidth,
+        image.naturalHeight,
+      )
+      setPendingImages(current => current.map((entry, entryIndex) => (
+        entryIndex === index ? { ...entry, rectangles } : entry
+      )))
+    } catch {
+      setError('Automatic detection could not read this page. You can still trace the tables manually.')
+    } finally {
+      setLoadingMessage('')
+    }
+  }, [pendingImages])
+
+  function updateRectangles(index: number, rectangles: FloorplanRectangle[]) {
+    setPendingImages(current => current.map((entry, entryIndex) => (
+      entryIndex === index ? { ...entry, rectangles } : entry
+    )))
+  }
+
+  function removePage(index: number) {
+    setPendingImages(current => current.filter((_, entryIndex) => entryIndex !== index))
+  }
+
+  function buildPageLayouts(): PageLayout[] {
+    const allRectangles = pendingImages.flatMap(image => image.rectangles)
+    const typicalTableLength = medianLongSide(allRectangles)
+    const calibratedScale = typicalTableLength
+      ? Math.max(0.05, Math.min(20, targetTableLength / typicalTableLength))
+      : null
+
+    const baseSizes = pendingImages.map(image => {
+      if (calibratedScale) {
+        return {
+          image,
+          width: image.naturalWidth * calibratedScale,
+          height: image.naturalHeight * calibratedScale,
+        }
+      }
+
+      const fitScale = Math.min(
+        (settings.canvasWidth - PLAN_MARGIN * 2) / image.naturalWidth,
+        (settings.canvasHeight - PLAN_MARGIN * 2) / image.naturalHeight,
+        1,
+      )
+      return {
+        image,
+        width: image.naturalWidth * fitScale,
+        height: image.naturalHeight * fitScale,
+      }
+    })
+
+    let nextX = PLAN_MARGIN
+    let nextY = PLAN_MARGIN
+
+    return baseSizes.map((size, index) => {
+      const x = nextX
+      const y = nextY
+
+      if (arrangement === 'side-by-side') {
+        nextX += size.width + PAGE_GAP
+      } else if (arrangement === 'stacked') {
+        nextY += size.height + PAGE_GAP
       } else {
-        const rawDataUrl = await readFileAsDataUrl(file)
-        const { width, height } = await loadImageDimensions(rawDataUrl)
-        const dataUrl = await compressImage(rawDataUrl, width, height)
-        results.push({ name: file.name, dataUrl, naturalWidth: width, naturalHeight: height })
+        nextX = PLAN_MARGIN + (index + 1) * PAGE_GAP
+        nextY = PLAN_MARGIN + (index + 1) * PAGE_GAP
       }
-    }
 
-    setPendingImages(prev => [...prev, ...results])
-    setLoading(false)
-  }, [])
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files)
-    }
-  }, [processFiles])
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-  }, [])
-
-  function removePending(index: number) {
-    setPendingImages(prev => prev.filter((_, i) => i !== index))
+      return {
+        ...size,
+        x,
+        y,
+        scaleX: size.width / size.image.naturalWidth,
+        scaleY: size.height / size.image.naturalHeight,
+      }
+    })
   }
 
   function handleImport() {
     if (pendingImages.length === 0) return
 
-    // Compute positions based on arrangement
-    const canvasW = settings.canvasWidth
-    const canvasH = settings.canvasHeight
-    const existingCount = Object.keys(useEditorStore.getState().backgroundImages).length
+    const state = useEditorStore.getState()
+    const pageLayouts = buildPageLayouts()
+    const existingBackgroundCount = Object.keys(state.backgroundImages).length
+    const maxX = Math.max(...pageLayouts.map(page => page.x + page.width)) + PLAN_MARGIN
+    const maxY = Math.max(...pageLayouts.map(page => page.y + page.height)) + PLAN_MARGIN
 
-    let xOffset = 0
-    let yOffset = 0
+    if (maxX > settings.canvasWidth || maxY > settings.canvasHeight) {
+      dispatch({
+        type: 'UPDATE_SETTINGS',
+        prev: {
+          canvasWidth: settings.canvasWidth,
+          canvasHeight: settings.canvasHeight,
+        },
+        next: {
+          canvasWidth: Math.max(settings.canvasWidth, Math.ceil(maxX / 12) * 12),
+          canvasHeight: Math.max(settings.canvasHeight, Math.ceil(maxY / 12) * 12),
+        },
+        timestamp: Date.now(),
+      })
+    }
 
-    for (let i = 0; i < pendingImages.length; i++) {
-      const img = pendingImages[i]
-
-      // Scale image to fit within canvas while preserving aspect ratio
-      const aspect = img.naturalWidth / img.naturalHeight
-      let displayW: number
-      let displayH: number
-
-      if (arrangement === 'side-by-side' && pendingImages.length > 1) {
-        // Split canvas width among images
-        displayW = canvasW / pendingImages.length
-        displayH = displayW / aspect
-        xOffset = displayW * i
-        yOffset = 0
-      } else if (arrangement === 'stacked' && pendingImages.length > 1) {
-        // Stack vertically
-        displayH = canvasH / pendingImages.length
-        displayW = displayH * aspect
-        xOffset = 0
-        yOffset = displayH * i
-      } else {
-        // Manual or single image — fit to canvas
-        const scaleW = canvasW / img.naturalWidth
-        const scaleH = canvasH / img.naturalHeight
-        const scale = Math.min(scaleW, scaleH, 1)
-        displayW = img.naturalWidth * scale
-        displayH = img.naturalHeight * scale
-        xOffset = 0
-        yOffset = 0
-      }
-
-      const bgImage: BackgroundImage = {
+    pageLayouts.forEach((page, index) => {
+      const backgroundImage: BackgroundImage = {
         id: createBackgroundImageId(),
-        name: img.name,
-        dataUrl: img.dataUrl,
-        x: xOffset,
-        y: yOffset,
-        width: displayW,
-        height: displayH,
+        name: page.image.name,
+        dataUrl: page.image.dataUrl,
+        x: page.x,
+        y: page.y,
+        width: page.width,
+        height: page.height,
         opacity,
-        locked: false,
+        locked: true,
         visible: true,
-        order: existingCount + i,
+        order: existingBackgroundCount + index,
       }
-      addBackgroundImage(bgImage)
+      addBackgroundImage(backgroundImage)
+    })
+
+    const existingTables = state.tables
+    const currentRoom = state.room
+    const defaultRoomId = getDefaultRoomId(currentRoom) ?? 'R1'
+    const nextNumberByRoom = new Map<string, number>()
+    const importedTables: TableObject[] = []
+
+    for (const page of pageLayouts) {
+      const rectangles = [...page.image.rectangles].sort((a, b) => {
+        const rowTolerance = Math.max(4, Math.min(a.height, b.height) * 0.6)
+        return Math.abs(a.y - b.y) <= rowTolerance ? a.x - b.x : a.y - b.y
+      })
+
+      for (const rectangle of rectangles) {
+        const x = page.x + rectangle.x * page.scaleX
+        const y = page.y + rectangle.y * page.scaleY
+        const width = Math.max(6, rectangle.width * page.scaleX)
+        const height = Math.max(6, rectangle.height * page.scaleY)
+        const roomId = getRoomIdForPoint(currentRoom, {
+          x: x + width / 2,
+          y: y + height / 2,
+        }) ?? defaultRoomId
+        const nextNumber = nextNumberByRoom.get(roomId)
+          ?? getNextLabelNumberForRoom(existingTables, roomId)
+        nextNumberByRoom.set(roomId, nextNumber + 1)
+        const label = `${roomId}-${nextNumber}`
+
+        importedTables.push({
+          id: createTableId(),
+          roomId,
+          tableNumber: nextNumber,
+          displayId: label,
+          x,
+          y,
+          width,
+          height,
+          rotation: 0,
+          shape: 'rectangle',
+          label,
+          labelOverridden: false,
+          rowId: null,
+          sectionId: null,
+          order: importedTables.length,
+          premium: false,
+        })
+      }
+    }
+
+    if (importedTables.length > 0) {
+      dispatch({
+        type: 'PLACE_TABLES',
+        tables: importedTables,
+        timestamp: Date.now(),
+      })
+      setSelected(importedTables.map(table => table.id))
+      setActiveTool('select')
     }
 
     onClose()
   }
 
+  const selectedTableCount = pendingImages.reduce(
+    (total, image) => total + image.rectangles.length,
+    0,
+  )
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-2xl w-[560px] max-h-[80vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
+        className="flex max-h-[92vh] w-[960px] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={event => event.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
-          <h2 className="text-base font-semibold text-gray-800">Import Floor Plan Images</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Set Up Floor Plan from PDF</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              The app finds rectangular tables, then lets you correct the result before anything is added.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close floor plan import"
+            className="rounded-lg px-2 py-1 text-xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            &times;
+          </button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* Drop zone */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div
-            ref={dropRef}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
+            onDrop={event => {
+              event.preventDefault()
+              if (event.dataTransfer.files.length > 0) processFiles(event.dataTransfer.files)
+            }}
+            onDragOver={event => event.preventDefault()}
             onClick={() => fileRef.current?.click()}
+            className="cursor-pointer rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/60 px-5 py-5 text-center transition-colors hover:border-blue-500 hover:bg-blue-50"
           >
             <input
               ref={fileRef}
@@ -209,207 +355,281 @@ export default function BackgroundImageModal({ onClose }: Props) {
               accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"
               multiple
               className="hidden"
-              onChange={e => {
-                if (e.target.files?.length) processFiles(e.target.files)
-                e.target.value = ''
+              onChange={event => {
+                if (event.target.files?.length) processFiles(event.target.files)
+                event.target.value = ''
               }}
             />
-            <div className="text-gray-500 text-sm">
-              <p className="font-medium">Drop floor plan images or PDFs here</p>
-              <p className="text-xs text-gray-400 mt-1">or click to browse. PNG, JPEG, WebP, or PDF up to 20 MB each.</p>
-            </div>
+            <p className="text-sm font-semibold text-blue-900">Drop the hotel PDF here or click to choose it</p>
+            <p className="mt-1 text-xs text-blue-700">PDF, PNG, JPEG, or WebP up to 20 MB per file</p>
           </div>
 
-          {loading && <p className="text-sm text-blue-600">Loading image...</p>}
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          {/* Preview of pending images */}
-          {pendingImages.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                {pendingImages.length} image{pendingImages.length > 1 ? 's' : ''} ready
-              </p>
-              {pendingImages.map((img, i) => (
-                <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                  <NextImage
-                    src={img.dataUrl}
-                    alt={img.name}
-                    width={64}
-                    height={48}
-                    unoptimized
-                    className="w-16 h-12 object-cover rounded border border-gray-200"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">{img.name}</p>
-                    <p className="text-xs text-gray-400">{img.naturalWidth} x {img.naturalHeight} px</p>
-                  </div>
-                  <button
-                    onClick={() => removePending(i)}
-                    className="text-gray-400 hover:text-red-500 text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+          {loadingMessage && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+              {loadingMessage}
+            </div>
+          )}
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
             </div>
           )}
 
-          {/* Arrangement (only if >1 image) */}
-          {pendingImages.length > 1 && (
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-2">
-                Arrangement
-              </label>
-              <p className="text-xs text-gray-400 mb-2">
-                These images are connected in real life. Choose how to place them:
-              </p>
-              <div className="flex gap-2">
-                {([
-                  ['side-by-side', 'Side by Side (left-right)'],
-                  ['stacked', 'Stacked (top-bottom)'],
-                  ['manual', 'Separate (position later)'],
-                ] as [Arrangement, string][]).map(([val, label]) => (
-                  <button
-                    key={val}
-                    onClick={() => setArrangement(val)}
-                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
-                      arrangement === val
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {label}
-                  </button>
+          {pendingImages.length > 0 && (
+            <>
+              <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Known table length
+                  </label>
+                  <div className="mt-2 flex gap-2">
+                    {[
+                      [72, '6 ft'],
+                      [96, '8 ft'],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setTargetTableLength(value as number)}
+                        className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                          targetTableLength === value
+                            ? 'border-blue-500 bg-blue-600 text-white'
+                            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    This calibrates the PDF so one canvas unit equals one inch.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Background strength
+                  </label>
+                  <div className="mt-3 flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={0.9}
+                      step={0.05}
+                      value={opacity}
+                      onChange={event => setOpacity(Number(event.target.value))}
+                      className="min-w-0 flex-1"
+                    />
+                    <span className="w-10 text-right text-sm font-semibold text-slate-700">
+                      {Math.round(opacity * 100)}%
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    The imported plan is locked behind the editable tables.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Result
+                  </label>
+                  <p className="mt-2 text-2xl font-bold text-slate-900">{selectedTableCount}</p>
+                  <p className="text-xs text-slate-500">
+                    editable table{selectedTableCount === 1 ? '' : 's'} will be created
+                  </p>
+                </div>
+              </div>
+
+              {pendingImages.length > 1 && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Page arrangement
+                  </label>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    {([
+                      ['side-by-side', 'Side by Side'],
+                      ['stacked', 'Top to Bottom'],
+                      ['separate', 'Separate Pages'],
+                    ] as Array<[Arrangement, string]>).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setArrangement(value)}
+                        className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                          arrangement === value
+                            ? 'border-blue-500 bg-blue-50 text-blue-800'
+                            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {pendingImages.map((image, index) => (
+                  <FloorplanPageReview
+                    key={`${image.name}-${index}`}
+                    image={image}
+                    onChange={rectangles => updateRectangles(index, rectangles)}
+                    onResetDetection={() => resetDetection(index)}
+                    onRemovePage={() => removePage(index)}
+                  />
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Opacity slider */}
-          {pendingImages.length > 0 && (
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">
-                Opacity: {Math.round(opacity * 100)}%
-              </label>
-              <input
-                type="range"
-                min={0.05}
-                max={1}
-                step={0.05}
-                value={opacity}
-                onChange={e => setOpacity(parseFloat(e.target.value))}
-                className="w-full"
-              />
-              <p className="text-xs text-gray-400">
-                Lower opacity makes it easier to see tables on top of the image.
-              </p>
-            </div>
+            </>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 text-sm text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleImport}
-            disabled={pendingImages.length === 0}
-            className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            Import {pendingImages.length > 0 ? `${pendingImages.length} Image${pendingImages.length > 1 ? 's' : ''}` : ''}
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <p className="text-xs text-slate-500">
+            Green boxes were found automatically. Blue boxes were traced manually.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={pendingImages.length === 0 || Boolean(loadingMessage)}
+              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {selectedTableCount > 0
+                ? `Import Plan + ${selectedTableCount} Tables`
+                : 'Import Plan Only'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}.`))
     reader.readAsDataURL(file)
   })
 }
 
-function loadImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
-    img.onerror = () => reject(new Error('Failed to load image'))
-    img.src = dataUrl
+    const image = new window.Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Could not load the floor plan image.'))
+    image.src = dataUrl
   })
 }
 
-const PDF_RENDER_SCALE = 2 // Render PDF pages at 2x for clarity
-const MAX_DIM = 2048
-const JPEG_QUALITY = 0.7
+async function renderImageFile(file: File): Promise<Omit<PendingImage, 'rectangles'>> {
+  const rawDataUrl = await readFileAsDataUrl(file)
+  const image = await loadImage(rawDataUrl)
+  const dataUrl = await compressImage(rawDataUrl, image.naturalWidth, image.naturalHeight)
+  return {
+    name: file.name,
+    dataUrl,
+    naturalWidth: image.naturalWidth,
+    naturalHeight: image.naturalHeight,
+  }
+}
 
-/** Render all pages of a PDF file to images. */
-async function renderPdfToImages(file: File): Promise<PendingImage[]> {
+const PDF_RENDER_SCALE = 2
+const MAX_DIMENSION = 2400
+const JPEG_QUALITY = 0.82
+
+async function renderPdfToImages(file: File): Promise<Array<Omit<PendingImage, 'rectangles'>>> {
   const pdfjsLib = await getPdfJs()
   const arrayBuffer = await file.arrayBuffer()
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-  const results: PendingImage[] = []
+  const results: Array<Omit<PendingImage, 'rectangles'>> = []
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum)
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+    const page = await pdf.getPage(pageNumber)
     const viewport = page.getViewport({ scale: PDF_RENDER_SCALE })
-
     const canvas = document.createElement('canvas')
     canvas.width = viewport.width
     canvas.height = viewport.height
-    const ctx = canvas.getContext('2d')!
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('The browser could not render this PDF page.')
 
-    await page.render({ canvasContext: ctx, viewport }).promise
-
-    const natW = viewport.width
-    const natH = viewport.height
-    // Compress the rendered page
+    await page.render({ canvasContext: context, viewport }).promise
     const rawDataUrl = canvas.toDataURL('image/png')
-    const dataUrl = await compressImage(rawDataUrl, natW, natH)
+    const dataUrl = await compressImage(rawDataUrl, viewport.width, viewport.height)
 
-    const pageName = pdf.numPages > 1
-      ? `${file.name} (page ${pageNum})`
-      : file.name
-
-    results.push({ name: pageName, dataUrl, naturalWidth: natW, naturalHeight: natH })
+    results.push({
+      name: pdf.numPages > 1 ? `${file.name} - page ${pageNumber}` : file.name,
+      dataUrl,
+      naturalWidth: viewport.width,
+      naturalHeight: viewport.height,
+    })
   }
 
   return results
 }
 
-/** Resize image to fit within MAX_DIM and re-encode as JPEG to save localStorage space. */
-function compressImage(dataUrl: string, natW: number, natH: number): Promise<string> {
-  return new Promise((resolve) => {
-    // Skip compression if already small
-    if (natW <= MAX_DIM && natH <= MAX_DIM && dataUrl.length < 200_000) {
+async function detectRectanglesInDataUrl(
+  dataUrl: string,
+  naturalWidth: number,
+  naturalHeight: number,
+): Promise<FloorplanRectangle[]> {
+  const image = await loadImage(dataUrl)
+  const analysisScale = Math.min(1, 1400 / Math.max(image.naturalWidth, image.naturalHeight))
+  const width = Math.max(1, Math.round(image.naturalWidth * analysisScale))
+  const height = Math.max(1, Math.round(image.naturalHeight * analysisScale))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) return []
+  context.drawImage(image, 0, 0, width, height)
+  const detected = detectTableRectangles(context.getImageData(0, 0, width, height))
+  const scaleX = naturalWidth / width
+  const scaleY = naturalHeight / height
+
+  return detected.map(rectangle => ({
+    ...rectangle,
+    x: rectangle.x * scaleX,
+    y: rectangle.y * scaleY,
+    width: rectangle.width * scaleX,
+    height: rectangle.height * scaleY,
+  }))
+}
+
+function compressImage(dataUrl: string, naturalWidth: number, naturalHeight: number): Promise<string> {
+  return new Promise(resolve => {
+    if (naturalWidth <= MAX_DIMENSION && naturalHeight <= MAX_DIMENSION && dataUrl.length < 350_000) {
       resolve(dataUrl)
       return
     }
 
-    const img = new window.Image()
-    img.onload = () => {
-      const scale = Math.min(1, MAX_DIM / natW, MAX_DIM / natH)
-      const w = Math.round(natW * scale)
-      const h = Math.round(natH * scale)
+    const image = new window.Image()
+    image.onload = () => {
+      const scale = Math.min(1, MAX_DIMENSION / naturalWidth, MAX_DIMENSION / naturalHeight)
+      const width = Math.max(1, Math.round(naturalWidth * scale))
+      const height = Math.max(1, Math.round(naturalHeight * scale))
       const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0, w, h)
+      canvas.width = width
+      canvas.height = height
+      const context = canvas.getContext('2d')
+      if (!context) {
+        resolve(dataUrl)
+        return
+      }
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, width, height)
+      context.drawImage(image, 0, 0, width, height)
       resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY))
     }
-    img.onerror = () => resolve(dataUrl) // fallback to original
-    img.src = dataUrl
+    image.onerror = () => resolve(dataUrl)
+    image.src = dataUrl
   })
 }

@@ -58,6 +58,13 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
       break
     }
 
+    case 'PLACE_TABLES': {
+      for (const table of command.tables) {
+        state.tables[table.id] = { ...table }
+      }
+      break
+    }
+
     case 'MOVE_TABLES': {
       for (const m of command.moves) {
         const t = state.tables[m.tableId]
@@ -337,6 +344,13 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
   switch (command.type) {
     case 'PLACE_TABLE': {
       delete state.tables[command.table.id]
+      break
+    }
+
+    case 'PLACE_TABLES': {
+      for (const table of command.tables) {
+        delete state.tables[table.id]
+      }
       break
     }
 
