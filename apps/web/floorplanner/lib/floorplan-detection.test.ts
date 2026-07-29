@@ -1,7 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { detectTableRectangles, medianLongSide, type PixelImage } from './floorplan-detection'
+import {
+  detectTableRectangles,
+  medianLongSide,
+  orderFloorplanRectangles,
+  type FloorplanRectangle,
+  type PixelImage,
+} from './floorplan-detection'
 
 function createImage(width: number, height: number): PixelImage {
   const data = new Uint8ClampedArray(width * height * 4)
@@ -112,4 +118,33 @@ test('separates touching gray table cells by their shared dark borders', () => {
   assert.equal(rectangles.length, 10)
   assert.ok(rectangles.every(rectangle => rectangle.width >= 48 && rectangle.width <= 55))
   assert.ok(rectangles.every(rectangle => rectangle.height >= 20 && rectangle.height <= 26))
+})
+
+test('orders imported tables in stable visual rows before numbering', () => {
+  const rectangle = (
+    id: string,
+    x: number,
+    y: number,
+    rotation = 0,
+  ): FloorplanRectangle => ({
+    id,
+    x,
+    y,
+    width: 60,
+    height: 24,
+    rotation,
+    confidence: 1,
+    source: 'auto',
+  })
+  const rectangles = [
+    rectangle('bottom-right', 220, 150),
+    rectangle('top-right', 220, 50),
+    rectangle('bottom-left', 40, 150),
+    rectangle('top-left', 40, 50),
+  ]
+
+  assert.deepEqual(
+    orderFloorplanRectangles(rectangles).map(item => item.id),
+    ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+  )
 })
