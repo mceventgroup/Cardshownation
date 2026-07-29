@@ -494,3 +494,51 @@ export function medianLongSide(rectangles: ReadonlyArray<FloorplanRectangle>): n
   const middle = Math.floor(values.length / 2)
   return values.length % 2 === 0 ? (values[middle - 1] + values[middle]) / 2 : values[middle]
 }
+
+export function orderFloorplanRectangles(
+  rectangles: ReadonlyArray<FloorplanRectangle>,
+): FloorplanRectangle[] {
+  if (rectangles.length < 2) return [...rectangles]
+
+  const shortSides = rectangles
+    .map(rectangle => Math.min(rectangle.width, rectangle.height))
+    .filter(value => Number.isFinite(value) && value > 0)
+    .sort((a, b) => a - b)
+  const middle = Math.floor(shortSides.length / 2)
+  const typicalShortSide = shortSides.length % 2 === 0
+    ? (shortSides[middle - 1] + shortSides[middle]) / 2
+    : shortSides[middle]
+  const rowTolerance = Math.max(4, typicalShortSide * 0.7)
+
+  const positioned = rectangles.map((rectangle, originalIndex) => {
+    const radians = rectangle.rotation * Math.PI / 180
+    const halfWidth = rectangle.width / 2
+    const halfHeight = rectangle.height / 2
+    return {
+      rectangle,
+      originalIndex,
+      centerX: rectangle.x + Math.cos(radians) * halfWidth - Math.sin(radians) * halfHeight,
+      centerY: rectangle.y + Math.sin(radians) * halfWidth + Math.cos(radians) * halfHeight,
+    }
+  }).sort((a, b) => a.centerY - b.centerY || a.centerX - b.centerX || a.originalIndex - b.originalIndex)
+
+  const rows: Array<{
+    centerY: number
+    items: typeof positioned
+  }> = []
+
+  for (const item of positioned) {
+    const row = rows[rows.length - 1]
+    if (!row || Math.abs(item.centerY - row.centerY) > rowTolerance) {
+      rows.push({ centerY: item.centerY, items: [item] })
+      continue
+    }
+
+    row.items.push(item)
+    row.centerY = row.items.reduce((sum, entry) => sum + entry.centerY, 0) / row.items.length
+  }
+
+  return rows.flatMap(row => row.items
+    .sort((a, b) => a.centerX - b.centerX || a.centerY - b.centerY || a.originalIndex - b.originalIndex)
+    .map(item => item.rectangle))
+}

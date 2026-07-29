@@ -9,6 +9,7 @@ import type { BackgroundImage, TableObject } from '@floorplanner/domain/types'
 import {
   detectTableRectangles,
   medianLongSide,
+  orderFloorplanRectangles,
   type FloorplanRectangle,
 } from '@floorplanner/lib/floorplan-detection'
 import FloorplanPageReview from './FloorplanPageReview'
@@ -258,10 +259,7 @@ export default function BackgroundImageModal({ onClose }: Props) {
     const importedTables: TableObject[] = []
 
     for (const page of pageLayouts) {
-      const rectangles = [...page.image.rectangles].sort((a, b) => {
-        const rowTolerance = Math.max(4, Math.min(a.height, b.height) * 0.6)
-        return Math.abs(a.y - b.y) <= rowTolerance ? a.x - b.x : a.y - b.y
-      })
+      const rectangles = orderFloorplanRectangles(page.image.rectangles)
 
       for (const rectangle of rectangles) {
         const x = page.x + rectangle.x * page.scaleX
@@ -275,7 +273,7 @@ export default function BackgroundImageModal({ onClose }: Props) {
         const nextNumber = nextNumberByRoom.get(roomId)
           ?? getNextLabelNumberForRoom(existingTables, roomId)
         nextNumberByRoom.set(roomId, nextNumber + 1)
-        const label = `${roomId}-${nextNumber}`
+        const label = String(nextNumber)
 
         importedTables.push({
           id: createTableId(),
