@@ -16,6 +16,7 @@ import SectionsPanel from './SectionsPanel'
 import WarningsPanel from './WarningsPanel'
 import SettingsPanel from './SettingsPanel'
 import VendorQuickAdd from './VendorQuickAdd'
+import BackgroundImagePanel from './BackgroundImagePanel'
 
 const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
 
@@ -104,6 +105,7 @@ function WarningsBadge() {
 
 export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps) {
   const clearVendors = useEditorStore(s => s.clearVendors)
+  const hasImportedPlan = useEditorStore(s => Object.keys(s.backgroundImages).length > 0)
 
   return (
     <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-slate-200 bg-slate-50/95 backdrop-blur-sm">
@@ -136,6 +138,14 @@ export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps
               <ToolSelector />
               <ToolOptions />
             </CollapsibleSection>
+
+            {hasImportedPlan && (
+              <CollapsibleSection title="Imported Plan" panelId="background-images">
+                <div className="px-3 py-3">
+                  <BackgroundImagePanel />
+                </div>
+              </CollapsibleSection>
+            )}
 
             <CollapsibleSection title="Add Room" panelId="room">
               <RoomPanel />

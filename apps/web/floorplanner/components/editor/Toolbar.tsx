@@ -8,6 +8,7 @@ import ImportModal from './ImportModal'
 import ExportModal from './ExportModal'
 import LayoutManagerModal from './LayoutManagerModal'
 import HelpCheatSheetModal from './HelpCheatSheetModal'
+import BackgroundImageModal from './BackgroundImageModal'
 
 const OPEN_HELP_EVENT = 'floorplanner:open-help'
 const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
@@ -31,6 +32,7 @@ function useMenuItems(
   openFilePicker: () => void,
   saveToCloud: () => void,
   saveToFile: () => void,
+  openFloorPlanImport: () => void,
   openExport: () => void,
   openHelp: () => void,
 ): Record<string, MenuItem[]> {
@@ -68,6 +70,10 @@ function useMenuItems(
       {
         label: 'Save to File...',
         action: saveToFile,
+      },
+      {
+        label: 'Import Floor Plan...',
+        action: openFloorPlanImport,
       },
       { label: 'Export...', action: openExport },
     ],
@@ -126,6 +132,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
   const tables = useEditorStore(selectTables)
 
   const [showImport, setShowImport] = useState(false)
+  const [showFloorPlanImport, setShowFloorPlanImport] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showLayouts, setShowLayouts] = useState(false)
   const [layoutView, setLayoutView] = useState<'browser' | 'cloud'>('browser')
@@ -210,6 +217,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
     openFilePicker,
     saveToCloud,
     saveToFile,
+    () => { setShowFloorPlanImport(true); setOpenMenu(null) },
     () => { setShowExport(true); setOpenMenu(null) },
     openHelp,
   )
@@ -429,6 +437,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
       )}
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showFloorPlanImport && <BackgroundImageModal onClose={() => setShowFloorPlanImport(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
       {showLayouts && <LayoutManagerModal initialView={layoutView} onClose={() => setShowLayouts(false)} />}
       {showHelp && <HelpCheatSheetModal onClose={() => setShowHelp(false)} />}

@@ -63,6 +63,12 @@ export interface PlaceTableCommand extends CommandBase {
   readonly table: TableObject
 }
 
+/** Place multiple independent tables as one undoable floor-plan import step. */
+export interface PlaceTablesCommand extends CommandBase {
+  readonly type: 'PLACE_TABLES'
+  readonly tables: ReadonlyArray<TableObject>
+}
+
 /**
  * Move one or more tables. Stores prev and next position for each.
  * Multi-table drag is one undo step.
@@ -348,6 +354,7 @@ export interface UpdateSettingsCommand extends CommandBase {
 
 export type LayoutCommand =
   | PlaceTableCommand
+  | PlaceTablesCommand
   | MoveTablesCommand
   | ResizeTableCommand
   | RotateTablesCommand

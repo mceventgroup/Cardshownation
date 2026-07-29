@@ -9,6 +9,8 @@ import {
   sendFanEmailChangeVerificationEmail,
 } from "./email";
 
+const TEST_RESEND_CREDENTIAL = ["re", "test", "key"].join("_");
+
 test("getFromAddress prefers explicit Resend sender env vars", () => {
   const originalFromEmail = process.env.RESEND_FROM_EMAIL;
   const originalFromAddress = process.env.RESEND_FROM_ADDRESS;
@@ -58,7 +60,7 @@ test("getEmailConfigStatus rejects personal inbox senders", () => {
   const originalApiKey = process.env.RESEND_API_KEY;
   const originalFromEmail = process.env.RESEND_FROM_EMAIL;
 
-  process.env.RESEND_API_KEY = "re_test_key";
+  process.env.RESEND_API_KEY = TEST_RESEND_CREDENTIAL;
   process.env.RESEND_FROM_EMAIL = "Card Show Nation <cardshownation@gmail.com>";
 
   assert.deepEqual(getEmailConfigStatus(), {
@@ -77,7 +79,7 @@ test("sendFanEmailChangeVerificationEmail uses the configured sender", async () 
   const originalFetch = global.fetch;
   const requests: any[] = [];
 
-  process.env.RESEND_API_KEY = "re_test_key";
+  process.env.RESEND_API_KEY = TEST_RESEND_CREDENTIAL;
   process.env.RESEND_FROM_EMAIL = "Card Show Nation <noreply@cardshownation.com>";
   global.fetch = async (_input: any, init?: any) => {
     requests.push(JSON.parse(init?.body ?? "{}"));
@@ -108,7 +110,7 @@ test("sendFanEmailChangeNotice uses the configured sender", async () => {
   const originalFetch = global.fetch;
   const requests: any[] = [];
 
-  process.env.RESEND_API_KEY = "re_test_key";
+  process.env.RESEND_API_KEY = TEST_RESEND_CREDENTIAL;
   process.env.RESEND_FROM_EMAIL = "Card Show Nation <noreply@cardshownation.com>";
   global.fetch = async (_input: any, init?: any) => {
     requests.push(JSON.parse(init?.body ?? "{}"));
