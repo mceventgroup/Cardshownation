@@ -286,7 +286,7 @@ export default function BackgroundImageModal({ onClose }: Props) {
           y,
           width,
           height,
-          rotation: 0,
+          rotation: rectangle.rotation,
           shape: 'rectangle',
           label,
           labelOverridden: false,

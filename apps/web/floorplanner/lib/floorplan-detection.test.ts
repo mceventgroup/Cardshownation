@@ -38,6 +38,26 @@ function drawRectangle(
   }
 }
 
+function fillRectangle(
+  image: PixelImage,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: [number, number, number],
+): void {
+  for (let py = y; py < y + height; py++) {
+    for (let px = x; px < x + width; px++) {
+      if (px < 0 || py < 0 || px >= image.width || py >= image.height) continue
+      const offset = (py * image.width + px) * 4
+      image.data[offset] = color[0]
+      image.data[offset + 1] = color[1]
+      image.data[offset + 2] = color[2]
+      image.data[offset + 3] = 255
+    }
+  }
+}
+
 test('detects repeated table rectangles and ignores a large room outline', () => {
   const image = createImage(640, 420)
 
@@ -69,4 +89,27 @@ test('keeps the dominant repeated rectangle size when labels contain boxes', () 
 
   assert.equal(rectangles.length, 8)
   assert.equal(medianLongSide(rectangles), 68)
+})
+
+test('separates touching gray table cells by their shared dark borders', () => {
+  const image = createImage(520, 240)
+  const cellWidth = 52
+  const cellHeight = 24
+
+  for (let row = 0; row < 2; row++) {
+    for (let column = 0; column < 5; column++) {
+      const x = 45 + column * cellWidth
+      const y = 45 + row * 90
+      fillRectangle(image, x, y, cellWidth, cellHeight, [232, 236, 239])
+      drawRectangle(image, x, y, cellWidth + 1, cellHeight, 2)
+      // Simulate a dark printed table number inside the shaded cell.
+      fillRectangle(image, x + 24, y + 7, 4, 10, [20, 20, 20])
+    }
+  }
+
+  const rectangles = detectTableRectangles(image)
+
+  assert.equal(rectangles.length, 10)
+  assert.ok(rectangles.every(rectangle => rectangle.width >= 48 && rectangle.width <= 55))
+  assert.ok(rectangles.every(rectangle => rectangle.height >= 20 && rectangle.height <= 26))
 })

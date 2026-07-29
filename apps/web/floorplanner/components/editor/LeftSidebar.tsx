@@ -19,7 +19,6 @@ import VendorQuickAdd from './VendorQuickAdd'
 import BackgroundImagePanel from './BackgroundImagePanel'
 
 const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
-const OPEN_FLOORPLAN_IMPORT_EVENT = 'floorplanner:open-floorplan-import'
 
 interface LeftSidebarProps {
   activeTab: 'layout' | 'vendors' | 'settings'
@@ -136,18 +135,6 @@ export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps
         {activeTab === 'layout' && (
           <div className="space-y-0">
             <CollapsibleSection title="Tables" panelId="tools">
-              <div className="px-3 pt-3">
-                <button
-                  type="button"
-                  onClick={() => window.dispatchEvent(new Event(OPEN_FLOORPLAN_IMPORT_EVENT))}
-                  className="w-full rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-                >
-                  Set Up from PDF / Image
-                </button>
-                <p className="mt-1.5 text-xs text-slate-500">
-                  Find table rectangles automatically, then review or trace any that were missed.
-                </p>
-              </div>
               <ToolSelector />
               <ToolOptions />
             </CollapsibleSection>

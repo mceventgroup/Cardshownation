@@ -12,7 +12,6 @@ import BackgroundImageModal from './BackgroundImageModal'
 
 const OPEN_HELP_EVENT = 'floorplanner:open-help'
 const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
-const OPEN_FLOORPLAN_IMPORT_EVENT = 'floorplanner:open-floorplan-import'
 
 interface MenuItem {
   label: string
@@ -73,7 +72,7 @@ function useMenuItems(
         action: saveToFile,
       },
       {
-        label: 'Set Up from PDF / Image...',
+        label: 'Import Floor Plan...',
         action: openFloorPlanImport,
       },
       { label: 'Export...', action: openExport },
@@ -256,25 +255,16 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
       }, 0)
     }
 
-    function handleOpenFloorPlanImport() {
-      setOpenMenu(null)
-      window.setTimeout(() => {
-        setShowFloorPlanImport(true)
-      }, 0)
-    }
-
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('keydown', handleEscape)
     window.addEventListener(OPEN_HELP_EVENT, handleOpenHelp)
     window.addEventListener(OPEN_VENDOR_IMPORT_EVENT, handleOpenVendorImport)
-    window.addEventListener(OPEN_FLOORPLAN_IMPORT_EVENT, handleOpenFloorPlanImport)
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
       window.removeEventListener(OPEN_HELP_EVENT, handleOpenHelp)
       window.removeEventListener(OPEN_VENDOR_IMPORT_EVENT, handleOpenVendorImport)
-      window.removeEventListener(OPEN_FLOORPLAN_IMPORT_EVENT, handleOpenFloorPlanImport)
     }
   }, [openHelp])
 

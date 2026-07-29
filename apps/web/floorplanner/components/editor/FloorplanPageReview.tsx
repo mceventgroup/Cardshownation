@@ -25,7 +25,7 @@ interface DraftRectangle {
   currentY: number
 }
 
-function normalizeDraft(draft: DraftRectangle): Omit<FloorplanRectangle, 'id' | 'confidence' | 'source'> {
+function normalizeDraft(draft: DraftRectangle): Omit<FloorplanRectangle, 'id' | 'rotation' | 'confidence' | 'source'> {
   return {
     x: Math.min(draft.startX, draft.currentX),
     y: Math.min(draft.startY, draft.currentY),
@@ -83,6 +83,7 @@ export default function FloorplanPageReview({
       {
         ...rectangle,
         id: `manual-${Date.now()}-${nextManualId.current++}`,
+        rotation: 0,
         confidence: 1,
         source: 'manual',
       },
@@ -151,6 +152,7 @@ export default function FloorplanPageReview({
               fill={rectangle.source === 'manual' ? 'rgba(37, 99, 235, 0.24)' : 'rgba(16, 185, 129, 0.22)'}
               stroke={rectangle.source === 'manual' ? '#2563eb' : '#059669'}
               strokeWidth={Math.max(1.5, image.naturalWidth / 700)}
+              transform={`rotate(${rectangle.rotation} ${rectangle.x} ${rectangle.y})`}
               vectorEffect="non-scaling-stroke"
               className="cursor-pointer"
               onPointerDown={event => {
