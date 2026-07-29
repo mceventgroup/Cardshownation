@@ -495,6 +495,31 @@ export function medianLongSide(rectangles: ReadonlyArray<FloorplanRectangle>): n
   return values.length % 2 === 0 ? (values[middle - 1] + values[middle]) / 2 : values[middle]
 }
 
+export function getClickDropTableBounds(
+  rectangles: ReadonlyArray<FloorplanRectangle>,
+  point: { x: number; y: number },
+  imageWidth: number,
+  imageHeight: number,
+  vertical = false,
+): Pick<FloorplanRectangle, 'x' | 'y' | 'width' | 'height'> {
+  const detectedLongSide = medianLongSide(rectangles)
+  const longSide = Math.min(
+    Math.max(12, detectedLongSide ?? imageWidth * 0.06),
+    Math.max(1, imageWidth),
+    Math.max(1, imageHeight),
+  )
+  const shortSide = Math.max(4, longSide / 3)
+  const width = Math.min(vertical ? shortSide : longSide, imageWidth)
+  const height = Math.min(vertical ? longSide : shortSide, imageHeight)
+
+  return {
+    x: Math.max(0, Math.min(imageWidth - width, point.x - width / 2)),
+    y: Math.max(0, Math.min(imageHeight - height, point.y - height / 2)),
+    width,
+    height,
+  }
+}
+
 export function orderFloorplanRectangles(
   rectangles: ReadonlyArray<FloorplanRectangle>,
 ): FloorplanRectangle[] {

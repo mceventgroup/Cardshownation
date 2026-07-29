@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   detectTableRectangles,
+  getClickDropTableBounds,
   medianLongSide,
   orderFloorplanRectangles,
   type FloorplanRectangle,
@@ -146,5 +147,33 @@ test('orders imported tables in stable visual rows before numbering', () => {
   assert.deepEqual(
     orderFloorplanRectangles(rectangles).map(item => item.id),
     ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+  )
+})
+
+test('creates centered 6 by 2 click-drop table bounds from the detected scale', () => {
+  const detected: FloorplanRectangle[] = [
+    {
+      id: 'detected',
+      x: 20,
+      y: 20,
+      width: 60,
+      height: 20,
+      rotation: 0,
+      confidence: 1,
+      source: 'auto',
+    },
+  ]
+
+  assert.deepEqual(
+    getClickDropTableBounds(detected, { x: 100, y: 80 }, 300, 200),
+    { x: 70, y: 70, width: 60, height: 20 },
+  )
+  assert.deepEqual(
+    getClickDropTableBounds(detected, { x: 100, y: 80 }, 300, 200, true),
+    { x: 90, y: 50, width: 20, height: 60 },
+  )
+  assert.deepEqual(
+    getClickDropTableBounds(detected, { x: 2, y: 3 }, 300, 200),
+    { x: 0, y: 0, width: 60, height: 20 },
   )
 })
