@@ -1,7 +1,10 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import type { FloorplanRectangle } from '@floorplanner/lib/floorplan-detection'
+import {
+  getClickDropTableBounds,
+  type FloorplanRectangle,
+} from '@floorplanner/lib/floorplan-detection'
 
 interface ReviewImage {
   name: string
@@ -72,16 +75,30 @@ export default function FloorplanPageReview({
   function finishTrace(event: React.PointerEvent<SVGSVGElement>) {
     if (!draft) return
     const point = pointFromEvent(event)
-    const rectangle = normalizeDraft({ ...draft, currentX: point.x, currentY: point.y })
+    const completedDraft = { ...draft, currentX: point.x, currentY: point.y }
+    const rectangle = normalizeDraft(completedDraft)
     setDraft(null)
 
     const minimumSide = Math.max(4, Math.min(image.naturalWidth, image.naturalHeight) * 0.003)
-    if (rectangle.width < minimumSide || rectangle.height < minimumSide) return
+    const pointerTravel = Math.hypot(
+      completedDraft.currentX - completedDraft.startX,
+      completedDraft.currentY - completedDraft.startY,
+    )
+    const bounds = pointerTravel < minimumSide * 2
+      ? getClickDropTableBounds(
+        image.rectangles,
+        point,
+        image.naturalWidth,
+        image.naturalHeight,
+        event.shiftKey,
+      )
+      : rectangle
+    if (bounds.width < minimumSide || bounds.height < minimumSide) return
 
     onChange([
       ...image.rectangles,
       {
-        ...rectangle,
+        ...bounds,
         id: `manual-${Date.now()}-${nextManualId.current++}`,
         rotation: 0,
         confidence: 1,
@@ -101,7 +118,7 @@ export default function FloorplanPageReview({
           <p className="truncate text-sm font-semibold text-slate-800">{image.name}</p>
           <p className="text-xs text-slate-500">
             {image.rectangles.length} table{image.rectangles.length === 1 ? '' : 's'} selected
-            {manualCount > 0 ? ` (${manualCount} traced manually)` : ''}
+            {manualCount > 0 ? ` (${manualCount} added manually)` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -180,7 +197,7 @@ export default function FloorplanPageReview({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-3 py-2 text-xs text-slate-500">
-        <span>Drag around a missed table to add it. Click a green or blue highlight to remove it.</span>
+        <span>Click to drop a 6 ft × 24 in table. Shift-click for vertical. Drag for a custom size.</span>
         <span>{automaticCount} found automatically</span>
       </div>
     </section>
