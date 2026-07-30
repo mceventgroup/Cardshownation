@@ -20,6 +20,7 @@ import {
   revokeModeratorAccessByAdmin,
   sendPasswordResetByAdmin,
 } from "@/lib/users";
+import { isFloorplannerSubscriptionActive } from "@/lib/floorplanner-access";
 import type { UserRole } from "@csn/db";
 
 type SearchParams = {
@@ -818,6 +819,11 @@ export default async function AdminUsersPage({
                         {account.organizer?.verified && (
                           <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
                             Verified promoter
+                          </span>
+                        )}
+                        {isFloorplannerSubscriptionActive(account.floorplannerSubscription) && (
+                          <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-700">
+                            Paid floor planner
                           </span>
                         )}
                       </div>

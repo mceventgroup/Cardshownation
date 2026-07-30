@@ -11,8 +11,8 @@ import {
   listCloudLayouts,
   upsertCloudLayout,
 } from "@floorplanner/lib/server/cloud-layout-store";
-import { authorizeCloudRequest, isCloudAuthConfigured } from "@floorplanner/lib/server/cloud-auth";
-import { getFloorplannerOperatorSession } from "@/lib/floorplanner-operator-auth";
+import { authorizeCloudRequest, isCloudSessionConfigured } from "@floorplanner/lib/server/cloud-auth";
+import { getFloorplannerWorkspaceSession } from "@/lib/floorplanner-workspace-auth";
 
 function unavailableResponse(message: string) {
   return NextResponse.json({ error: message }, { status: 503 });
@@ -27,11 +27,11 @@ function unauthorizedResponse() {
 }
 
 function isStandaloneCloudConfigured() {
-  return isCloudAuthConfigured() && isCloudSaveConfigured();
+  return isCloudSessionConfigured() && isCloudSaveConfigured();
 }
 
 export async function GET(request: NextRequest) {
-  const session = await getFloorplannerOperatorSession();
+  const session = await getFloorplannerWorkspaceSession();
   if (!session) {
     return unauthorizedResponse();
   }
@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
     const layouts = await listCloudLayouts({
       userId: session.user.id,
       role: session.role,
+      maxCloudProjects: session.maxCloudProjects,
     });
     return NextResponse.json({ layouts });
   } catch {
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getFloorplannerOperatorSession();
+  const session = await getFloorplannerWorkspaceSession();
   if (!session) {
     return unauthorizedResponse();
   }
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
       owner: {
         userId: session.user.id,
         role: session.role,
+        maxCloudProjects: session.maxCloudProjects,
       },
       expectedRevision:
         typeof body.expectedRevision === "number" ? body.expectedRevision : null,

@@ -13,6 +13,7 @@ import {
   startUserSession,
 } from "@/lib/user-auth";
 import { sanitizeLocalRedirectTarget } from "@/lib/url";
+import { GoogleSignInLink } from "@/components/auth/google-sign-in-link";
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_BLOCK_MS = 30 * 60 * 1000;
@@ -105,8 +106,10 @@ export default async function UserLoginPage({
         ? "Too many attempts. Wait 30 minutes and try again."
         : sp.error === "invalid"
           ? "Email or password did not match this account."
-          : sp.error === "unverified"
+      : sp.error === "unverified"
             ? "Please verify your email before logging in. Check your inbox for the verification link."
+          : sp.error?.startsWith("google-")
+            ? "Google sign-in could not be completed. Use the main login page for details."
           : null;
 
   return (
@@ -142,7 +145,9 @@ export default async function UserLoginPage({
           </p>
         )}
 
-        <form action={handleLogin} className="mt-8 space-y-5">
+        <GoogleSignInLink from={from} />
+
+        <form action={handleLogin} className="space-y-5">
           <input type="hidden" name="from" value={from} />
 
           <div>
@@ -179,6 +184,12 @@ export default async function UserLoginPage({
             Log in
           </button>
         </form>
+
+        {sp.error === "unverified" && (
+          <Link href="/account/resend-verification" className="mt-4 inline-flex text-sm font-semibold text-brand-700 hover:text-brand-800">
+            Send a new verification link
+          </Link>
+        )}
 
         <p className="mt-6 text-sm text-slate-600">
           <Link href="/account/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">

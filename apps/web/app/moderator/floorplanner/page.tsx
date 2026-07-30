@@ -7,15 +7,11 @@ export const dynamic = "force-dynamic";
 export default async function ModeratorFloorplannerPage() {
   await requireModeratorSession("/moderator/floorplanner");
   const hasDatabaseUrl = Boolean(process.env.DATABASE_URL?.trim());
-  const hasCloudPassword = Boolean(
-    process.env.FLOORPLANNER_ADMIN_PASSWORD?.trim() ||
-      process.env.FLOORPLANNER_SAVE_KEY?.trim(),
-  );
-  const hasCloudSessionSecret = Boolean(process.env.FLOORPLANNER_SESSION_SECRET?.trim());
-  const cloudReady = hasDatabaseUrl && hasCloudPassword && hasCloudSessionSecret;
+  const hasCloudSessionSecret =
+    (process.env.FLOORPLANNER_SESSION_SECRET?.trim().length ?? 0) >= 32;
+  const cloudReady = hasDatabaseUrl && hasCloudSessionSecret;
   const missingEnvVars = [
     !hasDatabaseUrl ? "DATABASE_URL" : null,
-    !hasCloudPassword ? "FLOORPLANNER_ADMIN_PASSWORD" : null,
     !hasCloudSessionSecret ? "FLOORPLANNER_SESSION_SECRET" : null,
   ].filter((value): value is string => Boolean(value));
 

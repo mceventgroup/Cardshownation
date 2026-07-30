@@ -11,6 +11,7 @@ import { createPasswordResetToken } from "@/lib/password-reset-token";
 import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from "@/lib/passwords";
 import { US_STATES } from "@/lib/states";
 import { hashOpaqueToken } from "@/lib/token-hash";
+import { isFloorplannerSubscriptionTerminal } from "@/lib/floorplanner-access";
 import type { Prisma, UserRole } from "@csn/db";
 
 type RegisterFanInput = {
@@ -559,6 +560,13 @@ export async function listManageableAccounts() {
           verified: true,
         },
       },
+      floorplannerSubscription: {
+        select: {
+          status: true,
+          cancelAtPeriodEnd: true,
+          currentPeriodEnd: true,
+        },
+      },
       _count: {
         select: {
           moderatedSubmissions: true,
@@ -881,6 +889,13 @@ export async function revokeModeratorAccessByAdmin(input: AdminModeratorActionIn
 export async function assignModeratorAccessByAdmin(input: AdminUserActionInput) {
   const user = await db.user.findUnique({
     where: { id: input.userId },
+    include: {
+      floorplannerSubscription: {
+        select: {
+          status: true,
+        },
+      },
+    },
   });
 
   if (!user) {
@@ -890,13 +905,25 @@ export async function assignModeratorAccessByAdmin(input: AdminUserActionInput) 
   if (user.role === "ADMIN" || user.role === "ORGANIZER") {
     throw new Error("That account type cannot be converted to moderator.");
   }
+  if (
+    user.floorplannerSubscription &&
+    !isFloorplannerSubscriptionTerminal(user.floorplannerSubscription.status)
+  ) {
+    throw new Error(
+      "Cancel this user's floor-planner subscription before assigning a staff role.",
+    );
+  }
 
   let updatedUser = user;
   if (user.role !== "MODERATOR") {
-    updatedUser = await db.user.update({
+    const roleUpdatedUser = await db.user.update({
       where: { id: user.id },
       data: { role: "MODERATOR" },
     });
+    updatedUser = {
+      ...roleUpdatedUser,
+      floorplannerSubscription: user.floorplannerSubscription,
+    };
   }
 
   await writeAuditLog({
@@ -950,6 +977,11 @@ export async function deleteUserAccountByAdmin(input: AdminUserActionInput) {
           id: true,
         },
       },
+      floorplannerSubscription: {
+        select: {
+          status: true,
+        },
+      },
     },
   });
 
@@ -959,6 +991,14 @@ export async function deleteUserAccountByAdmin(input: AdminUserActionInput) {
 
   if (user.role === "ADMIN") {
     throw new Error("Admin accounts cannot be deleted here.");
+  }
+  if (
+    user.floorplannerSubscription &&
+    !isFloorplannerSubscriptionTerminal(user.floorplannerSubscription.status)
+  ) {
+    throw new Error(
+      "Cancel this user's floor-planner subscription before deleting the account.",
+    );
   }
 
   await db.$transaction(async (tx) => {

@@ -18,10 +18,8 @@ import {
   CloudRevisionConflictError,
   deleteCloudLayout,
   getCloudSession,
-  loginCloudSession,
   listCloudLayouts,
   loadCloudLayout,
-  logoutCloudSession,
   saveCloudLayout,
   type CloudLayoutSummary,
 } from '@floorplanner/lib/cloud-layouts'
@@ -56,7 +54,6 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
   const [renameText, setRenameText] = useState('')
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null)
 
-  const [cloudPassword, setCloudPassword] = useState('')
   const [cloudLayouts, setCloudLayouts] = useState<CloudLayoutSummary[]>([])
   const [cloudName, setCloudName] = useState('')
   const [cloudStatus, setCloudStatus] = useState<string | null>(null)
@@ -125,43 +122,6 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function handleCloudSignIn() {
-    if (!cloudPassword.trim()) {
-      setCloudError('Enter the cloud admin password first.')
-      return
-    }
-
-    setCloudLoading(true)
-    setCloudError(null)
-    setCloudStatus(null)
-    try {
-      await loginCloudSession(cloudPassword)
-      setCloudAuthenticated(true)
-      setCloudPassword('')
-      await refreshCloudLayouts(true)
-    } catch (error) {
-      setCloudError(error instanceof Error ? error.message : 'Failed to sign in to cloud save.')
-    } finally {
-      setCloudLoading(false)
-    }
-  }
-
-  async function handleCloudSignOut() {
-    setCloudLoading(true)
-    setCloudError(null)
-    setCloudStatus(null)
-    try {
-      await logoutCloudSession()
-      setCloudAuthenticated(false)
-      setCloudLayouts([])
-      setCloudPassword('')
-    } catch (error) {
-      setCloudError(error instanceof Error ? error.message : 'Failed to sign out of cloud save.')
-    } finally {
-      setCloudLoading(false)
-    }
-  }
-
   function handleSaveNew() {
     const name = newName.trim() || title.trim() || 'Floor Plan'
     if (!name) return
@@ -208,7 +168,25 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
     )
   }
 
-  async function handleCloudSave() {
+  async function persistCloudLayout(input: {
+    id: string | null
+    name: string
+    expectedRevision: number | null
+    successVerb: 'Saved' | 'Overwrote'
+  }) {
+    const saved = await saveCloudLayout({
+      id: input.id,
+      name: input.name,
+      data: extractDocumentSlice(useEditorStore.getState()),
+      expectedRevision: input.expectedRevision,
+    })
+    markCloudSaved({ id: saved.id, name: saved.name, revision: saved.revision, savedAt: saved.savedAt })
+    setCloudName(saved.name)
+    setCloudStatus(`${input.successVerb} "${saved.name}" ${input.successVerb === 'Saved' ? 'to' : 'in'} cloud.`)
+    await refreshCloudLayouts()
+  }
+
+  async function handleCloudSave(saveAsNew = false) {
     const name =
       cloudName.trim() ||
       title.trim() ||
@@ -216,7 +194,7 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
       newName.trim() ||
       'Floor Plan'
     if (!cloudAuthenticated) {
-      setCloudError('Sign in to cloud save first.')
+      setCloudError('Your cloud session is not active. Refresh the page and try again.')
       return
     }
 
@@ -224,16 +202,12 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
     setCloudError(null)
     setCloudStatus(null)
     try {
-      const saved = await saveCloudLayout({
-        id: activeCloudLayoutId,
+      await persistCloudLayout({
+        id: saveAsNew ? null : activeCloudLayoutId,
         name,
-        data: extractDocumentSlice(useEditorStore.getState()),
-        expectedRevision: activeCloudLayoutRevision,
+        expectedRevision: saveAsNew ? null : activeCloudLayoutRevision,
+        successVerb: saveAsNew || !activeCloudLayoutId ? 'Saved' : 'Overwrote',
       })
-      markCloudSaved({ id: saved.id, name: saved.name, revision: saved.revision, savedAt: saved.savedAt })
-      setCloudName(saved.name)
-      setCloudStatus(`Saved "${saved.name}" to cloud.`)
-      await refreshCloudLayouts()
     } catch (error) {
       if (error instanceof CloudRevisionConflictError) {
         setCloudError(error.message)
@@ -247,9 +221,39 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
     }
   }
 
+  async function handleCloudOverwrite(layout: CloudLayoutSummary) {
+    if (!cloudAuthenticated) {
+      setCloudError('Your cloud session is not active. Refresh the page and try again.')
+      return
+    }
+    if (!window.confirm(
+      `Overwrite cloud layout "${layout.name}" with the floor plan currently on the canvas?`,
+    )) return
+
+    setCloudLoading(true)
+    setCloudError(null)
+    setCloudStatus(null)
+    try {
+      await persistCloudLayout({
+        id: layout.id,
+        name: layout.name,
+        expectedRevision: layout.revision,
+        successVerb: 'Overwrote',
+      })
+    } catch (error) {
+      if (error instanceof CloudRevisionConflictError) {
+        setCloudError(`${error.message} Refresh the cloud list before overwriting again.`)
+      } else {
+        setCloudError(error instanceof Error ? error.message : 'Failed to overwrite cloud layout.')
+      }
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
   async function handleCloudLoad(id: string) {
     if (!cloudAuthenticated) {
-      setCloudError('Sign in to cloud save first.')
+      setCloudError('Your cloud session is not active. Refresh the page and try again.')
       return
     }
     if (!confirmDiscardCurrentWork('Load a cloud layout')) return
@@ -277,7 +281,7 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
 
   async function handleCloudDelete(id: string, name: string) {
     if (!cloudAuthenticated) {
-      setCloudError('Sign in to cloud save first.')
+      setCloudError('Your cloud session is not active. Refresh the page and try again.')
       return
     }
     if (!window.confirm(`Delete cloud layout "${name}"? This cannot be undone.`)) return
@@ -434,29 +438,13 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
             <div className="border-b border-gray-800 p-4 space-y-3">
               {!cloudAvailable && (
                 <p className="text-xs text-gray-400">
-                  Cloud save is disabled on this deployment until the server is configured with a database, admin password, and session secret.
+                  Cloud save is disabled on this deployment until the server is configured with a database and floor-planner session secret.
                 </p>
               )}
               {cloudAvailable && !cloudAuthenticated && (
-                <div className="flex gap-2">
-                  <input
-                    value={cloudPassword}
-                    onChange={e => setCloudPassword(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') void handleCloudSignIn()
-                    }}
-                    type="password"
-                    placeholder="Cloud admin password..."
-                    className={`flex-1 text-sm ${darkFieldClassName}`}
-                  />
-                  <button
-                    onClick={() => void handleCloudSignIn()}
-                    disabled={cloudLoading || !cloudPassword.trim()}
-                    className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-gray-500 disabled:opacity-50"
-                  >
-                    Sign In
-                  </button>
-                </div>
+                <p className="text-xs text-amber-300">
+                  Your cloud session could not be started. Refresh the page and try again.
+                </p>
               )}
               {cloudAvailable && cloudAuthenticated && (
                 <>
@@ -467,13 +455,6 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                       className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-gray-500 disabled:opacity-50"
                     >
                       Refresh
-                    </button>
-                    <button
-                      onClick={() => void handleCloudSignOut()}
-                      disabled={cloudLoading}
-                      className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-red-500 disabled:opacity-50"
-                    >
-                      Sign Out
                     </button>
                   </div>
                   <div className="flex gap-2">
@@ -490,15 +471,24 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                       className={`flex-1 text-sm ${darkFieldClassName}`}
                     />
                     <button
-                      onClick={() => void handleCloudSave()}
+                      onClick={() => void handleCloudSave(false)}
                       disabled={cloudLoading}
                       className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-medium rounded"
                     >
-                      {activeCloudLayoutId ? 'Update Cloud' : 'Save To Cloud'}
+                      {activeCloudLayoutId ? 'Overwrite Active' : 'Save New To Cloud'}
                     </button>
+                    {activeCloudLayoutId && (
+                      <button
+                        onClick={() => void handleCloudSave(true)}
+                        disabled={cloudLoading}
+                        className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-emerald-500 disabled:opacity-50"
+                      >
+                        Save As New
+                      </button>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500">
-                    Admin and moderator accounts can keep up to 10 cloud projects each.
+                    Use Overwrite on a saved layout below to replace that exact cloud copy.
                   </p>
                 </>
               )}
@@ -510,7 +500,7 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                 <p className="py-6 text-center text-sm text-gray-500">Loading cloud layouts...</p>
               )}
               {cloudAvailable && !cloudAuthenticated && (
-                <p className="text-gray-500 text-sm text-center py-6">Sign in to list server-backed layouts.</p>
+                <p className="text-gray-500 text-sm text-center py-6">Cloud layouts are unavailable for this session.</p>
               )}
               {cloudAvailable && cloudAuthenticated && !cloudLoading && cloudLayouts.length === 0 && !cloudError && (
                 <p className="text-gray-500 text-sm text-center py-6">No cloud layouts saved yet.</p>
@@ -539,16 +529,25 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button
+                      onClick={() => void handleCloudOverwrite(l)}
+                      disabled={cloudLoading}
+                      className="text-xs rounded border border-emerald-700 px-2 py-1 text-emerald-300 hover:border-emerald-500 hover:text-emerald-200 disabled:opacity-50"
+                    >
+                      Overwrite
+                    </button>
+                    <button
                       onClick={() => void handleCloudLoad(l.id)}
+                      disabled={cloudLoading}
                       className="text-xs rounded border border-gray-600 px-2 py-1 text-gray-200 hover:border-blue-500"
                     >
-                      load
+                      Load
                     </button>
                     <button
                       onClick={() => void handleCloudDelete(l.id, l.name)}
+                      disabled={cloudLoading}
                       className="text-xs rounded border border-gray-600 px-2 py-1 text-gray-200 hover:border-red-500"
                     >
-                      delete
+                      Delete
                     </button>
                   </div>
                 </div>

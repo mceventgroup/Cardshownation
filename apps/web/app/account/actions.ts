@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { endUserSession, requireUserSession } from "@/lib/user-auth";
 import { db } from "@/lib/db";
+import { isFloorplannerSubscriptionTerminal } from "@/lib/floorplanner-access";
 import { verifyPassword } from "@/lib/passwords";
 
 export async function logoutUser() {
@@ -26,9 +27,23 @@ export async function deleteMyAccount(formData: FormData) {
   if (typeof password !== "string" || confirmation !== "DELETE") {
     redirect("/account?error=delete");
   }
-  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { passwordHash: true } });
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      passwordHash: true,
+      floorplannerSubscription: {
+        select: { status: true },
+      },
+    },
+  });
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     redirect("/account?error=delete");
+  }
+  if (
+    user.floorplannerSubscription &&
+    !isFloorplannerSubscriptionTerminal(user.floorplannerSubscription.status)
+  ) {
+    redirect("/account?error=billing");
   }
   await db.user.delete({ where: { id: session.user.id } });
   await endUserSession();

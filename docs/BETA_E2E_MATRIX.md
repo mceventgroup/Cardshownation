@@ -12,4 +12,16 @@ Run this matrix against a preview deployment connected to an isolated Postgres d
 | Privacy controls | Optional scripts are absent before consent and after essential-only choice; optional choice enables them; unsubscribe disables all state email. |
 | Account deletion | Wrong password and missing DELETE confirmation fail; correct confirmation deletes account data, clears session, and preserves public organizer/show records where required. |
 
-Automate the matrix with Playwright once `E2E_DATABASE_URL`, `E2E_BASE_URL`, admin credentials, and a test inbox API are available in CI. The current fixture mode cannot exercise database-backed authentication, so it must not be represented as full auth E2E coverage.
+## Automation status
+
+- `npm run test:e2e:public` runs public discovery, account-entry, and privacy-consent
+  smoke tests in fixture mode. CI runs these tests in Chromium.
+- `npm run test:e2e` also includes opt-in verified-member login and promoter
+  ownership-isolation checks. Point `E2E_BASE_URL` at an isolated preview and set
+  the `E2E_FAN_*`, `E2E_PROMOTER_*`, and `E2E_FOREIGN_SHOW_ID` variables.
+- Signup verification, password-reset token consumption, admin approval, account
+  deletion, and email delivery still require an isolated seeded database plus a
+  test inbox API. Do not run those destructive scenarios against production.
+
+Fixture mode cannot exercise database-backed authentication and must not be
+represented as full auth E2E coverage.

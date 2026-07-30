@@ -7,11 +7,15 @@ node_modules/
 # Build outputs
 .next
 .next/
+.next-e2e/
+.next-verify/
 out
 dist
 dist/
 build
 build/
+playwright-report/
+test-results/
 apps/web/public/uploads/
 *.tsbuildinfo
 

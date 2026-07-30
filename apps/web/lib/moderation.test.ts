@@ -241,25 +241,31 @@ test("createPasswordResetToken stores a hashed token and consumePasswordResetTok
 });
 
 test("createVerificationToken stores a hashed token and consumeVerificationToken looks it up by hash", async () => {
-  const deleteManyMock = stubMethod(db.emailVerificationToken, "deleteMany", async (input) => input);
+  let deleteManyCalls = 0;
+  const deleteManyMock = stubMethod(db.emailVerificationToken, "deleteMany", async (input) => {
+    deleteManyCalls += 1;
+    return deleteManyCalls === 1 ? input : { count: 1 };
+  });
   const createMock = stubMethod(db.emailVerificationToken, "create", async (input) => input);
   const findUniqueMock = stubMethod(db.emailVerificationToken, "findUnique", async () => ({
     id: "verify-1",
     userId: "user-1",
-    user: { id: "user-1", email: "fan@example.com" },
     expiresAt: new Date(Date.now() + 60_000),
   }));
-  const deleteMock = stubMethod(db.emailVerificationToken, "delete", async (input) => input);
-  const updateMock = stubMethod(db.user, "update", async (input) => input);
+  const updateMock = stubMethod(db.user, "update", async () => ({
+    id: "user-1",
+    email: "fan@example.com",
+  }));
+  const transactionMock = stubMethod(db, "$transaction", async (callback) => callback(db));
 
   const token = await createVerificationToken("user-1");
   const user = await consumeVerificationToken(token);
 
   assert.equal(createMock.mock.calls.length, 1);
-  assert.equal(deleteManyMock.mock.calls.length, 1);
+  assert.equal(deleteManyMock.mock.calls.length, 2);
   assert.equal(findUniqueMock.mock.calls.length, 1);
-  assert.equal(deleteMock.mock.calls.length, 1);
   assert.equal(updateMock.mock.calls.length, 1);
+  assert.equal(transactionMock.mock.calls.length, 1);
   assert.notEqual(token, hashOpaqueToken(token));
   assert.deepEqual(createMock.mock.calls[0]?.arguments[0], {
     data: {
@@ -270,7 +276,12 @@ test("createVerificationToken stores a hashed token and consumeVerificationToken
   });
   assert.deepEqual(findUniqueMock.mock.calls[0]?.arguments[0], {
     where: { token: hashOpaqueToken(token) },
-    include: { user: true },
+  });
+  assert.deepEqual(deleteManyMock.mock.calls[1]?.arguments[0], {
+    where: {
+      id: "verify-1",
+      token: hashOpaqueToken(token),
+    },
   });
   assert.deepEqual(updateMock.mock.calls[0]?.arguments[0], {
     where: { id: "user-1" },

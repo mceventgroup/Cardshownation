@@ -16,6 +16,7 @@ import { createVerificationToken } from "@/lib/verification-token";
 import { sendFanVerificationEmail } from "@/lib/email";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
 import { listFavoriteOrganizerOptions, registerFanAccount } from "@/lib/users";
+import { GoogleSignInLink } from "@/components/auth/google-sign-in-link";
 
 const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
 const SIGNUP_BLOCK_MS = 2 * 60 * 60 * 1000;
@@ -49,6 +50,7 @@ async function handleSignup(formData: FormData) {
   const sessionSecret = await getUserSessionSecret();
   const name = readRequiredString(formData, "name", 120);
   const email = readRequiredString(formData, "email", 320).toLowerCase();
+  const confirmEmail = readRequiredString(formData, "confirmEmail", 320).toLowerCase();
   const password = readPasswordInput(formData, "password");
   const confirmPassword = readPasswordInput(formData, "confirmPassword");
   const stateCodes = formData
@@ -83,7 +85,13 @@ async function handleSignup(formData: FormData) {
     redirect("/account/signup?error=disabled");
   }
 
-  if (!name || !isValidEmail(email) || password.length < MIN_PASSWORD_LENGTH || password !== confirmPassword) {
+  if (
+    !name ||
+    !isValidEmail(email) ||
+    email !== confirmEmail ||
+    password.length < MIN_PASSWORD_LENGTH ||
+    password !== confirmPassword
+  ) {
     redirect("/account/signup?error=validation");
   }
 
@@ -157,7 +165,7 @@ export default async function UserSignupPage({
         : sp.error === "rate"
           ? "Too many attempts. Wait a bit and try again."
           : sp.error === "validation"
-            ? `Check your information. Passwords must match and be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
+            ? `Check your information. Email addresses and passwords must match; passwords must be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
             : sp.error === "try-again"
               ? "We couldn't create that account right now. Double-check your information or try signing in / resetting your password if you may already have an account."
             : null;
@@ -189,9 +197,10 @@ export default async function UserSignupPage({
           </p>
         )}
 
+        <GoogleSignInLink />
+
         <form action={handleSignup} className="mt-8 space-y-6">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
+          <div>
               <label htmlFor="name" className="mb-2 block text-sm font-medium text-slate-700">
                 Name
               </label>
@@ -203,7 +212,8 @@ export default async function UserSignupPage({
                 disabled={!secret}
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
               />
-            </div>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
                 Email
@@ -213,6 +223,20 @@ export default async function UserSignupPage({
                 name="email"
                 type="email"
                 required
+                disabled={!secret}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="confirmEmail" className="mb-2 block text-sm font-medium text-slate-700">
+                Confirm email
+              </label>
+              <input
+                id="confirmEmail"
+                name="confirmEmail"
+                type="email"
+                required
+                autoComplete="email"
                 disabled={!secret}
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
               />

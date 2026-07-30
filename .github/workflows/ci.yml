@@ -39,3 +39,29 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    env:
+      CSN_DATA_MODE: fixture
+      DATABASE_URL: postgresql://user@localhost:5432/csn?schema=public
+      DIRECT_URL: postgresql://user@localhost:5432/csn?schema=public
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      ADMIN_PASSWORD: ci-password
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Public browser smoke tests
+        run: npm run test:e2e:public

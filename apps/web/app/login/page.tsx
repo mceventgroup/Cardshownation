@@ -9,6 +9,7 @@ import { getRequestIp } from "@/lib/request-ip";
 import { consumeRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { getUserSession, getUserSessionSecret, startUserSession } from "@/lib/user-auth";
 import { sanitizeLocalRedirectTarget } from "@/lib/url";
+import { GoogleSignInLink } from "@/components/auth/google-sign-in-link";
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_BLOCK_MS = 30 * 60 * 1000;
@@ -37,6 +38,12 @@ function getDefaultDestination(role: "FAN" | "MODERATOR" | "ORGANIZER") {
 function resolveDestination(role: "FAN" | "MODERATOR" | "ORGANIZER", requested: unknown) {
   const fallback = getDefaultDestination(role);
   const sanitized = sanitizeLocalRedirectTarget(requested, fallback);
+  const floorplannerDestination =
+    sanitized === "/floorplanner" || sanitized.startsWith("/floorplanner/");
+
+  if (floorplannerDestination) {
+    return sanitized;
+  }
 
   switch (role) {
     case "MODERATOR":
@@ -163,12 +170,20 @@ export default async function UnifiedLoginPage({
         ? "Email or password did not match a member or promoter account."
         : sp.error === "unverified"
           ? "Please verify your email before logging in."
-          : sp.error === "disabled"
+            : sp.error === "disabled"
             ? sp.role === "moderator"
               ? "Moderator sign-in is disabled until MODERATOR_SESSION_SECRET is configured."
               : sp.role === "promoter"
                 ? "Promoter sign-in is disabled until PROMOTER_SESSION_SECRET is configured."
                 : "Member sign-in is disabled until USER_SESSION_SECRET is configured."
+            : sp.error === "google-account-conflict"
+              ? "That Google email belongs to a promoter, moderator, or admin account. Use the existing email and password sign-in."
+              : sp.error === "google-email-verification"
+                ? "Google cannot confirm current ownership of that non-Gmail address. Create or verify the member account by email instead."
+                : sp.error === "google-cancelled"
+                  ? "Google sign-in was cancelled."
+                  : sp.error?.startsWith("google-")
+                    ? "Google sign-in could not be completed. Please try again."
             : null;
 
   return (
@@ -191,7 +206,9 @@ export default async function UnifiedLoginPage({
           </p>
         )}
 
-        <form action={handleLogin} className="mt-8 space-y-5">
+        <GoogleSignInLink from={sp.from ?? "/account"} />
+
+        <form action={handleLogin} className="space-y-5">
           <input type="hidden" name="from" value={sp.from ?? ""} />
 
           <div>
@@ -230,6 +247,15 @@ export default async function UnifiedLoginPage({
             Sign in
           </button>
         </form>
+
+        {sp.error === "unverified" && (
+          <p className="mt-4 text-sm text-slate-600">
+            Need another email?{" "}
+            <Link href="/account/resend-verification" className="font-semibold text-brand-700 hover:text-brand-800">
+              Send a new verification link
+            </Link>
+          </p>
+        )}
 
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
           <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">

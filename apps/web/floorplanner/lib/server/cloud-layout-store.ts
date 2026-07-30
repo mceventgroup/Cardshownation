@@ -1,11 +1,12 @@
 import { neon } from '@neondatabase/serverless'
 import type { DocumentSlice } from '@floorplanner/lib/persistence'
 
-export type CloudLayoutOwnerRole = 'ADMIN' | 'MODERATOR'
+export type CloudLayoutOwnerRole = 'ADMIN' | 'MODERATOR' | 'ORGANIZER' | 'FAN'
 
 export interface CloudLayoutOwner {
   userId: string
   role: CloudLayoutOwnerRole
+  maxCloudProjects: number
 }
 
 export interface CloudLayoutRow {
@@ -36,11 +37,6 @@ export class CloudLayoutQuotaError extends Error {
     this.name = 'CloudLayoutQuotaError'
     this.limit = limit
   }
-}
-
-const MAX_CLOUD_LAYOUTS_PER_OPERATOR: Record<CloudLayoutOwnerRole, number> = {
-  ADMIN: 10,
-  MODERATOR: 10,
 }
 
 function getDatabaseUrl(): string {
@@ -106,11 +102,12 @@ async function countOwnedCloudLayouts(owner: CloudLayoutOwner): Promise<number> 
 
 export async function listCloudLayouts(owner: CloudLayoutOwner): Promise<CloudLayoutRow[]> {
   const sql = getSql()
+  const canAccessLegacyLayouts = owner.role === 'ADMIN' || owner.role === 'MODERATOR'
   const rows = await sql`
     select id, name, saved_at, revision, table_count, vendor_count
     from floorplanner_cloud_layouts
     where (owner_user_id = ${owner.userId} and owner_role = ${owner.role})
-       or (owner_user_id is null and owner_role is null)
+       or (${canAccessLegacyLayouts} and owner_user_id is null and owner_role is null)
     order by saved_at desc, name asc
   `
   return rows as CloudLayoutRow[]
@@ -118,13 +115,14 @@ export async function listCloudLayouts(owner: CloudLayoutOwner): Promise<CloudLa
 
 export async function getCloudLayout(id: string, owner: CloudLayoutOwner): Promise<CloudLayoutRow | null> {
   const sql = getSql()
+  const canAccessLegacyLayouts = owner.role === 'ADMIN' || owner.role === 'MODERATOR'
   const rows = await sql`
     select id, name, saved_at, revision, table_count, vendor_count, data
     from floorplanner_cloud_layouts
     where id = ${id}
       and (
         (owner_user_id = ${owner.userId} and owner_role = ${owner.role})
-        or (owner_user_id is null and owner_role is null)
+        or (${canAccessLegacyLayouts} and owner_user_id is null and owner_role is null)
       )
     limit 1
   `
@@ -144,7 +142,7 @@ export async function upsertCloudLayout(input: {
 
   if (input.expectedRevision === null) {
     const currentCount = await countOwnedCloudLayouts(input.owner)
-    const maxLayouts = MAX_CLOUD_LAYOUTS_PER_OPERATOR[input.owner.role]
+    const maxLayouts = input.owner.maxCloudProjects
     if (currentCount >= maxLayouts) {
       throw new CloudLayoutQuotaError(maxLayouts)
     }
@@ -186,6 +184,8 @@ export async function upsertCloudLayout(input: {
     )
   }
 
+  const canAccessLegacyLayouts =
+    input.owner.role === 'ADMIN' || input.owner.role === 'MODERATOR'
   const rows = await sql`
     update floorplanner_cloud_layouts
     set name = ${input.name},
@@ -200,7 +200,7 @@ export async function upsertCloudLayout(input: {
       and revision = ${input.expectedRevision}
       and (
         (owner_user_id = ${input.owner.userId} and owner_role = ${input.owner.role})
-        or (owner_user_id is null and owner_role is null)
+        or (${canAccessLegacyLayouts} and owner_user_id is null and owner_role is null)
       )
     returning id, name, saved_at, revision, table_count, vendor_count
   `
@@ -224,12 +224,13 @@ export async function upsertCloudLayout(input: {
 
 export async function deleteCloudLayout(id: string, owner: CloudLayoutOwner): Promise<void> {
   const sql = getSql()
+  const canAccessLegacyLayouts = owner.role === 'ADMIN' || owner.role === 'MODERATOR'
   await sql`
     delete from floorplanner_cloud_layouts
     where id = ${id}
       and (
         (owner_user_id = ${owner.userId} and owner_role = ${owner.role})
-        or (owner_user_id is null and owner_role is null)
+        or (${canAccessLegacyLayouts} and owner_user_id is null and owner_role is null)
       )
   `
 }

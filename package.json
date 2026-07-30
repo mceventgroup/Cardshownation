@@ -10,7 +10,9 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "tsc --noEmit -p apps/web/tsconfig.json",
-    "test:web": "tsx --tsconfig apps/web/tsconfig.json --test apps/web/lib/moderation.test.ts apps/web/lib/flyers.test.ts apps/web/lib/users.test.ts apps/web/lib/email.test.ts apps/web/lib/security.test.ts apps/web/floorplanner/lib/floorplan-detection.test.ts",
+    "test:web": "node scripts/run-web-tests.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:public": "playwright test e2e/public-discovery.spec.ts e2e/privacy-consent.spec.ts",
     "secrets:scan": "powershell -ExecutionPolicy Bypass -File ./scripts/scan-secrets.ps1",
     "db:generate": "turbo run db:generate",
     "db:push": "turbo run db:push",
@@ -20,6 +22,7 @@
     "db:studio": "cd packages/db && npx prisma studio"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@types/node": "^20.14.0",
     "@types/react-dom": "19.2.2",
     "konva": "8.4.3",
@@ -40,11 +43,13 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "next": {
-      "postcss": "8.5.10"
+      "postcss": "8.5.24",
+      "sharp": "0.35.3"
     },
     "konva": "8.4.3",
     "react-reconciler": "0.33.0",
-    "postcss": "8.5.10",
+    "postcss": "8.5.24",
+    "sharp": "0.35.3",
     "undici": "6.27.0",
     "uuid": "14.0.0"
   },
@@ -55,6 +60,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-neon": "^7.7.0",
+    "google-auth-library": "^10.9.1",
     "resend": "^6.12.2",
     "ws": "^8.20.1"
   }

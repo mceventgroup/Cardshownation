@@ -828,6 +828,13 @@ export async function getAdminPromoterById(organizerId: string) {
           email: true,
           createdAt: true,
           emailVerifiedAt: true,
+          floorplannerSubscription: {
+            select: {
+              status: true,
+              cancelAtPeriodEnd: true,
+              currentPeriodEnd: true,
+            },
+          },
         },
       },
       approvals: {

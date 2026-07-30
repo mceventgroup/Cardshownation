@@ -72,6 +72,12 @@ export default async function PromoterPortalPage({
 
             <div className="flex gap-3">
               <Link
+                href="/floorplanner"
+                className="inline-flex items-center justify-center rounded-full border border-brand-200 bg-brand-50 px-5 py-3 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100"
+              >
+                Floor planner
+              </Link>
+              <Link
                 href="/promoter/new-show"
                 className="inline-flex items-center justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
               >

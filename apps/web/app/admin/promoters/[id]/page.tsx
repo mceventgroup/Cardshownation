@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireAdminSession } from "@/lib/admin-auth";
 import { writeAuditLog } from "@/lib/audit-log";
 import { db } from "@/lib/db";
+import { isFloorplannerSubscriptionActive } from "@/lib/floorplanner-access";
 import { getAdminPromoterById } from "@/lib/promoters";
 import { formatShowDate } from "@/lib/utils";
 
@@ -188,6 +189,14 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
     !promoter.floorplanEnabled
   );
   const markEmailVerifiedAction = markEmailVerified.bind(null, promoter.id);
+  const hasPaidFloorplanner = isFloorplannerSubscriptionActive(
+    promoter.user?.floorplannerSubscription,
+  );
+  const floorplannerAccessLabel = hasPaidFloorplanner
+    ? "Paid"
+    : promoter.floorplanEnabled
+      ? "Complimentary"
+      : "Disabled";
 
   return (
     <div className="max-w-5xl p-6 lg:p-10">
@@ -227,7 +236,9 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
               type="submit"
               className="rounded-lg border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
-              {promoter.floorplanEnabled ? "Disable floorplanner" : "Enable floorplanner"}
+              {promoter.floorplanEnabled
+                ? "Remove complimentary access"
+                : "Grant complimentary access"}
             </button>
           </form>
 
@@ -247,7 +258,7 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard label="Total shows" value={String(promoter._count.shows)} />
         <StatCard label="Trusted cities" value={String(promoter.approvals.length)} />
-        <StatCard label="Floorplanner" value={promoter.floorplanEnabled ? "Enabled" : "Disabled"} />
+        <StatCard label="Floorplanner" value={floorplannerAccessLabel} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -353,6 +364,18 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
             <Field label="Website" value={promoter.websiteUrl ?? "—"} />
             <Field label="Facebook" value={promoter.facebookUrl ?? "—"} />
             <Field label="Instagram" value={promoter.instagramUrl ?? "—"} />
+            <Field
+              label="Planner billing"
+              value={
+                promoter.user?.floorplannerSubscription
+                  ? `${promoter.user.floorplannerSubscription.status}${
+                      promoter.user.floorplannerSubscription.cancelAtPeriodEnd
+                        ? " (cancels after current period)"
+                        : ""
+                    }`
+                  : "No paid subscription"
+              }
+            />
             <Field
               label="Account created"
               value={

@@ -42,6 +42,13 @@ export async function Header() {
               <span className="sm:hidden">Browse</span>
             </Link>
             <Link
+              href="/floorplanner"
+              className="inline-flex flex-1 items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 sm:flex-none"
+            >
+              <span className="hidden sm:inline">Floor Planner</span>
+              <span className="sm:hidden">Planner</span>
+            </Link>
+            <Link
               href={portalLink.href}
               className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800 sm:flex-none"
             >

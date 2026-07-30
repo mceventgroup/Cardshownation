@@ -17,21 +17,29 @@ export async function createVerificationToken(userId: string) {
 
 export async function consumeVerificationToken(token: string) {
   const tokenHash = hashOpaqueToken(token);
-  const record = await db.emailVerificationToken.findUnique({
-    where: { token: tokenHash },
-    include: { user: true },
+  return db.$transaction(async (tx) => {
+    const record = await tx.emailVerificationToken.findUnique({
+      where: { token: tokenHash },
+    });
+
+    if (!record || record.expiresAt < new Date()) {
+      if (record) {
+        await tx.emailVerificationToken.deleteMany({ where: { id: record.id } });
+      }
+      return null;
+    }
+
+    const consumed = await tx.emailVerificationToken.deleteMany({
+      where: {
+        id: record.id,
+        token: tokenHash,
+      },
+    });
+    if (consumed.count !== 1) return null;
+
+    return tx.user.update({
+      where: { id: record.userId },
+      data: { emailVerifiedAt: new Date() },
+    });
   });
-
-  if (!record || record.expiresAt < new Date()) {
-    return null;
-  }
-
-  await db.emailVerificationToken.delete({ where: { id: record.id } });
-
-  await db.user.update({
-    where: { id: record.userId },
-    data: { emailVerifiedAt: new Date() },
-  });
-
-  return record.user;
 }

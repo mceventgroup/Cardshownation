@@ -3,7 +3,10 @@
 import { usePathname } from "next/navigation";
 
 function isWorkspacePath(pathname: string) {
-  return pathname === "/floorplanner" || pathname.endsWith("/floorplanner");
+  return (
+    pathname === "/floorplanner/workspace" ||
+    (pathname !== "/floorplanner" && pathname.endsWith("/floorplanner"))
+  );
 }
 
 export function AppChrome({

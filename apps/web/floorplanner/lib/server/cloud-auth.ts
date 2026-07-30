@@ -3,6 +3,7 @@ import type { NextRequest, NextResponse } from 'next/server'
 
 export const CLOUD_SESSION_COOKIE = 'floorplanner_cloud_session'
 const CLOUD_SESSION_TTL_SECONDS = 60 * 60 * 12
+const MIN_CLOUD_SESSION_SECRET_LENGTH = 32
 
 type SessionPayload = {
   scope: 'cloud'
@@ -18,9 +19,9 @@ function getCloudPassword(): string {
 }
 
 function getSessionSecret(): string {
-  const value = process.env.FLOORPLANNER_SESSION_SECRET
-  if (!value) {
-    throw new Error('FLOORPLANNER_SESSION_SECRET is not configured.')
+  const value = process.env.FLOORPLANNER_SESSION_SECRET?.trim()
+  if (!value || value.length < MIN_CLOUD_SESSION_SECRET_LENGTH) {
+    throw new Error('FLOORPLANNER_SESSION_SECRET must be at least 32 characters.')
   }
   return value
 }
@@ -47,6 +48,10 @@ function decodePayload(value: string): SessionPayload | null {
 
 export function isCloudAuthConfigured(): boolean {
   return Boolean((process.env.FLOORPLANNER_ADMIN_PASSWORD ?? process.env.FLOORPLANNER_SAVE_KEY) && process.env.FLOORPLANNER_SESSION_SECRET)
+}
+
+export function isCloudSessionConfigured(): boolean {
+  return (process.env.FLOORPLANNER_SESSION_SECRET?.trim().length ?? 0) >= MIN_CLOUD_SESSION_SECRET_LENGTH
 }
 
 export function authenticateCloudPassword(providedPassword: string | null | undefined): boolean {
