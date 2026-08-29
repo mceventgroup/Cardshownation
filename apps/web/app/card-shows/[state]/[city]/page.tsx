@@ -7,6 +7,7 @@ import { getShowsByCity, getCitiesWithShows } from "@/lib/shows";
 import { getStateBySlug } from "@/lib/states";
 import { slugify } from "@/lib/utils";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
+import { absoluteSiteUrl } from "@/lib/site-url";
 
 export const revalidate = 3600;
 export const dynamic = "force-dynamic";
@@ -29,9 +30,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const cityName = await resolveCityName(stateRecord.code, city);
   if (!cityName) return {};
 
+  const title = `${cityName}, ${stateRecord.name} Card Shows`;
+  const description = `Find upcoming sports card, Pokemon, and TCG shows in ${cityName}, ${stateRecord.name}. Browse dates, venues, and admission details on Card Show Nation.`;
+  const path = `/card-shows/${stateRecord.slug}/${city}`;
+
   return {
-    title: `${cityName}, ${stateRecord.name} Card Shows`,
-    description: `Find upcoming sports card, Pokemon, and TCG shows in ${cityName}, ${stateRecord.name}. Browse dates, venues, and admission details on Card Show Nation.`,
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: { title, description, url: absoluteSiteUrl(path) },
   };
 }
 
@@ -46,21 +53,35 @@ export default async function CityPage({ params }: Props) {
   const shows = await getShowsByCity(stateRecord.code, cityName, 50);
   const freeShows = shows.filter((s) => s.isFree).length;
 
+  const pagePath = `/card-shows/${stateRecord.slug}/${city}`;
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "CollectionPage",
-    name: `${cityName}, ${stateRecord.name} Card Shows`,
-    description: `Upcoming card shows in ${cityName}, ${stateRecord.name} listed on Card Show Nation.`,
-    url: `https://cardshownation.com/card-shows/${stateRecord.slug}/${city}`,
-    mainEntity: {
-      "@type": "ItemList",
-      itemListElement: shows.map((show, i) => ({
-        "@type": "ListItem",
-        position: i + 1,
-        url: `https://cardshownation.com/shows/${show.slug}`,
-        name: show.title,
-      })),
-    },
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        name: `${cityName}, ${stateRecord.name} Card Shows`,
+        description: `Upcoming card shows in ${cityName}, ${stateRecord.name} listed on Card Show Nation.`,
+        url: absoluteSiteUrl(pagePath),
+        mainEntity: {
+          "@type": "ItemList",
+          numberOfItems: shows.length,
+          itemListElement: shows.map((show, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            url: absoluteSiteUrl(`/shows/${show.slug}`),
+            name: show.title,
+          })),
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Card Shows", item: absoluteSiteUrl("/card-shows") },
+          { "@type": "ListItem", position: 2, name: stateRecord.name, item: absoluteSiteUrl(`/card-shows/${stateRecord.slug}`) },
+          { "@type": "ListItem", position: 3, name: cityName, item: absoluteSiteUrl(pagePath) },
+        ],
+      },
+    ],
   };
 
   return (

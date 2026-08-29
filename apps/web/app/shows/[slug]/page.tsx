@@ -17,8 +17,9 @@ import { normalizeFlyerUrlForRender } from "@/lib/flyers";
 import { getStateByCode } from "@/lib/states";
 import { ensureManagedShowFlyerImage, getShowBySlug } from "@/lib/shows";
 import { normalizeExternalUrl } from "@/lib/url";
-import { formatShowDate, stateCodeToSlug } from "@/lib/utils";
+import { formatShowDate, slugify, stateCodeToSlug } from "@/lib/utils";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
+import { absoluteSiteUrl } from "@/lib/site-url";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -34,12 +35,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!show) return {};
 
   const stateName = getStateByCode(show.state)?.name ?? show.state;
+  const canonicalPath = `/shows/${show.slug}`;
+  const description =
+    show.description ??
+    `${show.title} takes place ${formatShowDate(show.startDate, show.endDate)} in ${show.city}, ${stateName}. Find venue, admission, organizer, and vendor details on Card Show Nation.`;
+  const flyerImage = normalizeFlyerUrlForRender(show.flyerImageUrl);
+  const socialImage = flyerImage
+    ? flyerImage.startsWith("http")
+      ? flyerImage
+      : absoluteSiteUrl(flyerImage)
+    : undefined;
 
   return {
     title: show.title,
-    description:
-      show.description ??
-      `${show.title} takes place ${formatShowDate(show.startDate, show.endDate)} in ${show.city}, ${stateName}. Find venue, admission, organizer, and vendor details on Card Show Nation.`,
+    description,
+    alternates: { canonical: canonicalPath },
+    openGraph: {
+      title: show.title,
+      description,
+      url: absoluteSiteUrl(canonicalPath),
+      images: socialImage ? [{ url: socialImage, alt: `${show.title} flyer` }] : undefined,
+    },
   };
 }
 
@@ -68,7 +84,8 @@ export default async function ShowDetailPage({ params }: Props) {
   const stateRecord = getStateByCode(show.state);
   const stateName = stateRecord?.name ?? show.state;
   const stateSlug = stateRecord?.slug ?? stateCodeToSlug(show.state);
-  const cityHref = `/card-shows?state=${show.state}&city=${encodeURIComponent(show.city)}`;
+  const cityHref = `/card-shows/${stateSlug}/${slugify(show.city)}`;
+  const canonicalUrl = absoluteSiteUrl(`/shows/${show.slug}`);
   const mapsQuery = encodeURIComponent(
     [
       show.venue?.name,
@@ -99,6 +116,13 @@ export default async function ShowDetailPage({ params }: Props) {
     show.flyerImageUrl
   );
   const flyerImageUrl = normalizeFlyerUrlForRender(managedFlyerImageUrl);
+  const structuredFlyerImageUrl = flyerImageUrl
+    ? flyerImageUrl.startsWith("http")
+      ? flyerImageUrl
+      : absoluteSiteUrl(flyerImageUrl)
+    : null;
+  const admissionPriceMatch = show.admissionPrice?.match(/\$\s*(\d+(?:\.\d{1,2})?)/);
+  const structuredPrice = show.isFree ? 0 : admissionPriceMatch?.[1];
   const organizerEmail = show.organizer?.email?.trim() || null;
   const promoterContacts: Array<{
     href: string;
@@ -159,9 +183,19 @@ export default async function ShowDetailPage({ params }: Props) {
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     description: show.description ?? undefined,
-    image: flyerImageUrl ?? undefined,
-    url: websiteUrl ?? `https://cardshownation.com/shows/${show.slug}`,
+    image: structuredFlyerImageUrl ?? undefined,
+    url: canonicalUrl,
+    sameAs: [websiteUrl, facebookUrl].filter((value): value is string => Boolean(value)),
     isAccessibleForFree: show.isFree,
+    offers: structuredPrice !== undefined
+      ? {
+          "@type": "Offer",
+          price: structuredPrice,
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+          url: ticketUrl ?? canonicalUrl,
+        }
+      : undefined,
     organizer: show.organizer
       ? {
           "@type": "Organization",
@@ -191,19 +225,25 @@ export default async function ShowDetailPage({ params }: Props) {
         "@type": "ListItem",
         position: 1,
         name: "Card Shows",
-        item: "https://cardshownation.com/card-shows",
+        item: absoluteSiteUrl("/card-shows"),
       },
       {
         "@type": "ListItem",
         position: 2,
         name: `${stateName} Card Shows`,
-        item: `https://cardshownation.com/card-shows/${stateSlug}`,
+        item: absoluteSiteUrl(`/card-shows/${stateSlug}`),
       },
       {
         "@type": "ListItem",
         position: 3,
+        name: `${show.city} Card Shows`,
+        item: absoluteSiteUrl(cityHref),
+      },
+      {
+        "@type": "ListItem",
+        position: 4,
         name: show.title,
-        item: `https://cardshownation.com/shows/${show.slug}`,
+        item: canonicalUrl,
       },
     ],
   };
@@ -234,6 +274,10 @@ export default async function ShowDetailPage({ params }: Props) {
             className="transition-colors hover:text-brand-700"
           >
             {stateName}
+          </Link>
+          <span>/</span>
+          <Link href={cityHref} className="transition-colors hover:text-brand-700">
+            {show.city}
           </Link>
           <span>/</span>
           <span className="text-slate-900">{show.title}</span>

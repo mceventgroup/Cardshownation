@@ -162,6 +162,13 @@ async function handleCreateShow(formData: FormData) {
       flyerFile: flyerFile instanceof File ? flyerFile : null,
     });
 
+    if (result.status === "BLOCKED") {
+      redirect("/promoter/new-show?error=blocked");
+    }
+    if (result.status === "DUPLICATE") {
+      redirect("/promoter/new-show?error=duplicate");
+    }
+
     redirect(
       `/promoter?created=1&status=${
         result.status === "APPROVED" ? "approved" : "review"
@@ -192,6 +199,10 @@ export default async function NewPromoterShowPage({
   const errorMessage =
     sp.error === "validation"
       ? "Check your dates, URLs, and flyer file before submitting again."
+      : sp.error === "duplicate"
+        ? "A matching show or pending submission already exists."
+        : sp.error === "blocked"
+          ? "This organizer is blocked from submitting shows. Contact Card Show Nation if you believe this is an error."
       : null;
 
   return (

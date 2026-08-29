@@ -9,15 +9,11 @@ import { DEFAULT_NEARBY_RADIUS, normalizeNearbyRadius } from "@/lib/nearby-radiu
 import { SHOW_CATEGORIES, getUpcomingShows, getNearbyShows } from "@/lib/shows";
 import { US_STATES, getStateByCode } from "@/lib/states";
 import { StateDirectory } from "@/components/shows/state-directory";
+import { serializeJsonLd } from "@/lib/safe-json-ld";
+import { absoluteSiteUrl } from "@/lib/site-url";
 
 export const revalidate = 3600;
 export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "Browse Card Shows",
-  description:
-    "Browse upcoming card shows by state, city, venue, and category. Card Show Nation is built for collectors, vendors, and promoters.",
-};
 
 type SearchParams = {
   state?: string;
@@ -33,6 +29,28 @@ type SearchParams = {
   near?: string;
   view?: string;
 };
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const hasSearchVariant = Object.entries(sp).some(
+    ([key, value]) => key !== "view" && Boolean(value)
+  );
+  const title = "Browse Upcoming Card Shows";
+  const description =
+    "Search the free Card Show Nation database for upcoming sports card, Pokemon, and TCG shows by state, city, venue, promoter, and date.";
+
+  return {
+    title,
+    description,
+    alternates: { canonical: "/card-shows" },
+    robots: hasSearchVariant ? { index: false, follow: true } : undefined,
+    openGraph: { title, description, url: absoluteSiteUrl("/card-shows") },
+  };
+}
 
 function buildQuery(
   current: SearchParams,
@@ -105,8 +123,36 @@ export default async function CardShowsPage({
         ? `Approx near ${nearLabel}`
         : "Approximate location";
 
+  const collectionJsonLd = !hasFilters
+    ? {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        name: "Upcoming Card Shows",
+        description:
+          "A nationwide directory of upcoming sports card, Pokemon, and trading card shows.",
+        url: absoluteSiteUrl("/card-shows"),
+        mainEntity: {
+          "@type": "ItemList",
+          numberOfItems: total,
+          itemListElement: shows.map((show, index) => ({
+            "@type": "ListItem",
+            position: offset + index + 1,
+            name: show.title,
+            url: absoluteSiteUrl(`/shows/${show.slug}`),
+          })),
+        },
+      }
+    : null;
+
 
   return (
+    <>
+    {collectionJsonLd && (
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(collectionJsonLd) }}
+      />
+    )}
     <div className="container-wide py-10">
       <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
@@ -201,6 +247,16 @@ export default async function CardShowsPage({
         </div>
       </section>
 
+      <aside className="mt-10 rounded-3xl border border-brand-200 bg-brand-50 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-6">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">Help keep the card show database complete</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">Know about a show we missed? Anyone can add it for free—no account required.</p>
+        </div>
+        <Link href="/submit-show" className="mt-4 inline-flex shrink-0 items-center justify-center rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 sm:mt-0">
+          Submit a show free
+        </Link>
+      </aside>
+
       {!hasFilters && <StateDirectory states={US_STATES} />}
 
       <section className="mt-10">
@@ -282,5 +338,6 @@ export default async function CardShowsPage({
         </div>
       )}
     </div>
+    </>
   );
 }

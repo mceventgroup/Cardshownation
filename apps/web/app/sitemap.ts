@@ -12,13 +12,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     { url: BASE_URL, priority: 1.0, changeFrequency: "daily" },
     { url: `${BASE_URL}/card-shows`, priority: 0.9, changeFrequency: "daily" },
-    { url: `${BASE_URL}/submit-show`, priority: 0.6, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/submit-show`, priority: 0.8, changeFrequency: "weekly" },
   ];
 
   if (isFixtureMode()) return staticPages;
 
   try {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const shows = await db.show.findMany({
       where: {
@@ -39,14 +40,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       by: ["state"],
       where: { status: "APPROVED", endDate: { gte: today } },
       _count: { state: true },
+      _max: { updatedAt: true },
     });
 
-    const statePages: MetadataRoute.Sitemap = stateResults.flatMap(({ state }) => {
+    const statePages: MetadataRoute.Sitemap = stateResults.flatMap(({ state, _max }) => {
       const record = getStateByCode(state);
       if (!record) return [];
       return [
         {
           url: `${BASE_URL}/card-shows/${record.slug}`,
+          lastModified: _max.updatedAt ?? undefined,
           priority: 0.8,
           changeFrequency: "daily" as const,
         },
@@ -57,14 +60,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       by: ["city", "state"],
       where: { status: "APPROVED", endDate: { gte: today } },
       _count: { city: true },
+      _max: { updatedAt: true },
     });
 
-    const cityPages: MetadataRoute.Sitemap = cityResults.flatMap(({ city, state }) => {
+    const cityPages: MetadataRoute.Sitemap = cityResults.flatMap(({ city, state, _max }) => {
       const record = getStateByCode(state);
       if (!record) return [];
       return [
         {
           url: `${BASE_URL}/card-shows/${record.slug}/${slugify(city)}`,
+          lastModified: _max.updatedAt ?? undefined,
           priority: 0.7,
           changeFrequency: "weekly" as const,
         },

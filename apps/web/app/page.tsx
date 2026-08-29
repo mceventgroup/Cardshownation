@@ -9,6 +9,7 @@ import { getPublicPortalLink } from "@/lib/public-portal";
 import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
 import { US_STATES } from "@/lib/states";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
+import { absoluteSiteUrl } from "@/lib/site-url";
 
 export const revalidate = 3600;
 export const dynamic = "force-dynamic";
@@ -17,6 +18,12 @@ export const metadata: Metadata = {
   title: "Card Show Nation | Find Upcoming Card Shows",
   description:
     "The national card show directory. Find upcoming sports card, Pokemon, and TCG shows by state, city, and date.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Card Show Nation | Find Upcoming Card Shows",
+    description: "Find upcoming sports card, Pokemon, and TCG shows by state, city, and date.",
+    url: absoluteSiteUrl(),
+  },
 };
 
 const HOME_INLINE_AD_SLOT = process.env.NEXT_PUBLIC_AD_SLOT_HOME_INLINE?.trim() ?? "";
@@ -36,14 +43,22 @@ export default async function HomePage() {
 
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: "Card Show Nation",
-    url: "https://cardshownation.com",
-    potentialAction: {
-      "@type": "SearchAction",
-      target: "https://cardshownation.com/card-shows?q={search_term_string}",
-      "query-input": "required name=search_term_string",
-    },
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${absoluteSiteUrl()}/#website`,
+        name: "Card Show Nation",
+        url: absoluteSiteUrl(),
+        publisher: { "@id": `${absoluteSiteUrl()}/#organization` },
+      },
+      {
+        "@type": "Organization",
+        "@id": `${absoluteSiteUrl()}/#organization`,
+        name: "Card Show Nation",
+        url: absoluteSiteUrl(),
+        description: "A free national directory for sports card, Pokemon, and trading card shows.",
+      },
+    ],
   };
 
   return (

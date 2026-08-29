@@ -9,14 +9,20 @@ import { getRequestIp } from "@/lib/request-ip";
 import { isValidDateInput, listDateRange } from "@/lib/daily-schedule";
 import { SHOW_CATEGORIES } from "@/lib/shows";
 import { US_STATES } from "@/lib/states";
-import { createShowSubmission } from "@/lib/submissions";
+import { submitShowForModeration } from "@/lib/submissions";
 import { normalizeExternalUrl } from "@/lib/url";
 import { hashOpaqueToken } from "@/lib/token-hash";
 
 export const metadata: Metadata = {
   title: "Submit a Card Show",
   description:
-    "Submit a sports card, Pokemon, or TCG show to Card Show Nation for review.",
+    "Add a sports card, Pokemon, or TCG show to the Card Show Nation directory for free. No account required.",
+  alternates: { canonical: "/submit-show" },
+  openGraph: {
+    title: "Submit a Card Show Free",
+    description: "Help collectors find an upcoming card show. Add it to Card Show Nation for free—no account required.",
+    url: "/submit-show",
+  },
 };
 
 const MAX_SUBMISSIONS_PER_HOUR = 5;
@@ -178,11 +184,18 @@ async function handleSubmission(formData: FormData) {
       parkingInfo: readOptionalString(formData, "parkingInfo", 200),
     };
 
-    await createShowSubmission({
+    const result = await submitShowForModeration({
       submitterName,
       submitterEmail,
       payloadJson: payload,
     });
+
+    if (result.status === "BLOCKED") {
+      redirect("/submit-show?error=blocked");
+    }
+    if (result.status === "DUPLICATE") {
+      redirect("/submit-show?error=duplicate");
+    }
   } catch (error) {
     rethrowIfRedirectError(error);
     redirect("/submit-show?error=validation");
@@ -238,6 +251,10 @@ export default async function SubmitShowPage({
       ? "Too many submissions from this connection. Please wait an hour and try again."
       : sp.error === "validation"
         ? "Please check your details and use valid email and URL values."
+        : sp.error === "duplicate"
+          ? "A matching show or pending submission already exists."
+          : sp.error === "blocked"
+            ? "We cannot accept submissions from this organizer. Contact Card Show Nation if you believe this is an error."
         : null;
 
   return (

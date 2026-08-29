@@ -128,9 +128,9 @@ async function main() {
       {
         email,
         firstStatus: first.status,
-        firstTerritoryStatus: first.territoryStatus,
+        firstTerritoryStatus: "territoryStatus" in first ? first.territoryStatus : first.status,
         secondStatus: second.status,
-        secondTerritoryStatus: second.territoryStatus,
+        secondTerritoryStatus: "territoryStatus" in second ? second.territoryStatus : second.status,
         approvalCount: approval?.approvedShowCount ?? null,
       },
       null,

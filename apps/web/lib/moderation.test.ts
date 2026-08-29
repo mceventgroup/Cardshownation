@@ -24,6 +24,8 @@ let approveShowSubmission: typeof import("./submissions").approveShowSubmission;
 let rejectShowSubmission: typeof import("./submissions").rejectShowSubmission;
 let getModeratorVisibleSubmissions: typeof import("./submissions").getModeratorVisibleSubmissions;
 let getModeratorVisibleSubmissionById: typeof import("./submissions").getModeratorVisibleSubmissionById;
+let buildShowDedupeKey: typeof import("./submissions").buildShowDedupeKey;
+let submitShowForModeration: typeof import("./submissions").submitShowForModeration;
 const restorers: Array<() => void> = [];
 
 function stubMethod(
@@ -66,6 +68,8 @@ before(async () => {
     rejectShowSubmission,
     getModeratorVisibleSubmissions,
     getModeratorVisibleSubmissionById,
+    buildShowDedupeKey,
+    submitShowForModeration,
   } = await import("./submissions"));
 });
 
@@ -309,6 +313,14 @@ test("getModeratorVisibleSubmissions returns only pending and self-reviewed subm
           role: true,
         },
       },
+      organizer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          moderationStatus: true,
+        },
+      },
     },
     where: {
       OR: [{ status: "PENDING" }, { reviewerId: "moderator-1" }],
@@ -319,6 +331,87 @@ test("getModeratorVisibleSubmissions returns only pending and self-reviewed subm
     { id: "pending-1", status: "PENDING", reviewerId: null },
     { id: "reviewed-by-self", status: "APPROVED", reviewerId: "moderator-1" },
   ]);
+});
+
+test("buildShowDedupeKey normalizes punctuation, case, city, and state", () => {
+  const first = buildShowDedupeKey({
+    showName: "KC Card Show!",
+    startDate: "2026-10-17",
+    city: "Kansas City",
+    state: "mo",
+  });
+  const second = buildShowDedupeKey({
+    showName: "kc-card-show",
+    startDate: "2026-10-17",
+    city: "kansas-city",
+    state: "MO",
+  });
+
+  assert.equal(first, second);
+  assert.equal(first, "kccardshow|2026-10-17|kansascity|MO");
+});
+
+test("submitShowForModeration prevents blocked organizers", async () => {
+  stubMethod(db.show, "findUnique", async () => null);
+  stubMethod(db.show, "findMany", async () => []);
+  stubMethod(db.showSubmission, "findFirst", async () => null);
+  stubMethod(db.showSubmission, "findMany", async () => []);
+  const organizerMock = stubMethod(db.organizer, "findUnique", async () => ({
+    id: "organizer-1",
+    name: "Blocked Organizer",
+    email: "blocked@example.com",
+    moderationStatus: "BLOCKED",
+  }));
+  const createSubmissionMock = stubMethod(db.showSubmission, "create", async () => {
+    throw new Error("blocked organizers must not create submissions");
+  });
+
+  const result = await submitShowForModeration({
+    submitterName: "Blocked Organizer",
+    submitterEmail: "blocked@example.com",
+    payloadJson: {
+      organizerId: "organizer-1",
+      showName: "Blocked Show",
+      startDate: "2026-10-17",
+      city: "Kansas City",
+      state: "MO",
+    },
+  });
+
+  assert.deepEqual(result, { status: "BLOCKED", organizerId: "organizer-1" });
+  assert.equal(organizerMock.mock.calls.length, 1);
+  assert.equal(createSubmissionMock.mock.calls.length, 0);
+});
+
+test("submitShowForModeration stops exact published duplicates", async () => {
+  stubMethod(db.organizer, "findUnique", async () => ({
+    id: "organizer-1",
+    name: "New Organizer",
+    email: "new@example.com",
+    moderationStatus: "NEW",
+  }));
+  stubMethod(db.show, "findUnique", async () => ({ id: "show-1", title: "KC Card Show" }));
+  const createSubmissionMock = stubMethod(db.showSubmission, "create", async () => {
+    throw new Error("duplicates must not create submissions");
+  });
+
+  const result = await submitShowForModeration({
+    submitterName: "New Organizer",
+    submitterEmail: "new@example.com",
+    payloadJson: {
+      organizerId: "organizer-1",
+      showName: "KC Card Show",
+      startDate: "2026-10-17",
+      city: "Kansas City",
+      state: "MO",
+    },
+  });
+
+  assert.deepEqual(result, {
+    status: "DUPLICATE",
+    duplicate: { kind: "show", id: "show-1", title: "KC Card Show" },
+  });
+  assert.equal(createSubmissionMock.mock.calls.length, 0);
 });
 
 test("getModeratorVisibleSubmissionById allows pending submissions for any moderator", async () => {

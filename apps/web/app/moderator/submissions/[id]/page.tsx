@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireModeratorSession } from "@/lib/moderator-auth";
+import { SubmissionEditForm } from "@/components/moderation/submission-edit-form";
+import { readSubmissionPayloadEdits } from "@/lib/submission-edit";
 import {
   approveShowSubmission,
-  getOrganizerApprovalForPayload,
+  DuplicateSubmissionError,
   getModeratorVisibleSubmissionById,
   rejectShowSubmission,
+  updatePendingSubmissionPayload,
 } from "@/lib/submissions";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; saved?: string }>;
+};
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +27,7 @@ function buildModeratorNote(
   const parts: string[] = [];
 
   if (recommendTrust && city && state) {
-    parts.push(`Moderator recommendation: consider trusting this promoter for ${city}, ${state}.`);
+    parts.push(`Moderator recommendation: consider marking this organizer Trusted. Reviewed show market: ${city}, ${state}.`);
   }
 
   if (customNote) {
@@ -48,14 +54,44 @@ async function approveSubmission(submissionId: string, formData: FormData) {
     customNote
   );
 
-  const show = await approveShowSubmission(submissionId, {
-    reviewerId: session.user.id,
-    reviewerRole: "MODERATOR",
-    notes: note || null,
-  });
+  let show;
+  try {
+    show = await approveShowSubmission(submissionId, {
+      reviewerId: session.user.id,
+      reviewerRole: "MODERATOR",
+      notes: note || null,
+    });
+  } catch (error) {
+    if (error instanceof DuplicateSubmissionError) {
+      redirect(`/moderator/submissions/${submissionId}?error=duplicate`);
+    }
+    throw error;
+  }
   if (!show) return;
 
   redirect(`/moderator/submissions/${submissionId}`);
+}
+
+async function saveSubmissionEdits(submissionId: string, formData: FormData) {
+  "use server";
+  const session = await requireModeratorSession(`/moderator/submissions/${submissionId}`);
+  const visible = await getModeratorVisibleSubmissionById(submissionId, session.user.id);
+  if (!visible || visible.status !== "PENDING") return;
+  const updates = readSubmissionPayloadEdits(formData);
+  if (!updates) redirect(`/moderator/submissions/${submissionId}?error=validation`);
+
+  try {
+    await updatePendingSubmissionPayload(submissionId, updates, {
+      reviewerId: session.user.id,
+      reviewerRole: "MODERATOR",
+    });
+  } catch (error) {
+    if (error instanceof DuplicateSubmissionError) {
+      redirect(`/moderator/submissions/${submissionId}?error=duplicate`);
+    }
+    throw error;
+  }
+  redirect(`/moderator/submissions/${submissionId}?saved=1`);
 }
 
 async function rejectSubmission(submissionId: string, formData: FormData) {
@@ -70,22 +106,22 @@ async function rejectSubmission(submissionId: string, formData: FormData) {
   redirect("/moderator/submissions");
 }
 
-export default async function ModeratorSubmissionDetailPage({ params }: Props) {
+export default async function ModeratorSubmissionDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const sp = await searchParams;
   const session = await requireModeratorSession(`/moderator/submissions/${id}`);
   const submission = await getModeratorVisibleSubmissionById(id, session.user.id);
   if (!submission) notFound();
 
   const payload = submission.payloadJson as Record<string, unknown>;
-  const approval =
-    typeof payload.organizerId === "string" &&
-    typeof payload.city === "string" &&
-    typeof payload.state === "string"
-      ? await getOrganizerApprovalForPayload(payload)
-      : null;
+  const moderationStatus =
+    "organizer" in submission && submission.organizer
+      ? submission.organizer.moderationStatus
+      : "NEW";
   const isPending = submission.status === "PENDING";
   const approveWithId = approveSubmission.bind(null, submission.id);
   const rejectWithId = rejectSubmission.bind(null, submission.id);
+  const editWithId = saveSubmissionEdits.bind(null, submission.id);
   const submittedFields: [string, unknown][] = [
     ["Show Name", payload.showName],
     ["Start Date", payload.startDate],
@@ -136,12 +172,27 @@ export default async function ModeratorSubmissionDetailPage({ params }: Props) {
         {new Date(submission.createdAt).toLocaleDateString()}
       </p>
 
+      {sp.error && (
+        <p className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {sp.error === "duplicate"
+            ? "A matching show or pending submission already exists."
+            : "Check the edited fields and try again."}
+        </p>
+      )}
+      {sp.saved === "1" && (
+        <p className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          Submission details saved.
+        </p>
+      )}
+
       <div className="mb-8 rounded-xl border border-slate-200 bg-slate-50 p-5">
         <h2 className="text-sm font-semibold text-slate-700">Promoter trust context</h2>
         <p className="mt-2 text-sm text-slate-600">
-          {approval?.autoApprove
-            ? `This promoter is already trusted for ${String(payload.city)}, ${String(payload.state)} with a spot check every ${approval.reviewEvery} shows.`
-            : `This promoter is not trusted yet for ${String(payload.city ?? "")}, ${String(payload.state ?? "")}. You can recommend trusted-market approval to admin when approving.`}
+          {moderationStatus === "TRUSTED"
+            ? "This organizer is Trusted; future non-duplicate submissions auto-publish."
+            : moderationStatus === "BLOCKED"
+              ? "This organizer is Blocked; new submissions are prevented."
+              : "This organizer is New. You can recommend Trusted status to an admin when approving."}
         </p>
       </div>
 
@@ -163,6 +214,8 @@ export default async function ModeratorSubmissionDetailPage({ params }: Props) {
         </div>
       </div>
 
+      {isPending && <SubmissionEditForm payload={payload} action={editWithId} />}
+
       {isPending ? (
         <div className="space-y-4">
           <form action={approveWithId} className="space-y-4">
@@ -173,8 +226,7 @@ export default async function ModeratorSubmissionDetailPage({ params }: Props) {
                 className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
               />
               <span>
-                Recommend that admin enable trusted-market auto approval for this promoter in{" "}
-                {String(payload.city ?? "")}, {String(payload.state ?? "")}.
+                Recommend that admin mark this organizer Trusted for future auto-publishing.
               </span>
             </label>
 

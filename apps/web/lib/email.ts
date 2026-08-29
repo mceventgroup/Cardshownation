@@ -339,3 +339,64 @@ export async function sendPromoterVerificationEmail(
     `,
   });
 }
+
+export async function sendModerationDigestEmail(
+  to: string,
+  input: {
+    pendingCount: number;
+    newOrganizerCount: number;
+    queueUrl: string;
+    submissions: Array<{
+      title: string;
+      city: string;
+      state: string;
+      organizerName: string;
+    }>;
+  }
+) {
+  const rows = input.submissions
+    .map(
+      (submission) => `
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid #e2e8f0;color:#0f172a">${escapeHtml(submission.title)}</td>
+          <td style="padding:10px;border-bottom:1px solid #e2e8f0;color:#475569">${escapeHtml(submission.city)}, ${escapeHtml(submission.state)}</td>
+          <td style="padding:10px;border-bottom:1px solid #e2e8f0;color:#475569">${escapeHtml(submission.organizerName)}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  await sendEmail({
+    from: getFromAddress(),
+    to,
+    subject: `Card Show Nation: ${input.pendingCount} show${input.pendingCount === 1 ? "" : "s"} awaiting review`,
+    html: `
+      <div style="font-family:sans-serif;max-width:640px;margin:0 auto;padding:32px 16px">
+        <h1 style="font-size:22px;font-weight:600;color:#020617;margin-bottom:8px">
+          Moderation digest
+        </h1>
+        <p style="color:#475569;font-size:15px;line-height:1.6;margin-bottom:20px">
+          ${input.pendingCount} show${input.pendingCount === 1 ? " is" : "s are"} waiting for review.
+          ${input.newOrganizerCount} ${input.newOrganizerCount === 1 ? "comes" : "come"} from a New organizer.
+        </p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+          <thead>
+            <tr style="background:#f8fafc;text-align:left">
+              <th style="padding:10px;color:#64748b">Show</th>
+              <th style="padding:10px;color:#64748b">Location</th>
+              <th style="padding:10px;color:#64748b">Organizer</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <a href="${escapeHtml(input.queueUrl)}"
+           style="display:inline-block;background:#0284c7;color:#fff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:9999px;text-decoration:none">
+          Review pending shows
+        </a>
+        <p style="color:#94a3b8;font-size:13px;line-height:1.5;margin-top:24px">
+          This digest replaces per-submission moderator alerts and is scheduled twice daily.
+        </p>
+      </div>
+    `,
+  });
+}

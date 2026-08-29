@@ -5,6 +5,10 @@ import { writeAuditLog } from "@/lib/audit-log";
 import { db } from "@/lib/db";
 import { isFloorplannerSubscriptionActive } from "@/lib/floorplanner-access";
 import { getAdminPromoterById } from "@/lib/promoters";
+import {
+  setOrganizerModerationStatus,
+  type OrganizerModerationStatus,
+} from "@/lib/submissions";
 import { formatShowDate } from "@/lib/utils";
 
 type Props = { params: Promise<{ id: string }> };
@@ -38,6 +42,21 @@ async function toggleVerified(organizerId: string, nextValue: boolean) {
     targetType: "Organizer",
     targetId: organizerId,
   });
+  redirect(`/admin/promoters/${organizerId}`);
+}
+
+async function updateModerationStatus(organizerId: string, formData: FormData) {
+  "use server";
+  const session = await requireAdminSession(`/admin/promoters/${organizerId}`);
+  const value = formData.get("moderationStatus");
+  const moderationStatus =
+    value === "TRUSTED" || value === "BLOCKED" ? value : "NEW";
+
+  await setOrganizerModerationStatus(
+    organizerId,
+    moderationStatus as OrganizerModerationStatus,
+    { actorId: session.user.id, actorRole: "ADMIN" }
+  );
   redirect(`/admin/promoters/${organizerId}`);
 }
 
@@ -115,6 +134,10 @@ async function createTrustedCity(organizerId: string, formData: FormData) {
       reviewEvery,
     },
   });
+  await db.organizer.update({
+    where: { id: organizerId },
+    data: { moderationStatus: "TRUSTED" },
+  });
 
   await writeAuditLog({
     actorId: session.user.id,
@@ -183,6 +206,7 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
   if (!promoter) notFound();
 
   const verifyAction = toggleVerified.bind(null, promoter.id, !promoter.verified);
+  const moderationAction = updateModerationStatus.bind(null, promoter.id);
   const toggleFloorplanAccessAction = toggleFloorplanAccess.bind(
     null,
     promoter.id,
@@ -222,6 +246,24 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <form action={moderationAction} className="flex items-center gap-2">
+            <select
+              name="moderationStatus"
+              defaultValue={promoter.moderationStatus}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
+              aria-label="Organizer moderation status"
+            >
+              <option value="NEW">New · review required</option>
+              <option value="TRUSTED">Trusted · auto-publish</option>
+              <option value="BLOCKED">Blocked · prevent submissions</option>
+            </select>
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+            >
+              Save status
+            </button>
+          </form>
           <form action={verifyAction}>
             <button
               type="submit"
@@ -257,7 +299,7 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard label="Total shows" value={String(promoter._count.shows)} />
-        <StatCard label="Trusted cities" value={String(promoter.approvals.length)} />
+        <StatCard label="Moderation" value={promoter.moderationStatus.toLowerCase()} />
         <StatCard label="Floorplanner" value={floorplannerAccessLabel} />
       </div>
 

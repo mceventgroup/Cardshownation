@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -14,6 +15,12 @@ import { GoogleSignInLink } from "@/components/auth/google-sign-in-link";
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_BLOCK_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
+
+export const metadata: Metadata = {
+  title: "Login",
+  description: "Sign in to your Card Show Nation collector or promoter account.",
+  robots: { index: false, follow: true },
+};
 
 function readString(formData: FormData, key: string, maxLength: number) {
   const value = formData.get(key);
@@ -187,17 +194,16 @@ export default async function UnifiedLoginPage({
             : null;
 
   return (
-    <div className="container-narrow py-6 sm:py-10">
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
-          Login
+    <div className="mx-auto max-w-xl px-4 py-5 sm:px-6 sm:py-10">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
+          Account access
         </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Login once. We&apos;ll send you to the right place.
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+          Welcome back
         </h1>
-        <p className="mt-4 text-base leading-7 text-slate-600">
-          Use one login form for members and promoters. After sign-in, Card Show Nation routes you
-          to the correct dashboard automatically.
+        <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-base">
+          Sign in once and we&apos;ll take you to your collector or promoter dashboard.
         </p>
 
         {errorMessage && (
@@ -206,13 +212,13 @@ export default async function UnifiedLoginPage({
           </p>
         )}
 
-        <GoogleSignInLink from={sp.from ?? "/account"} />
+        <GoogleSignInLink from={sp.from ?? "/account"} compact />
 
-        <form action={handleLogin} className="space-y-5">
+        <form action={handleLogin} className="space-y-4">
           <input type="hidden" name="from" value={sp.from ?? ""} />
 
           <div>
-            <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
+            <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">
               Email
             </label>
             <input
@@ -221,14 +227,17 @@ export default async function UnifiedLoginPage({
               type="email"
               required
               autoComplete="email"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-700">
-              Password
-            </label>
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+              <label htmlFor="password" className="text-sm font-medium text-slate-700">Password</label>
+              <span className="text-xs text-slate-500">
+                Forgot? <Link href="/account/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">Collector</Link> · <Link href="/promoter/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">Promoter</Link>
+              </span>
+            </div>
             <input
               id="password"
               name="password"
@@ -236,7 +245,7 @@ export default async function UnifiedLoginPage({
               required
               maxLength={MAX_PASSWORD_LENGTH}
               autoComplete="current-password"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
             />
           </div>
 
@@ -257,44 +266,19 @@ export default async function UnifiedLoginPage({
           </p>
         )}
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
-          <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Member
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-slate-950">Collector account</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Save favorite states, follow show hosts, and manage your account details.
-            </p>
-            <div className="mt-4 flex flex-col gap-2 text-sm">
-              <Link href="/account/signup" className="font-semibold text-brand-700 hover:text-brand-800">
-                Create account
-              </Link>
-              <Link href="/account/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
-                Reset member password
-              </Link>
-            </div>
-          </section>
-
-          <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Promoter
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-slate-950">Organizer account</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Submit shows, manage your listings, and work inside the promoter dashboard.
-            </p>
-            <div className="mt-4 flex flex-col gap-2 text-sm">
-              <Link href="/promoter/signup" className="font-semibold text-brand-700 hover:text-brand-800">
-                Create promoter account
-              </Link>
-              <Link href="/promoter/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
-                Reset promoter password
-              </Link>
-            </div>
-          </section>
-
+        <div className="mt-6 border-t border-slate-200 pt-5 text-sm">
+          <p className="text-slate-600">New to Card Show Nation?</p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+            <Link href="/account/signup" className="font-semibold text-brand-700 hover:text-brand-800">Create a collector account</Link>
+            <Link href="/promoter/signup" className="font-semibold text-brand-700 hover:text-brand-800">Create a promoter account</Link>
+          </div>
         </div>
+
+        <aside className="mt-5 rounded-2xl bg-brand-50 p-4">
+          <p className="font-semibold text-slate-950">Know about an upcoming card show?</p>
+          <p className="mt-1 text-sm leading-5 text-slate-600">Help collectors find it. Listings are free and you don&apos;t need an account.</p>
+          <Link href="/submit-show" className="mt-3 inline-flex rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Submit a show free</Link>
+        </aside>
       </div>
     </div>
   );

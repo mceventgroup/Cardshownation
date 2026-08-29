@@ -175,6 +175,28 @@ export async function getFixtureSubmissionById(id: string) {
   return submissions.find((submission) => submission.id === id) ?? null;
 }
 
+export async function updateFixtureSubmissionPayload(
+  submissionId: string,
+  payloadJson: Record<string, unknown>
+) {
+  const submissions = await readSubmissions();
+  const submissionIndex = submissions.findIndex((submission) => submission.id === submissionId);
+
+  if (submissionIndex === -1 || submissions[submissionIndex]?.status !== "PENDING") {
+    return null;
+  }
+
+  const updatedSubmission = {
+    ...submissions[submissionIndex],
+    payloadJson,
+    updatedAt: new Date(),
+  };
+
+  submissions[submissionIndex] = updatedSubmission;
+  await writeSubmissions(submissions);
+  return updatedSubmission;
+}
+
 export async function createFixtureSubmission(input: {
   submitterName: string;
   submitterEmail: string;

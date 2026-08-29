@@ -35,14 +35,14 @@ export const metadata: Metadata = {
   openGraph: {
     siteName: "Card Show Nation",
     type: "website",
+    title: "Card Show Nation | Card Show Directory",
+    description: "Find upcoming sports card, Pokemon, and TCG shows by state, city, and date.",
   },
+  twitter: { card: "summary_large_image" },
   robots: {
     index: true,
     follow: true,
     googleBot: { index: true, follow: true },
-  },
-  alternates: {
-    canonical: process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com",
   },
 };
 

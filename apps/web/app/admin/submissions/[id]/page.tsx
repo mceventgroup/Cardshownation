@@ -1,30 +1,23 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireAdminSession } from "@/lib/admin-auth";
+import { SubmissionEditForm } from "@/components/moderation/submission-edit-form";
+import { readSubmissionPayloadEdits } from "@/lib/submission-edit";
 import {
   approveShowSubmission,
+  DuplicateSubmissionError,
   getSubmissionById,
-  getOrganizerApprovalForPayload,
   rejectShowSubmission,
-  setOrganizerAutoApprovalForPayload,
+  setOrganizerModerationStatus,
+  updatePendingSubmissionPayload,
 } from "@/lib/submissions";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; saved?: string }>;
+};
 
 export const dynamic = "force-dynamic";
-
-function readReviewEvery(formData: FormData) {
-  const reviewEveryValue = formData.get("reviewEvery");
-  return Math.max(
-    1,
-    Math.min(
-      10,
-      typeof reviewEveryValue === "string"
-        ? Number.parseInt(reviewEveryValue, 10) || 4
-        : 4
-    )
-  );
-}
 
 async function approveSubmission(submissionId: string, formData: FormData) {
   "use server";
@@ -34,23 +27,49 @@ async function approveSubmission(submissionId: string, formData: FormData) {
   if (!submission) return;
 
   if (grantAutoApproval) {
-    await setOrganizerAutoApprovalForPayload(
-      submission.payloadJson as Record<string, unknown>,
-      true,
-      readReviewEvery(formData),
-      {
+    const organizerId = (submission.payloadJson as Record<string, unknown>).organizerId;
+    if (typeof organizerId === "string") {
+      await setOrganizerModerationStatus(organizerId, "TRUSTED", {
         actorId: session.user.id,
         actorRole: "ADMIN",
-      }
-    );
+      });
+    }
   }
 
-  const show = await approveShowSubmission(submissionId, {
-    reviewerId: session.user.id,
-    reviewerRole: "ADMIN",
-  });
+  let show;
+  try {
+    show = await approveShowSubmission(submissionId, {
+      reviewerId: session.user.id,
+      reviewerRole: "ADMIN",
+    });
+  } catch (error) {
+    if (error instanceof DuplicateSubmissionError) {
+      redirect(`/admin/submissions/${submissionId}?error=duplicate`);
+    }
+    throw error;
+  }
   if (!show) return;
   redirect(`/admin/shows/${show.id}`);
+}
+
+async function saveSubmissionEdits(submissionId: string, formData: FormData) {
+  "use server";
+  const session = await requireAdminSession(`/admin/submissions/${submissionId}`);
+  const updates = readSubmissionPayloadEdits(formData);
+  if (!updates) redirect(`/admin/submissions/${submissionId}?error=validation`);
+
+  try {
+    await updatePendingSubmissionPayload(submissionId, updates, {
+      reviewerId: session.user.id,
+      reviewerRole: "ADMIN",
+    });
+  } catch (error) {
+    if (error instanceof DuplicateSubmissionError) {
+      redirect(`/admin/submissions/${submissionId}?error=duplicate`);
+    }
+    throw error;
+  }
+  redirect(`/admin/submissions/${submissionId}?saved=1`);
 }
 
 async function rejectSubmission(submissionId: string, formData: FormData) {
@@ -65,24 +84,23 @@ async function rejectSubmission(submissionId: string, formData: FormData) {
   redirect("/admin/submissions");
 }
 
-export default async function ReviewSubmissionPage({ params }: Props) {
+export default async function ReviewSubmissionPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const sp = await searchParams;
   await requireAdminSession(`/admin/submissions/${id}`);
   const submission = await getSubmissionById(id);
   if (!submission) notFound();
 
   const payload = submission.payloadJson as Record<string, unknown>;
   const isPending = submission.status === "PENDING";
-  const hasOrganizerApprovalContext =
-    typeof payload.organizerId === "string" &&
-    typeof payload.city === "string" &&
-    typeof payload.state === "string";
-  const approval =
-    hasOrganizerApprovalContext
-      ? await getOrganizerApprovalForPayload(payload)
-      : null;
+  const hasOrganizerApprovalContext = typeof payload.organizerId === "string";
+  const moderationStatus =
+    "organizer" in submission && submission.organizer
+      ? submission.organizer.moderationStatus
+      : "NEW";
   const approveWithId = approveSubmission.bind(null, submission.id);
   const rejectWithId = rejectSubmission.bind(null, submission.id);
+  const editWithId = saveSubmissionEdits.bind(null, submission.id);
   const submittedFields: [string, unknown][] = [
     ["Show Name", payload.showName],
     ["Start Date", payload.startDate],
@@ -144,6 +162,19 @@ export default async function ReviewSubmissionPage({ params }: Props) {
         {new Date(submission.createdAt).toLocaleDateString()}
       </p>
 
+      {sp.error && (
+        <p className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {sp.error === "duplicate"
+            ? "A matching show or pending submission already exists."
+            : "Check the edited fields and try again."}
+        </p>
+      )}
+      {sp.saved === "1" && (
+        <p className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          Submission details saved.
+        </p>
+      )}
+
       {reviewer && (
         <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           Reviewed by {reviewer.name ?? reviewer.email} ({reviewer.role.toLowerCase()})
@@ -171,13 +202,17 @@ export default async function ReviewSubmissionPage({ params }: Props) {
         </div>
       </div>
 
+      {isPending && <SubmissionEditForm payload={payload} action={editWithId} />}
+
       {hasOrganizerApprovalContext && (
         <div className="mb-8 rounded-xl border border-slate-200 bg-slate-50 p-5">
-          <h2 className="text-sm font-semibold text-slate-700">Promoter Trust For This Market</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Organizer moderation status</h2>
           <p className="mt-2 text-sm text-slate-600">
-            {approval?.autoApprove
-              ? `${String(payload.city)}, ${String(payload.state)} is already trusted. ${approval.approvedShowCount} approved shows so far, with a spot check every ${approval.reviewEvery}.`
-              : `${String(payload.city)}, ${String(payload.state)} is not trusted yet. Approving this show can also enable auto-approval for future submissions in this market.`}
+            {moderationStatus === "TRUSTED"
+              ? "Trusted organizer: future non-duplicate submissions publish automatically."
+              : moderationStatus === "BLOCKED"
+                ? "Blocked organizer: new submissions are prevented."
+                : "New organizer: submissions remain pending until reviewed."}
           </p>
         </div>
       )}
@@ -185,7 +220,7 @@ export default async function ReviewSubmissionPage({ params }: Props) {
       {isPending ? (
         <div className="space-y-4">
           <form action={approveWithId}>
-            {hasOrganizerApprovalContext && !approval?.autoApprove && (
+            {hasOrganizerApprovalContext && moderationStatus !== "TRUSTED" && (
               <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <label className="flex items-start gap-3 text-sm text-slate-700">
                   <input
@@ -194,28 +229,9 @@ export default async function ReviewSubmissionPage({ params }: Props) {
                     className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                   />
                   <span>
-                    Trust this promoter for future shows in {String(payload.city)},{" "}
-                    {String(payload.state)}.
+                    Mark this organizer Trusted so future non-duplicate shows auto-publish.
                   </span>
                 </label>
-                <div className="mt-3 flex items-center gap-3">
-                  <label
-                    htmlFor="reviewEvery"
-                    className="text-xs font-medium uppercase tracking-wide text-slate-500"
-                  >
-                    Spot check every
-                  </label>
-                  <input
-                    id="reviewEvery"
-                    name="reviewEvery"
-                    type="number"
-                    min={1}
-                    max={10}
-                    defaultValue={4}
-                    className="w-20 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                  />
-                  <span className="text-sm text-slate-500">approved shows</span>
-                </div>
               </div>
             )}
             <button

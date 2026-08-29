@@ -32,6 +32,12 @@ enum SubmissionStatus {
   REJECTED
 }
 
+enum OrganizerModerationStatus {
+  NEW
+  TRUSTED
+  BLOCKED
+}
+
 enum SourceType {
   MANUAL
   SUBMITTED
@@ -167,6 +173,7 @@ model Organizer {
   facebookUrl  String?
   instagramUrl String?
   verified     Boolean  @default(false)
+  moderationStatus OrganizerModerationStatus @default(NEW)
   floorplanEnabled Boolean @default(false)
   userId       String?  @unique
   createdAt    DateTime @default(now())
@@ -174,7 +181,11 @@ model Organizer {
   shows        Show[]
   approvals    OrganizerApproval[]
   followers    UserFavoriteOrganizer[]
+  submissions  ShowSubmission[]
   user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([moderationStatus])
 }
 
 model OrganizerApproval {
@@ -220,6 +231,7 @@ model Show {
   id                  String     @id @default(cuid())
   title               String
   slug                String     @unique
+  dedupeKey           String?    @unique
   description         String?
   status              ShowStatus @default(PENDING)
   sourceType          SourceType @default(SUBMITTED)
@@ -306,6 +318,8 @@ model ShowSubmission {
   id             String           @id @default(cuid())
   submitterName  String
   submitterEmail String
+  organizerId   String?
+  dedupeKey     String?
   payloadJson    Json
   status         SubmissionStatus @default(PENDING)
   notes          String?
@@ -316,6 +330,23 @@ model ShowSubmission {
   updatedAt      DateTime         @updatedAt
 
   reviewer User? @relation("SubmissionReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  organizer Organizer? @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+
+  @@index([organizerId, status, createdAt])
+  @@index([dedupeKey, status])
+}
+
+model ModerationDigestDelivery {
+  id             String   @id @default(cuid())
+  recipientEmail String
+  slotKey        String
+  pendingCount   Int
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([recipientEmail, slotKey])
+  @@index([slotKey, sentAt])
 }
 
 model ShowReport {

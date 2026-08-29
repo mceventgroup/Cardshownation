@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { isFixtureMode } from "@/lib/data-mode";
 import { saveFlyerImage } from "@/lib/flyers";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
-import { createApprovedShowFromPayload, createShowSubmission } from "@/lib/submissions";
+import { submitShowForModeration } from "@/lib/submissions";
 import { SHOW_CATEGORIES } from "@/lib/shows";
 import { hasOrganizerFloorplanEnabledColumn } from "@/lib/organizer-schema";
 import { normalizeExternalUrl } from "@/lib/url";
@@ -279,6 +279,7 @@ export async function getPromoterDashboardData(userId: string) {
               facebookUrl: true,
               instagramUrl: true,
               verified: true,
+              moderationStatus: true,
               floorplanEnabled: true,
               approvals: {
                 where: { autoApprove: true },
@@ -309,6 +310,7 @@ export async function getPromoterDashboardData(userId: string) {
               facebookUrl: true,
               instagramUrl: true,
               verified: true,
+              moderationStatus: true,
               approvals: {
                 where: { autoApprove: true },
                 orderBy: [{ state: "asc" }, { city: "asc" }],
@@ -412,6 +414,7 @@ export async function createPromoterShow(userId: string, input: PromoterShowInpu
           email: true,
           websiteUrl: true,
           facebookUrl: true,
+          moderationStatus: true,
         },
       },
     },
@@ -422,6 +425,9 @@ export async function createPromoterShow(userId: string, input: PromoterShowInpu
   }
 
   const organizer = user.organizer;
+  if (organizer.moderationStatus === "BLOCKED") {
+    return { status: "BLOCKED" as const };
+  }
   const city = normalizeLocationValue(input.city);
   const state = normalizeLocationValue(input.state).toUpperCase();
   const flyerImageUrl =
@@ -458,46 +464,19 @@ export async function createPromoterShow(userId: string, input: PromoterShowInpu
     submittedViaPortal: true,
   };
 
-  const approval = await db.organizerApproval.findUnique({
-    where: {
-      organizerId_city_state: {
-        organizerId: organizer.id,
-        city,
-        state,
-      },
-    },
-  });
-
-  const nextApprovedCount = (approval?.approvedShowCount ?? 0) + 1;
-  const needsSpotCheck =
-    Boolean(approval?.autoApprove) &&
-    nextApprovedCount % Math.max(approval?.reviewEvery ?? 4, 1) === 0;
-
-  if (approval?.autoApprove && !needsSpotCheck) {
-    const show = await createApprovedShowFromPayload(payload);
-    await db.organizerApproval.update({
-      where: { id: approval.id },
-      data: { approvedShowCount: { increment: 1 } },
-    });
-
-    return {
-      status: "APPROVED" as const,
-      show,
-      territoryStatus: "trusted",
-    };
-  }
-
-  const submission = await createShowSubmission({
+  const result = await submitShowForModeration({
     submitterName: user.name ?? organizer.name,
     submitterEmail: user.email,
     payloadJson: payload,
   });
 
-  return {
-    status: "PENDING" as const,
-    submission,
-    territoryStatus: approval?.autoApprove ? "spot-check" : "review",
-  };
+  if (result.status === "APPROVED") {
+    return { ...result, territoryStatus: "trusted" as const };
+  }
+  if (result.status === "PENDING") {
+    return { ...result, territoryStatus: "review" as const };
+  }
+  return result;
 }
 
 export async function bulkCreatePromoterShows(
@@ -529,6 +508,7 @@ export async function bulkCreatePromoterShows(
           email: true,
           websiteUrl: true,
           facebookUrl: true,
+          moderationStatus: true,
         },
       },
     },
@@ -536,6 +516,18 @@ export async function bulkCreatePromoterShows(
 
   if (!user?.organizer) {
     throw new Error("Organizer account not found.");
+  }
+
+  if (user.organizer.moderationStatus === "BLOCKED") {
+    return {
+      approved: 0,
+      pending: 0,
+      skipped: rows.length,
+      errors: rows.map((row) => ({
+        row: row.rowNumber,
+        message: "This organizer is blocked from submitting shows.",
+      })),
+    };
   }
 
   const errors: PromoterBulkUploadResult["errors"] = [];
@@ -770,8 +762,17 @@ export async function bulkCreatePromoterShows(
 
     if (result.status === "APPROVED") {
       approved += 1;
-    } else {
+    } else if (result.status === "PENDING") {
       pending += 1;
+    } else {
+      errors.push({
+        row: row.rowNumber,
+        message:
+          result.status === "DUPLICATE"
+            ? "A matching show or pending submission already exists."
+            : "This organizer is blocked from submitting shows.",
+      });
+      continue;
     }
 
     existingKeys.add(key);

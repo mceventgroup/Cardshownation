@@ -109,8 +109,8 @@ export default async function PromoterPortalPage({
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             <StatCard label="Shows on account" value={String(dashboard.showCount)} />
             <StatCard
-              label="Trusted cities"
-              value={String(dashboard.approvals.length)}
+              label="Organizer status"
+              value={dashboard.organizer.moderationStatus.toLowerCase()}
             />
             <StatCard label="Recent status" value="Admin managed" />
           </div>
@@ -190,30 +190,15 @@ export default async function PromoterPortalPage({
         <aside className="space-y-6">
           <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Trusted cities
+              Submission review
             </p>
-            {dashboard.approvals.length === 0 ? (
-              <p className="mt-4 text-sm leading-6 text-slate-600">
-                Admin can approve repeat markets for your account after reviewing your submitted
-                shows.
-              </p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {dashboard.approvals.map((approval) => (
-                  <div
-                    key={approval.id}
-                    className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3"
-                  >
-                    <p className="text-sm font-semibold text-slate-900">
-                      {approval.city}, {approval.state}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {approval.approvedShowCount} approved shows in this market
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              {dashboard.organizer.moderationStatus === "TRUSTED"
+                ? "Your organizer is Trusted. Future non-duplicate shows publish automatically."
+                : dashboard.organizer.moderationStatus === "BLOCKED"
+                  ? "This organizer cannot submit new shows. Contact Card Show Nation if you believe this is an error."
+                  : "New organizer submissions stay pending until an admin or moderator reviews them."}
+            </p>
           </section>
 
           <section className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
@@ -292,8 +277,8 @@ function PromoterLandingPage() {
             body: "Your organizer name, contact email, and links stay attached to your account so each new show starts mostly filled in.",
           },
           {
-            title: "City-based trust",
-            body: "Admin can approve specific city and state markets for repeat submissions after a promoter has built trust there.",
+            title: "Trust-based review",
+            body: "New organizers are reviewed first. Trusted organizers can publish future non-duplicate shows automatically.",
           },
           {
             title: "Flyer rules built in",

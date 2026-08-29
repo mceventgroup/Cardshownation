@@ -38,7 +38,7 @@ export function PromoterUploadForm() {
           <div>
             <h2 className="text-lg font-semibold text-slate-950">Bulk show upload</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Upload one CSV to add multiple shows at once. Trusted cities will auto-approve based on your account settings. Other rows will become pending submissions for admin review.
+              Upload one CSV to add multiple shows at once. Trusted organizers auto-publish non-duplicate rows. New organizers&apos; rows become pending submissions for review.
             </p>
           </div>
           <a

@@ -48,6 +48,9 @@ export default async function AdminPromotersPage() {
                 <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 md:table-cell">
                   Account
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Moderation
+                </th>
                 <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 lg:table-cell">
                   Trusted Cities
                 </th>
@@ -75,6 +78,19 @@ export default async function AdminPromotersPage() {
                   </td>
                   <td className="hidden px-4 py-3 text-slate-500 md:table-cell">
                     {promoter.user?.email ?? "No linked account"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        promoter.moderationStatus === "TRUSTED"
+                          ? "bg-green-50 text-green-700"
+                          : promoter.moderationStatus === "BLOCKED"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-yellow-50 text-yellow-700"
+                      }`}
+                    >
+                      {promoter.moderationStatus.toLowerCase()}
+                    </span>
                   </td>
                   <td className="hidden px-4 py-3 lg:table-cell">
                     <span className="text-slate-500">{promoter.approvals.length}</span>

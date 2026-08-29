@@ -7,6 +7,7 @@ import { getStateBySlug } from "@/lib/states";
 import { ShowListItem } from "@/components/shows/show-list-item";
 import { slugify } from "@/lib/utils";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
+import { absoluteSiteUrl } from "@/lib/site-url";
 
 export const revalidate = 3600;
 export const dynamic = "force-dynamic";
@@ -21,11 +22,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!stateRecord) return {};
 
-  return {
-    title: `${stateRecord.name} Card Shows`,
-    description:
+  const title = `${stateRecord.name} Card Shows`;
+  const description =
       stateRecord.seoBlurb ??
-      `Find upcoming sports card, Pokemon, and TCG shows in ${stateRecord.name}. Browse dates, venues, admission info, and promoter details on Card Show Nation.`,
+      `Find upcoming sports card, Pokemon, and TCG shows in ${stateRecord.name}. Browse dates, venues, admission info, and promoter details on Card Show Nation.`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/card-shows/${stateRecord.slug}` },
+    openGraph: {
+      title,
+      description,
+      url: absoluteSiteUrl(`/card-shows/${stateRecord.slug}`),
+    },
   };
 }
 
@@ -42,23 +52,34 @@ export default async function StatePage({ params }: Props) {
 
   const freeShows = shows.filter((show) => show.isFree).length;
 
+  const pagePath = `/card-shows/${stateRecord.slug}`;
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "CollectionPage",
-    name: `${stateRecord.name} Card Shows`,
-    description:
-      stateRecord.seoBlurb ??
-      `Upcoming card shows in ${stateRecord.name} listed on Card Show Nation.`,
-    url: `https://cardshownation.com/card-shows/${stateRecord.slug}`,
-    mainEntity: {
-      "@type": "ItemList",
-      itemListElement: shows.map((show, index) => ({
-        "@type": "ListItem",
-        position: index + 1,
-        url: `https://cardshownation.com/shows/${show.slug}`,
-        name: show.title,
-      })),
-    },
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        name: `${stateRecord.name} Card Shows`,
+        description: stateRecord.seoBlurb ?? `Upcoming card shows in ${stateRecord.name} listed on Card Show Nation.`,
+        url: absoluteSiteUrl(pagePath),
+        mainEntity: {
+          "@type": "ItemList",
+          numberOfItems: shows.length,
+          itemListElement: shows.map((show, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            url: absoluteSiteUrl(`/shows/${show.slug}`),
+            name: show.title,
+          })),
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Card Shows", item: absoluteSiteUrl("/card-shows") },
+          { "@type": "ListItem", position: 2, name: stateRecord.name, item: absoluteSiteUrl(pagePath) },
+        ],
+      },
+    ],
   };
 
   return (

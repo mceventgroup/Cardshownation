@@ -9,6 +9,7 @@ import {
   getFixtureSubmissionById,
   getFixtureSubmissions,
   rejectFixtureSubmission,
+  updateFixtureSubmissionPayload,
 } from "@/lib/fixture-store";
 import { slugify } from "@/lib/utils";
 import { normalizeExternalUrl } from "@/lib/url";
@@ -23,7 +24,24 @@ const reviewerInclude = {
       role: true,
     },
   },
+  organizer: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      moderationStatus: true,
+    },
+  },
 } as const;
+
+export type OrganizerModerationStatus = "NEW" | "TRUSTED" | "BLOCKED";
+
+export class DuplicateSubmissionError extends Error {
+  constructor(public readonly duplicateId: string) {
+    super("A matching show or pending submission already exists.");
+    this.name = "DuplicateSubmissionError";
+  }
+}
 
 function readString(payload: Record<string, unknown>, key: string) {
   const value = payload[key];
@@ -34,6 +52,154 @@ function readStringArray(payload: Record<string, unknown>, key: string) {
   const value = payload[key];
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
+}
+
+function normalizeDedupePart(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+export function buildShowDedupeKey(payload: Record<string, unknown>) {
+  const title = readString(payload, "showName");
+  const startDate = readString(payload, "startDate");
+  const city = readString(payload, "city");
+  const state = readString(payload, "state");
+
+  if (!title || !startDate || !city || !state) {
+    return null;
+  }
+
+  return [
+    normalizeDedupePart(title),
+    startDate,
+    normalizeDedupePart(city),
+    state.trim().toUpperCase(),
+  ].join("|");
+}
+
+async function findDuplicateForPayload(
+  payload: Record<string, unknown>,
+  options?: { excludeSubmissionId?: string; includePending?: boolean }
+) {
+  const dedupeKey = buildShowDedupeKey(payload);
+  if (!dedupeKey || isFixtureMode()) {
+    return null;
+  }
+
+  const storedMatch = await db.show.findUnique({
+    where: { dedupeKey },
+    select: { id: true, title: true },
+  });
+  if (storedMatch) {
+    return { kind: "show" as const, id: storedMatch.id, title: storedMatch.title };
+  }
+
+  const startDateValue = readString(payload, "startDate");
+  const state = readString(payload, "state")?.toUpperCase();
+  if (startDateValue && state) {
+    const dayStart = new Date(`${startDateValue}T00:00:00.000Z`);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const candidates = await db.show.findMany({
+      where: {
+        state,
+        startDate: { gte: dayStart, lt: dayEnd },
+      },
+      select: { id: true, title: true, city: true, state: true, startDate: true },
+    });
+
+    const legacyMatch = candidates.find(
+      (show) =>
+        buildShowDedupeKey({
+          showName: show.title,
+          startDate: show.startDate.toISOString().slice(0, 10),
+          city: show.city,
+          state: show.state,
+        }) === dedupeKey
+    );
+    if (legacyMatch) {
+      return { kind: "show" as const, id: legacyMatch.id, title: legacyMatch.title };
+    }
+  }
+
+  if (options?.includePending === false) {
+    return null;
+  }
+
+  const pendingMatch = await db.showSubmission.findFirst({
+    where: {
+      status: "PENDING",
+      dedupeKey,
+      ...(options?.excludeSubmissionId
+        ? { id: { not: options.excludeSubmissionId } }
+        : {}),
+    },
+    select: { id: true, payloadJson: true },
+  });
+  if (pendingMatch) {
+    const pendingPayload = pendingMatch.payloadJson as Record<string, unknown>;
+    return {
+      kind: "submission" as const,
+      id: pendingMatch.id,
+      title: readString(pendingPayload, "showName") ?? "Pending show",
+    };
+  }
+
+  const legacyPending = await db.showSubmission.findMany({
+    where: {
+      status: "PENDING",
+      dedupeKey: null,
+      ...(options?.excludeSubmissionId
+        ? { id: { not: options.excludeSubmissionId } }
+        : {}),
+    },
+    select: { id: true, payloadJson: true },
+    take: 200,
+    orderBy: { createdAt: "desc" },
+  });
+  const legacyPendingMatch = legacyPending.find(
+    (submission) =>
+      buildShowDedupeKey(submission.payloadJson as Record<string, unknown>) === dedupeKey
+  );
+
+  return legacyPendingMatch
+    ? {
+        kind: "submission" as const,
+        id: legacyPendingMatch.id,
+        title:
+          readString(legacyPendingMatch.payloadJson as Record<string, unknown>, "showName") ??
+          "Pending show",
+      }
+    : null;
+}
+
+async function resolveOrganizerForSubmission(input: {
+  submitterName: string;
+  submitterEmail: string;
+  payloadJson: Record<string, unknown>;
+}) {
+  const organizerId = readString(input.payloadJson, "organizerId");
+  if (organizerId) {
+    const organizer = await db.organizer.findUnique({ where: { id: organizerId } });
+    if (organizer) return organizer;
+  }
+
+  const email = (
+    readString(input.payloadJson, "organizerEmail") ?? input.submitterEmail
+  ).toLowerCase();
+  const existing = await db.organizer.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+    orderBy: { createdAt: "asc" },
+  });
+  if (existing) return existing;
+
+  return db.organizer.create({
+    data: {
+      name: readString(input.payloadJson, "organizerName") ?? input.submitterName,
+      email,
+      websiteUrl: normalizeExternalUrl(readString(input.payloadJson, "websiteUrl")),
+      facebookUrl: normalizeExternalUrl(readString(input.payloadJson, "facebookUrl")),
+      moderationStatus: "NEW",
+    },
+  });
 }
 
 function readDailySchedule(payload: Record<string, unknown>) {
@@ -226,6 +392,7 @@ export async function createApprovedShowFromPayload(payload: Record<string, unkn
     data: {
       title: readString(payload, "showName") ?? "Untitled Show",
       slug,
+      dedupeKey: buildShowDedupeKey(payload),
       city,
       state,
       startDate: new Date(
@@ -268,6 +435,8 @@ export async function createShowSubmission(input: {
   submitterName: string;
   submitterEmail: string;
   payloadJson: Record<string, unknown>;
+  organizerId?: string | null;
+  dedupeKey?: string | null;
 }) {
   if (isFixtureMode()) {
     return createFixtureSubmission(input);
@@ -278,9 +447,53 @@ export async function createShowSubmission(input: {
       submitterName: input.submitterName,
       submitterEmail: input.submitterEmail,
       payloadJson: input.payloadJson as object,
+      organizerId: input.organizerId ?? null,
+      dedupeKey: input.dedupeKey ?? buildShowDedupeKey(input.payloadJson),
       status: "PENDING",
     },
   });
+}
+
+export async function submitShowForModeration(input: {
+  submitterName: string;
+  submitterEmail: string;
+  payloadJson: Record<string, unknown>;
+}) {
+  if (isFixtureMode()) {
+    const submission = await createShowSubmission(input);
+    return { status: "PENDING" as const, submission };
+  }
+
+  const duplicate = await findDuplicateForPayload(input.payloadJson, { includePending: true });
+  if (duplicate) {
+    return { status: "DUPLICATE" as const, duplicate };
+  }
+
+  const organizer = await resolveOrganizerForSubmission(input);
+  if (organizer.moderationStatus === "BLOCKED") {
+    return { status: "BLOCKED" as const, organizerId: organizer.id };
+  }
+  const payloadJson = {
+    ...input.payloadJson,
+    organizerId: organizer.id,
+    organizerName: readString(input.payloadJson, "organizerName") ?? organizer.name,
+    organizerEmail: readString(input.payloadJson, "organizerEmail") ?? organizer.email,
+  };
+  const submission = await createShowSubmission({
+    ...input,
+    payloadJson,
+    organizerId: organizer.id,
+    dedupeKey: buildShowDedupeKey(payloadJson),
+  });
+
+  if (organizer.moderationStatus !== "TRUSTED") {
+    return { status: "PENDING" as const, submission };
+  }
+
+  const show = await approveShowSubmission(submission.id, {
+    notes: "Auto-published for a trusted organizer.",
+  });
+  return { status: "APPROVED" as const, submission, show };
 }
 
 export async function getAllSubmissions() {
@@ -377,6 +590,10 @@ export async function approveShowSubmission(
   }
 
   const payload = submission.payloadJson as Record<string, unknown>;
+  const duplicate = await findDuplicateForPayload(payload, { includePending: false });
+  if (duplicate) {
+    throw new DuplicateSubmissionError(duplicate.id);
+  }
   const show = await createApprovedShowFromPayload(payload);
   await bumpOrganizerApprovalCount(payload);
 
@@ -404,6 +621,107 @@ export async function approveShowSubmission(
   });
 
   return show;
+}
+
+export async function updatePendingSubmissionPayload(
+  submissionId: string,
+  updates: Record<string, unknown>,
+  actor: {
+    reviewerId?: string | null;
+    reviewerRole?: UserRole | null;
+  }
+) {
+  if (actor.reviewerRole !== "ADMIN" && actor.reviewerRole !== "MODERATOR") {
+    throw new Error("Only admin or moderator reviewers can edit submissions.");
+  }
+
+  const existing = await getSubmissionById(submissionId);
+  if (!existing || existing.status !== "PENDING") {
+    return null;
+  }
+
+  const payloadJson = {
+    ...(existing.payloadJson as Record<string, unknown>),
+    ...updates,
+  };
+  const previousPayload = existing.payloadJson as Record<string, unknown>;
+  if (
+    updates.startDate !== previousPayload.startDate ||
+    updates.endDate !== previousPayload.endDate
+  ) {
+    payloadJson.sameTimesEachDay = true;
+    payloadJson.dailySchedule = null;
+  }
+
+  if (isFixtureMode()) {
+    return updateFixtureSubmissionPayload(submissionId, payloadJson);
+  }
+
+  const duplicate = await findDuplicateForPayload(payloadJson, {
+    excludeSubmissionId: submissionId,
+    includePending: true,
+  });
+  if (duplicate) {
+    throw new DuplicateSubmissionError(duplicate.id);
+  }
+
+  const submission = await db.showSubmission.update({
+    where: { id: submissionId },
+    data: {
+      payloadJson: payloadJson as object,
+      dedupeKey: buildShowDedupeKey(payloadJson),
+    },
+  });
+
+  await writeAuditLog({
+    actorId: actor.reviewerId ?? null,
+    actorRole: actor.reviewerRole,
+    action: "submission.edited",
+    targetType: "ShowSubmission",
+    targetId: submissionId,
+    details: { updatedFields: Object.keys(updates) },
+  });
+
+  return submission;
+}
+
+export async function setOrganizerModerationStatus(
+  organizerId: string,
+  moderationStatus: OrganizerModerationStatus,
+  actor: {
+    actorId?: string | null;
+    actorRole?: UserRole | null;
+  }
+) {
+  if (actor.actorRole !== "ADMIN") {
+    throw new Error("Only admins can update organizer moderation status.");
+  }
+
+  const organizer = await db.$transaction(async (transaction) => {
+    const updated = await transaction.organizer.update({
+      where: { id: organizerId },
+      data: { moderationStatus },
+    });
+
+    if (moderationStatus !== "TRUSTED") {
+      await transaction.organizerApproval.updateMany({
+        where: { organizerId },
+        data: { autoApprove: false },
+      });
+    }
+
+    return updated;
+  });
+
+  await writeAuditLog({
+    actorId: actor.actorId ?? null,
+    actorRole: actor.actorRole,
+    action: `promoter.moderation_${moderationStatus.toLowerCase()}`,
+    targetType: "Organizer",
+    targetId: organizerId,
+  });
+
+  return organizer;
 }
 
 export async function setOrganizerAutoApprovalForPayload(
@@ -446,6 +764,11 @@ export async function setOrganizerAutoApprovalForPayload(
       autoApprove: enabled,
       reviewEvery: normalizedReviewEvery,
     },
+  });
+
+  await db.organizer.update({
+    where: { id: lookup.organizerId },
+    data: { moderationStatus: enabled ? "TRUSTED" : "NEW" },
   });
 
   await writeAuditLog({

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Search } from "lucide-react";
+import { MapPin, Plus, Search } from "lucide-react";
 import { getDataModeLabel, isFixtureMode } from "@/lib/data-mode";
 import { getPublicPortalLink } from "@/lib/public-portal";
 
@@ -9,10 +9,10 @@ export async function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="container-wide py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/" className="flex items-center gap-3 self-start">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
+      <div className="container-wide py-2.5 sm:py-3">
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm sm:h-10 sm:w-10 sm:rounded-2xl">
               <MapPin className="h-4 w-4" />
             </div>
             <div className="min-w-0">
@@ -32,46 +32,61 @@ export async function Header() {
             </div>
           </Link>
 
-          <nav className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3">
+          <Link
+            href="/submit-show"
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:hidden"
+          >
+            <Plus className="h-4 w-4" />
+            Submit show
+          </Link>
+
+          <nav className="hidden items-center justify-end gap-2 sm:flex lg:gap-3">
             <Link
               href="/card-shows"
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 sm:flex-none"
+              className="inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950"
             >
               <Search className="h-4 w-4" />
-              <span className="hidden sm:inline">Browse Shows</span>
-              <span className="sm:hidden">Browse</span>
+              Browse Shows
             </Link>
             <Link
               href="/floorplanner"
-              className="inline-flex flex-1 items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 sm:flex-none"
+              className="inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950"
             >
-              <span className="hidden sm:inline">Floor Planner</span>
-              <span className="sm:hidden">Planner</span>
+              Floor Planner
             </Link>
             <Link
               href={portalLink.href}
-              className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800 sm:flex-none"
+              className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800"
             >
-              <span className="hidden sm:inline">{portalLink.label}</span>
-              <span className="sm:hidden">{portalLink.shortLabel}</span>
+              {portalLink.label}
             </Link>
             {showGuestCta && (
               <Link
                 href="/account/signup"
-                className="inline-flex flex-1 items-center justify-center rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100 sm:flex-none sm:px-4"
+                className="hidden items-center justify-center rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100 lg:inline-flex"
               >
-                <span className="hidden sm:inline">Create Account</span>
-                <span className="sm:hidden">Create</span>
+                Create Account
               </Link>
             )}
             <Link
               href="/submit-show"
-              className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:w-auto"
+              className="inline-flex items-center justify-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
             >
               Submit a Show
             </Link>
           </nav>
         </div>
+        <nav className="mt-2 flex items-center justify-center gap-1 border-t border-slate-100 pt-2 sm:hidden" aria-label="Main navigation">
+          <Link href="/card-shows" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+            <Search className="h-3.5 w-3.5" /> Browse
+          </Link>
+          <Link href="/floorplanner" className="inline-flex flex-1 items-center justify-center rounded-full px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+            Planner
+          </Link>
+          <Link href={portalLink.href} className="inline-flex flex-1 items-center justify-center rounded-full px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+            {portalLink.shortLabel}
+          </Link>
+        </nav>
       </div>
     </header>
   );
