@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runModerationDigest } from "@/lib/moderation-digest";
 import { runDiscordUpcomingShowsSync } from "@/lib/discord-upcoming-shows-runner";
 
 export const runtime = "nodejs";
@@ -20,12 +19,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await runModerationDigest();
   try {
-    const discord = await runDiscordUpcomingShowsSync();
-    return NextResponse.json({ ...result, discord: { ok: true, ...discord } });
+    return NextResponse.json({ ok: true, ...(await runDiscordUpcomingShowsSync()) });
   } catch (error) {
-    console.error("[discord upcoming shows] daily synchronization failed", error);
-    return NextResponse.json({ ...result, discord: { ok: false } });
+    console.error("[discord upcoming shows] synchronization failed", error);
+    return NextResponse.json({ error: "Discord synchronization failed." }, { status: 502 });
   }
 }

@@ -13,6 +13,10 @@ import {
   getFloorplannerWorkspaceSession,
 } from "@/lib/floorplanner-workspace-auth";
 import { FLOORPLANNER_MONTHLY_PRICE_LABEL } from "@/lib/stripe";
+import {
+  isPurchasingEnabled,
+  PURCHASING_PAUSED_MESSAGE,
+} from "@/lib/purchasing";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +36,7 @@ export default async function FloorplannerBillingPage() {
     customerSession.role === "ORGANIZER" &&
     Boolean(customerSession.organizer?.floorplanEnabled);
   const active = complimentary || paidAccess;
+  const purchasingEnabled = isPurchasingEnabled();
 
   return (
     <div className="container-narrow py-10">
@@ -43,7 +48,9 @@ export default async function FloorplannerBillingPage() {
           {active ? "Your floor planner is active" : "Floor planner access"}
         </h1>
         <p className="mt-4 text-base leading-7 text-slate-600">
-          One active cloud project for {FLOORPLANNER_MONTHLY_PRICE_LABEL} per month.
+          {purchasingEnabled
+            ? `One active cloud project for ${FLOORPLANNER_MONTHLY_PRICE_LABEL} per month.`
+            : PURCHASING_PAUSED_MESSAGE}
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -89,7 +96,7 @@ export default async function FloorplannerBillingPage() {
                 Manage in Stripe
               </button>
             </form>
-          ) : !complimentary ? (
+          ) : !complimentary && purchasingEnabled ? (
             <form action={startFloorplannerCheckout}>
               <button
                 type="submit"
@@ -98,6 +105,10 @@ export default async function FloorplannerBillingPage() {
                 Subscribe
               </button>
             </form>
+          ) : !complimentary ? (
+            <span className="inline-flex items-center justify-center rounded-full bg-slate-100 px-6 py-3 text-sm font-semibold text-slate-500">
+              New subscriptions paused
+            </span>
           ) : null}
           <Link
             href={customerSession.role === "ORGANIZER" ? "/promoter" : "/account"}

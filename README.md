@@ -92,3 +92,23 @@ npm run db:seed
 ```
 
 Then start the app normally with `npm run dev`.
+
+## Purchasing and Discord automation
+
+New Floor Planner subscriptions are off by default. Existing subscribers retain access and can
+still open Stripe's billing portal to manage or cancel their current subscription. Set
+`PURCHASING_ENABLED=true` only when new purchases should reopen.
+
+The daily moderation cron also reconciles approved upcoming Kansas shows into Discord
+`#upcoming-shows`. It creates missing posts, updates changed posts, removes stale or duplicate
+managed posts, and leaves unrelated channel messages alone. Configure:
+
+```env
+DISCORD_BOT_TOKEN="your-bot-token"
+DISCORD_UPCOMING_SHOWS_CHANNEL_ID="your-channel-id"
+DISCORD_UPCOMING_SHOWS_STATE="KS"
+```
+
+The existing `CRON_SECRET` protects both the scheduled run and the manual
+`/api/cron/discord-upcoming-shows` endpoint. Do not broaden `DISCORD_UPCOMING_SHOWS_STATE` until
+regional show publishing is ready.

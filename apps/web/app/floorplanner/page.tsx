@@ -18,6 +18,10 @@ import {
   FLOORPLANNER_MONTHLY_PRICE_LABEL,
   getStripeConfigStatus,
 } from "@/lib/stripe";
+import {
+  isPurchasingEnabled,
+  PURCHASING_PAUSED_MESSAGE,
+} from "@/lib/purchasing";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +80,7 @@ export default async function FloorplannerPage({
     ? await getFloorplannerSubscription(customerSession.user.id)
     : null;
   const stripeReady = getStripeConfigStatus().ready;
+  const purchasingEnabled = isPurchasingEnabled();
   const needsBillingRepair =
     subscription &&
     !["canceled", "incomplete_expired"].includes(subscription.status);
@@ -112,6 +117,11 @@ export default async function FloorplannerPage({
                 Billing is temporarily unavailable. Please try again shortly.
               </p>
             )}
+            {sp.billing === "paused" && (
+              <p className="mt-6 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                {PURCHASING_PAUSED_MESSAGE}
+              </p>
+            )}
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               {customerSession ? (
@@ -124,7 +134,7 @@ export default async function FloorplannerPage({
                       Fix billing in Stripe
                     </button>
                   </form>
-                ) : (
+                ) : purchasingEnabled ? (
                   <form action={startFloorplannerCheckout}>
                     <button
                       type="submit"
@@ -134,15 +144,29 @@ export default async function FloorplannerPage({
                       {stripeReady ? "Start my floor plan" : "Purchases temporarily unavailable"}
                     </button>
                   </form>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-full bg-slate-700 px-6 py-3 text-sm font-semibold text-slate-300 sm:w-auto"
+                  >
+                    Purchases temporarily unavailable
+                  </button>
                 )
               ) : (
                 <>
-                  <Link
-                    href="/login?from=%2Ffloorplanner"
-                    className="inline-flex items-center justify-center rounded-full bg-cyan-300 px-6 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-200"
-                  >
-                    Log in to subscribe
-                  </Link>
+                  {purchasingEnabled ? (
+                    <Link
+                      href="/login?from=%2Ffloorplanner"
+                      className="inline-flex items-center justify-center rounded-full bg-cyan-300 px-6 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-200"
+                    >
+                      Log in to subscribe
+                    </Link>
+                  ) : (
+                    <span className="inline-flex items-center justify-center rounded-full bg-slate-700 px-6 py-3 text-sm font-semibold text-slate-300">
+                      Purchases temporarily unavailable
+                    </span>
+                  )}
                   <Link
                     href="/account/signup"
                     className="inline-flex items-center justify-center rounded-full border border-slate-700 px-6 py-3 text-sm font-semibold text-white transition-colors hover:border-slate-500 hover:bg-slate-900"
@@ -153,24 +177,32 @@ export default async function FloorplannerPage({
               )}
             </div>
             <p className="mt-4 text-sm text-slate-400">
-              Members and promoters can subscribe. Promoter trust status does not affect the
-              price or planner access.
+              {purchasingEnabled
+                ? "Members and promoters can subscribe. Promoter trust status does not affect the price or planner access."
+                : PURCHASING_PAUSED_MESSAGE}
             </p>
           </div>
 
           <div className="rounded-[2rem] border border-slate-700 bg-white p-7 text-slate-950 shadow-2xl shadow-cyan-950/30 sm:p-9">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
-              One-show plan
+              {purchasingEnabled ? "One-show plan" : "Purchasing paused"}
             </p>
-            <div className="mt-4 flex items-end gap-2">
-              <span className="text-5xl font-semibold tracking-tight">
-                {FLOORPLANNER_MONTHLY_PRICE_LABEL}
-              </span>
-              <span className="pb-1 text-base text-slate-500">/ month</span>
-            </div>
+            {purchasingEnabled ? (
+              <div className="mt-4 flex items-end gap-2">
+                <span className="text-5xl font-semibold tracking-tight">
+                  {FLOORPLANNER_MONTHLY_PRICE_LABEL}
+                </span>
+                <span className="pb-1 text-base text-slate-500">/ month</span>
+              </div>
+            ) : (
+              <p className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+                New subscriptions are not available right now.
+              </p>
+            )}
             <p className="mt-4 text-sm leading-6 text-slate-600">
-              One active cloud floor plan. Edit it as often as you need while your
-              subscription is active.
+              {purchasingEnabled
+                ? "One active cloud floor plan. Edit it as often as you need while your subscription is active."
+                : "Existing subscribers keep their access. No new charges or subscriptions can be started from this site while purchasing is paused."}
             </p>
             <ul className="mt-7 space-y-3 text-sm text-slate-700">
               {[
@@ -179,7 +211,9 @@ export default async function FloorplannerPage({
                 "Vendor and table assignments",
                 "PNG, CSV, and printable exports",
                 "Show-day check-in mode",
-                "Cancel from the Stripe billing portal",
+                purchasingEnabled
+                  ? "Cancel from the Stripe billing portal"
+                  : "Existing subscribers can still manage billing",
               ].map((feature) => (
                 <li key={feature} className="flex gap-3">
                   <span className="mt-0.5 text-emerald-600">✓</span>

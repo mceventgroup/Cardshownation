@@ -12,6 +12,7 @@ import {
   getFloorplannerMonthlyPriceId,
   getStripe,
 } from "@/lib/stripe";
+import { isPurchasingEnabled } from "@/lib/purchasing";
 
 const REUSABLE_SUBSCRIPTION_STATUSES = new Set([
   "incomplete",
@@ -21,6 +22,10 @@ const REUSABLE_SUBSCRIPTION_STATUSES = new Set([
 ]);
 
 export async function startFloorplannerCheckout() {
+  if (!isPurchasingEnabled()) {
+    redirect("/floorplanner?billing=paused");
+  }
+
   const customerSession = await getFloorplannerCustomerSession();
   if (!customerSession) {
     redirect("/login?from=%2Ffloorplanner");
