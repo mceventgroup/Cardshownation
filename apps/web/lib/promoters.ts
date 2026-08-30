@@ -17,6 +17,10 @@ type RegisterPromoterInput = {
   instagramUrl?: string | null;
 };
 
+type EnablePromoterAccessInput = Omit<RegisterPromoterInput, "password" | "contactName" | "email"> & {
+  userId: string;
+};
+
 type PromoterShowInput = {
   showName: string;
   startDate: string;
@@ -225,6 +229,46 @@ export async function registerPromoterAccount(input: RegisterPromoterInput) {
   });
 
   return user;
+}
+
+export async function enablePromoterAccess(input: EnablePromoterAccessInput) {
+  const user = await db.user.findUnique({
+    where: { id: input.userId },
+    include: { organizer: { select: { id: true } } },
+  });
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
+    throw new Error("Account not found.");
+  }
+  if (user.organizer) {
+    return user.organizer;
+  }
+
+  const profile = {
+    name: input.organizerName.trim().slice(0, 160),
+    websiteUrl: normalizeExternalUrl(input.websiteUrl),
+    facebookUrl: normalizeExternalUrl(input.facebookUrl),
+    instagramUrl: normalizeExternalUrl(input.instagramUrl),
+  };
+  if (!profile.name) {
+    throw new Error("Enter an organizer or business name.");
+  }
+
+  const existingOrganizer = await db.organizer.findFirst({
+    where: { email: user.email, userId: null },
+    select: { id: true },
+  });
+
+  return db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { role: "ORGANIZER" } });
+    return existingOrganizer
+      ? tx.organizer.update({
+          where: { id: existingOrganizer.id },
+          data: { ...profile, userId: user.id },
+        })
+      : tx.organizer.create({
+          data: { ...profile, email: user.email, userId: user.id },
+        });
+  });
 }
 
 export async function authenticatePromoter(email: string, password: string) {

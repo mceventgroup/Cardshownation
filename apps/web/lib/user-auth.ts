@@ -48,7 +48,7 @@ export async function getUserSession() {
 
   if (
     !user ||
-    user.role !== "FAN" ||
+    (user.role !== "FAN" && user.role !== "ORGANIZER") ||
     !user.emailVerifiedAt ||
     payload.sv !== user.sessionVersion
   ) {
@@ -80,7 +80,7 @@ export async function startUserSession(userId: string) {
       sessionVersion: true,
     },
   });
-  if (!user || user.role !== "FAN") {
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
     throw new Error("Member account not found.");
   }
 

@@ -43,7 +43,7 @@ function VerifyError({ message }: { message: string }) {
         </h1>
         <p className="mt-4 text-base leading-7 text-slate-600">{message}</p>
         <Link
-          href="/promoter/signup"
+          href="/account/signup?promoter=1"
           className="mt-6 inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
           Back to sign up

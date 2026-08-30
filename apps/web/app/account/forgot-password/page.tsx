@@ -37,11 +37,11 @@ async function handleForgotPassword(formData: FormData) {
       where: { email },
     });
 
-    if (user?.role === "FAN") {
+    if (user?.role === "FAN" || user?.role === "ORGANIZER") {
       const token = await createPasswordResetToken(user.id);
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
       const resetUrl = `${appUrl}/account/reset-password?token=${token}`;
-      await sendPasswordResetEmail(email, resetUrl, "FAN");
+      await sendPasswordResetEmail(email, resetUrl, user.role);
     }
   } catch (error) {
     rethrowIfRedirectError(error);
@@ -70,7 +70,7 @@ export default async function AccountForgotPasswordPage({
             Reset link sent
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-600">
-            If that email is linked to a member account, you&apos;ll receive a password reset
+            If that email is linked to an account, you&apos;ll receive a password reset
             link shortly. The link expires in 1 hour.
           </p>
           <p className="mt-4 text-sm text-slate-500">
@@ -97,7 +97,7 @@ export default async function AccountForgotPasswordPage({
     <div className="container-narrow py-6 sm:py-10">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
-          Member account
+          Account access
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
           Forgot password
@@ -146,7 +146,7 @@ export default async function AccountForgotPasswordPage({
 
         <p className="mt-6 text-sm text-slate-600">
           Remember your password?{" "}
-          <Link href="/account/login" className="font-semibold text-brand-700 hover:text-brand-800">
+          <Link href="/login" className="font-semibold text-brand-700 hover:text-brand-800">
             Log in
           </Link>
         </p>

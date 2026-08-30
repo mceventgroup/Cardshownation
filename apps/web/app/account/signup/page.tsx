@@ -13,10 +13,17 @@ import {
   MIN_USER_SESSION_SECRET_LENGTH,
 } from "@/lib/user-auth";
 import { createVerificationToken } from "@/lib/verification-token";
-import { sendFanVerificationEmail } from "@/lib/email";
+import { sendFanVerificationEmail, sendPromoterVerificationEmail } from "@/lib/email";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
-import { listFavoriteOrganizerOptions, registerFanAccount } from "@/lib/users";
+import {
+  listFavoriteOrganizerOptions,
+  registerFanAccount,
+  updateFanFavoriteOrganizers,
+  updateFanStateSubscriptions,
+} from "@/lib/users";
 import { GoogleSignInLink } from "@/components/auth/google-sign-in-link";
+import { getPromoterSessionSecret } from "@/lib/promoter-auth";
+import { registerPromoterAccount } from "@/lib/promoters";
 
 const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
 const SIGNUP_BLOCK_MS = 2 * 60 * 60 * 1000;
@@ -40,6 +47,11 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function readOptionalString(formData: FormData, key: string, maxLength: number) {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim().slice(0, maxLength) || null : null;
+}
+
 async function delay(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -48,7 +60,10 @@ async function handleSignup(formData: FormData) {
   "use server";
 
   const sessionSecret = await getUserSessionSecret();
+  const promoterSessionSecret = await getPromoterSessionSecret();
+  const isPromoter = formData.get("isPromoter") === "on";
   const name = readRequiredString(formData, "name", 120);
+  const organizerName = readRequiredString(formData, "organizerName", 160);
   const email = readRequiredString(formData, "email", 320).toLowerCase();
   const confirmEmail = readRequiredString(formData, "confirmEmail", 320).toLowerCase();
   const password = readPasswordInput(formData, "password");
@@ -81,7 +96,7 @@ async function handleSignup(formData: FormData) {
   });
   if (!emailRateLimit.allowed) redirect("/account/signup?error=rate");
 
-  if (!sessionSecret) {
+  if (!sessionSecret || (isPromoter && !promoterSessionSecret)) {
     redirect("/account/signup?error=disabled");
   }
 
@@ -90,24 +105,39 @@ async function handleSignup(formData: FormData) {
     !isValidEmail(email) ||
     email !== confirmEmail ||
     password.length < MIN_PASSWORD_LENGTH ||
-    password !== confirmPassword
+    password !== confirmPassword ||
+    (isPromoter && !organizerName)
   ) {
     redirect("/account/signup?error=validation");
   }
 
   try {
-    const user = await registerFanAccount({
-      email,
-      password,
-      name,
-      stateCodes,
-      organizerIds,
-    });
+    const user = isPromoter
+      ? await registerPromoterAccount({
+          contactName: name,
+          organizerName,
+          email,
+          password,
+          websiteUrl: readOptionalString(formData, "websiteUrl", 2048),
+          facebookUrl: readOptionalString(formData, "facebookUrl", 2048),
+          instagramUrl: readOptionalString(formData, "instagramUrl", 2048),
+        })
+      : await registerFanAccount({ email, password, name, stateCodes, organizerIds });
+    if (isPromoter) {
+      await Promise.all([
+        updateFanStateSubscriptions(user.id, stateCodes),
+        updateFanFavoriteOrganizers(user.id, organizerIds),
+      ]);
+    }
     const token = await createVerificationToken(user.id);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
-    const verifyUrl = `${appUrl}/account/verify?token=${token}`;
-    await sendFanVerificationEmail(email, verifyUrl);
-    redirect("/account/signup?sent=1");
+    const verifyUrl = `${appUrl}/${isPromoter ? "promoter" : "account"}/verify?token=${token}`;
+    if (isPromoter) {
+      await sendPromoterVerificationEmail(email, verifyUrl);
+    } else {
+      await sendFanVerificationEmail(email, verifyUrl);
+    }
+    redirect(`/account/signup?sent=1&type=${isPromoter ? "promoter" : "member"}`);
   } catch (error) {
     rethrowIfRedirectError(error);
     await delay(750);
@@ -118,7 +148,7 @@ async function handleSignup(formData: FormData) {
 export default async function UserSignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: Promise<{ error?: string; sent?: string; promoter?: string; type?: string }>;
 }) {
   const [session, secret, secretStatus, sp] = await Promise.all([
     getUserSession(),
@@ -143,7 +173,7 @@ export default async function UserSignupPage({
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
             We sent a verification link to your email address. Click the link to activate your
-            member account. The link expires in 24 hours.
+            account. The link expires in 24 hours.
           </p>
           <p className="mt-4 text-sm text-slate-500">
             Didn&apos;t get it? Check your spam folder or{" "}
@@ -174,13 +204,13 @@ export default async function UserSignupPage({
     <div className="container-wide py-6 sm:py-10">
       <div className="mx-auto max-w-4xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
-          Member account
+          One Card Show Nation account
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
           Create account
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-          Pick the states and show hosts you care about now so Card Show Nation can grow into targeted email alerts, then later SMS and app notifications.
+          Every account includes collector features. If you organize shows, add promoter tools to the same account below.
         </p>
 
         {!secret && (
@@ -200,6 +230,35 @@ export default async function UserSignupPage({
         <GoogleSignInLink />
 
         <form action={handleSignup} className="mt-8 space-y-6">
+          <label className="flex items-start gap-3 rounded-3xl border border-brand-200 bg-brand-50 p-5 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              name="isPromoter"
+              defaultChecked={sp.promoter === "1"}
+              disabled={!secret}
+              className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span>
+              <span className="block font-semibold text-slate-950">I organize card shows</span>
+              <span className="mt-1 block leading-6">Add promoter tools to this account. You will still have all collector features.</span>
+            </span>
+          </label>
+
+          <details open={sp.promoter === "1"} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <summary className="cursor-pointer font-semibold text-slate-900">Promoter profile details</summary>
+            <p className="mt-2 text-sm text-slate-600">Complete this section when selecting “I organize card shows.”</p>
+            <div className="mt-5 space-y-5">
+              <div>
+                <label htmlFor="organizerName" className="mb-2 block text-sm font-medium text-slate-700">Organizer or business name</label>
+                <input id="organizerName" name="organizerName" type="text" disabled={!secret} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none" />
+              </div>
+              <div className="grid gap-5 sm:grid-cols-3">
+                <input aria-label="Website" name="websiteUrl" type="url" placeholder="Website" disabled={!secret} className="rounded-2xl border border-slate-200 px-4 py-3 text-base" />
+                <input aria-label="Facebook" name="facebookUrl" type="url" placeholder="Facebook" disabled={!secret} className="rounded-2xl border border-slate-200 px-4 py-3 text-base" />
+                <input aria-label="Instagram" name="instagramUrl" type="url" placeholder="Instagram" disabled={!secret} className="rounded-2xl border border-slate-200 px-4 py-3 text-base" />
+              </div>
+            </div>
+          </details>
           <div>
               <label htmlFor="name" className="mb-2 block text-sm font-medium text-slate-700">
                 Name

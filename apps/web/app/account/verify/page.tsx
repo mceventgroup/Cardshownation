@@ -23,8 +23,8 @@ export default async function AccountVerifyPage({
     );
   }
 
-  if (user.role !== "FAN") {
-    return <VerifyError message="This link is not valid for a member account." />;
+  if (user.role !== "FAN" && user.role !== "ORGANIZER") {
+    return <VerifyError message="This link is not valid for this account." />;
   }
 
   await startUserSession(user.id);

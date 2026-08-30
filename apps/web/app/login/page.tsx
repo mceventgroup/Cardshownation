@@ -126,13 +126,19 @@ async function handleLogin(formData: FormData) {
       redirect("/login?error=invalid");
     }
 
-    const secret = await getPromoterSessionSecret();
-    if (!secret) {
+    const [promoterSecret, userSecret] = await Promise.all([
+      getPromoterSessionSecret(),
+      getUserSessionSecret(),
+    ]);
+    if (!promoterSecret) {
       redirect("/login?error=disabled&role=promoter");
+    }
+    if (!userSecret) {
+      redirect("/login?error=disabled&role=member");
     }
 
     await resetRateLimit("public-login", ip);
-    await startPromoterSession(user.id);
+    await Promise.all([startPromoterSession(user.id), startUserSession(user.id)]);
     redirect(resolveDestination("ORGANIZER", requestedDestination));
   }
 
@@ -149,7 +155,7 @@ async function handleLogin(formData: FormData) {
 export default async function UnifiedLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; role?: string; from?: string }>;
+  searchParams: Promise<{ error?: string; role?: string; from?: string; reset?: string }>;
 }) {
   const [memberSession, promoterSession, moderatorSession, sp] = await Promise.all([
     getUserSession(),
@@ -203,12 +209,18 @@ export default async function UnifiedLoginPage({
           Welcome back
         </h1>
         <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-base">
-          Sign in once and we&apos;ll take you to your collector or promoter dashboard.
+          One account gives you collector features, plus promoter tools if you organize shows.
         </p>
 
         {errorMessage && (
           <p className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMessage}
+          </p>
+        )}
+
+        {sp.reset === "1" && (
+          <p className="mt-5 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            Password updated. Sign in with your new password.
           </p>
         )}
 
@@ -234,9 +246,9 @@ export default async function UnifiedLoginPage({
           <div>
             <div className="mb-1.5 flex items-center justify-between gap-3">
               <label htmlFor="password" className="text-sm font-medium text-slate-700">Password</label>
-              <span className="text-xs text-slate-500">
-                Forgot? <Link href="/account/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">Collector</Link> · <Link href="/promoter/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">Promoter</Link>
-              </span>
+              <Link href="/account/forgot-password" className="text-xs font-semibold text-brand-700 hover:text-brand-800">
+                Forgot password?
+              </Link>
             </div>
             <input
               id="password"
@@ -268,10 +280,9 @@ export default async function UnifiedLoginPage({
 
         <div className="mt-6 border-t border-slate-200 pt-5 text-sm">
           <p className="text-slate-600">New to Card Show Nation?</p>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
-            <Link href="/account/signup" className="font-semibold text-brand-700 hover:text-brand-800">Create a collector account</Link>
-            <Link href="/promoter/signup" className="font-semibold text-brand-700 hover:text-brand-800">Create a promoter account</Link>
-          </div>
+          <Link href="/account/signup" className="mt-2 inline-flex font-semibold text-brand-700 hover:text-brand-800">
+            Create an account
+          </Link>
         </div>
 
         <aside className="mt-5 rounded-2xl bg-brand-50 p-4">

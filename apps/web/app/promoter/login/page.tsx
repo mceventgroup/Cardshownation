@@ -183,12 +183,12 @@ export default async function PromoterLoginPage({
         <div className="mt-6 flex flex-col gap-2 text-sm text-slate-600 sm:flex-row sm:justify-between">
           <p>
             Need an account?{" "}
-            <Link href="/promoter/signup" className="font-semibold text-brand-700 hover:text-brand-800">
+            <Link href="/account/signup?promoter=1" className="font-semibold text-brand-700 hover:text-brand-800">
               Create promoter account
             </Link>
           </p>
           <p>
-            <Link href="/promoter/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
+            <Link href="/account/forgot-password" className="font-semibold text-brand-700 hover:text-brand-800">
               Forgot password?
             </Link>
           </p>

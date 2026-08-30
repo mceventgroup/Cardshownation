@@ -15,7 +15,7 @@ async function handleReset(token: string, formData: FormData) {
   }
 
   const user = await consumePasswordResetToken(token);
-  if (!user || user.role !== "FAN") {
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
     redirect("/account/reset-password?error=expired");
   }
 
@@ -31,7 +31,7 @@ async function handleReset(token: string, formData: FormData) {
     },
   });
 
-  redirect("/account/login?reset=1");
+  redirect("/login?reset=1");
 }
 
 export default async function AccountResetPasswordPage({
@@ -78,7 +78,7 @@ export default async function AccountResetPasswordPage({
     <div className="container-narrow py-6 sm:py-10">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
-          Member account
+          Account access
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
           Reset password

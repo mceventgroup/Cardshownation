@@ -21,6 +21,8 @@ import {
   updateFanStateSubscriptions,
 } from "@/lib/users";
 import { endUserSession } from "@/lib/user-auth";
+import { enablePromoterAccess } from "@/lib/promoters";
+import { startPromoterSession } from "@/lib/promoter-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +130,26 @@ async function savePassword(formData: FormData) {
   }
 }
 
+async function becomePromoter(formData: FormData) {
+  "use server";
+
+  const session = await requireUserSession("/account");
+  try {
+    await enablePromoterAccess({
+      userId: session.user.id,
+      organizerName: readRequiredString(formData, "organizerName", 160),
+      websiteUrl: readOptionalString(formData, "websiteUrl", 2048),
+      facebookUrl: readOptionalString(formData, "facebookUrl", 2048),
+      instagramUrl: readOptionalString(formData, "instagramUrl", 2048),
+    });
+    await Promise.all([startUserSession(session.user.id), startPromoterSession(session.user.id)]);
+    redirect("/promoter");
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    redirect("/account?error=promoter");
+  }
+}
+
 export default async function AccountPage({
   searchParams,
 }: {
@@ -215,6 +237,8 @@ export default async function AccountPage({
       ? "Account deletion failed. Enter your current password and type DELETE exactly."
       : sp.error === "billing"
         ? "Cancel your floor-planner subscription and wait for it to end before deleting your account."
+      : sp.error === "promoter"
+        ? "We couldn't add promoter tools. Enter your organizer or business name and try again."
       : sp.error === "password"
       ? `Password update failed. Check your current password and make sure the new one is at least ${MIN_PASSWORD_LENGTH} characters.`
       : sp.error ?? null;
@@ -504,6 +528,25 @@ export default async function AccountPage({
         </section>
 
         <aside className="space-y-6">
+          {account.role === "ORGANIZER" ? (
+            <section className="rounded-[2rem] border border-brand-200 bg-brand-50 p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">Promoter tools</p>
+              <h2 className="mt-3 text-xl font-semibold text-slate-950">Your promoter profile is connected</h2>
+              <Link href="/promoter" className="mt-5 inline-flex rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-700">Open promoter dashboard</Link>
+            </section>
+          ) : (
+            <section className="rounded-[2rem] border border-brand-200 bg-brand-50 p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">Organize card shows?</p>
+              <h2 className="mt-3 text-xl font-semibold text-slate-950">Add promoter tools to this account</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Keep all your collector features and use the same login.</p>
+              <form action={becomePromoter} className="mt-5 space-y-3">
+                <input name="organizerName" required placeholder="Organizer or business name" className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm" />
+                <input name="websiteUrl" type="url" placeholder="Website (optional)" className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm" />
+                <button type="submit" className="inline-flex rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-700">Become a promoter</button>
+              </form>
+            </section>
+          )}
+
           <section className="rounded-[2rem] border border-cyan-200 bg-cyan-50 p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-800">
               Floor Planner

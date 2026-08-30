@@ -253,7 +253,7 @@ export async function authenticateFan(email: string, password: string) {
     where: { email: normalizedEmail },
   });
 
-  if (!user || user.role !== "FAN") {
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
     return null;
   }
 
@@ -296,7 +296,7 @@ export async function getFanAccountData(userId: string): Promise<FanAccountData 
     },
   });
 
-  if (!user || user.role !== "FAN") {
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
     return null;
   }
 
@@ -671,7 +671,7 @@ export async function updateFanProfile(input: UpdateFanProfileInput) {
     where: { id: input.userId },
   });
 
-  if (!user || user.role !== "FAN") {
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
     throw new Error("User account not found.");
   }
 
@@ -779,7 +779,7 @@ export async function changeFanPassword(input: ChangeFanPasswordInput) {
     where: { id: input.userId },
   });
 
-  if (!user || user.role !== "FAN") {
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
     throw new Error("User account not found.");
   }
 
