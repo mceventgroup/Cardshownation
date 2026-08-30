@@ -59,7 +59,7 @@ export default async function PromoterPortalPage({
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
-                Promoter portal
+                Organizer dashboard
               </p>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
                 {dashboard.organizer.name}
@@ -70,7 +70,13 @@ export default async function PromoterPortalPage({
               </p>
             </div>
 
-            <div className="flex gap-3">
+            <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-wrap sm:justify-end sm:gap-3">
+              <Link
+                href="/promoter/new-show"
+                className="col-span-2 inline-flex items-center justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:col-span-1"
+              >
+                Add show
+              </Link>
               <Link
                 href="/floorplanner"
                 className="inline-flex items-center justify-center rounded-full border border-brand-200 bg-brand-50 px-5 py-3 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100"
@@ -78,18 +84,12 @@ export default async function PromoterPortalPage({
                 Floor planner
               </Link>
               <Link
-                href="/promoter/new-show"
-                className="inline-flex items-center justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
-              >
-                Add show
-              </Link>
-              <Link
                 href="/promoter/upload"
-                className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
               >
                 Upload CSV
               </Link>
-              <form action={logoutPromoter}>
+              <form action={logoutPromoter} className="contents">
                 <button
                   type="submit"
                   className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
@@ -106,13 +106,13 @@ export default async function PromoterPortalPage({
             </p>
           )}
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <div className="mt-8 grid grid-cols-2 gap-4 [&>*:last-child]:col-span-2 sm:grid-cols-3 sm:[&>*:last-child]:col-span-1">
             <StatCard label="Shows on account" value={String(dashboard.showCount)} />
             <StatCard
-              label="Organizer status"
-              value={dashboard.organizer.moderationStatus.toLowerCase()}
+              label="Publishing"
+              value={dashboard.organizer.moderationStatus === "TRUSTED" ? "Instant" : dashboard.organizer.moderationStatus === "BLOCKED" ? "Paused" : "Reviewed"}
             />
-            <StatCard label="Recent status" value="Admin managed" />
+            <StatCard label="Support" value="Free listing" />
           </div>
 
           <div className="mt-8">
@@ -143,7 +143,7 @@ export default async function PromoterPortalPage({
                     key={show.id}
                     className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4"
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="truncate text-base font-semibold text-slate-950">
                           {show.title}
@@ -152,7 +152,7 @@ export default async function PromoterPortalPage({
                           {show.city}, {show.state} · {formatShowDate(show.startDate, show.endDate)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
                         {dashboard.organizer.floorplanEnabled ? (
                           <Link
                             href={`/promoter/shows/${encodeURIComponent(show.id)}/floorplan`}
@@ -190,26 +190,24 @@ export default async function PromoterPortalPage({
         <aside className="space-y-6">
           <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Submission review
+              Publishing status
             </p>
             <p className="mt-4 text-sm leading-6 text-slate-600">
               {dashboard.organizer.moderationStatus === "TRUSTED"
-                ? "Your organizer is Trusted. Future non-duplicate shows publish automatically."
+                ? "Your shows publish immediately when they are not duplicates."
                 : dashboard.organizer.moderationStatus === "BLOCKED"
                   ? "This organizer cannot submit new shows. Contact Card Show Nation if you believe this is an error."
-                  : "New organizer submissions stay pending until an admin or moderator reviews them."}
+                  : "New shows are checked by our team before they appear in the directory."}
             </p>
           </section>
 
           <section className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-300">
-              Flyer spec
+              Need a flyer?
             </p>
-            <h2 className="mt-3 text-2xl font-semibold">Mobile-first artwork</h2>
+            <h2 className="mt-3 text-xl font-semibold">We format it for you</h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Upload JPG, PNG, or WebP artwork and the portal will fit it into a
-              1200x1600 WebP flyer. That keeps the card layout sharp on phones
-              without forcing exact export dimensions up front.
+              Upload a JPG, PNG, or WebP. Card Show Nation automatically prepares it for phones and show listings.
             </p>
             <Link
               href="/promoter/new-show"

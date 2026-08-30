@@ -250,24 +250,55 @@ export default async function AccountPage({
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
-                Member account
+                Collector dashboard
               </p>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
                 {account.name ?? account.email}
               </h1>
               <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                Keep your profile current and manage the states and show hosts you want to follow for future alerts.
+                Find your next card show, keep favorites close, and help other collectors discover events near you.
               </p>
             </div>
 
             <form action={logoutUser}>
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
               >
                 Log out
               </button>
             </form>
+          </div>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <Link
+              href="/card-shows"
+              className="inline-flex min-h-24 flex-col justify-between rounded-3xl bg-slate-950 p-5 text-white transition-colors hover:bg-slate-800"
+            >
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Discover</span>
+              <span className="mt-4 text-lg font-semibold">Browse card shows</span>
+            </Link>
+            <Link
+              href="/submit-show"
+              className="inline-flex min-h-24 flex-col justify-between rounded-3xl bg-brand-600 p-5 text-white transition-colors hover:bg-brand-700"
+            >
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-100">Help the community</span>
+              <span className="mt-4 text-lg font-semibold">Submit a show</span>
+            </Link>
+            <a
+              href="#collector-preferences"
+              className="inline-flex min-h-24 flex-col justify-between rounded-3xl border border-slate-200 bg-slate-50 p-5 text-slate-950 transition-colors hover:bg-slate-100"
+            >
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Personalize</span>
+              <span className="mt-4 text-lg font-semibold">Manage alerts</span>
+            </a>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Tracked states" value={String(account.subscriptions.length)} />
+            <StatCard label="Favorite organizers" value={String(account.favoriteOrganizers.length)} />
+            <StatCard label="Saved shows" value={String(account._count.savedShows)} />
+            <StatCard label="Email" value={account.emailVerifiedAt ? "Verified" : "Verify"} />
           </div>
 
           {successMessage && (
@@ -282,9 +313,20 @@ export default async function AccountPage({
             </p>
           )}
 
-          <form action={saveProfile} className="mt-8 space-y-6">
+          <div id="collector-preferences" className="mt-10 scroll-mt-28">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Account settings</p>
+            <p className="mt-2 text-sm text-slate-600">Open only the section you want to change.</p>
+          </div>
+
+          <details className="group mt-5 rounded-3xl border border-slate-200 bg-slate-50">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold text-slate-950 marker:content-none">
+              <span>Profile information</span>
+              <span className="text-brand-700 group-open:hidden">Edit</span>
+              <span className="hidden text-brand-700 group-open:inline">Close</span>
+            </summary>
+          <form action={saveProfile} className="space-y-6 border-t border-slate-200 p-4 sm:p-5">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Personal information</h2>
                   <p className="mt-1 text-sm text-slate-500">
@@ -372,15 +414,22 @@ export default async function AccountPage({
 
             <button
               type="submit"
-              className="inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+              className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:w-auto"
             >
               Save profile
             </button>
           </form>
+          </details>
 
-          <form action={saveSubscriptions} className="mt-8 space-y-6">
+          <details className="group mt-4 rounded-3xl border border-slate-200 bg-slate-50">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold text-slate-950 marker:content-none">
+              <span>Show alerts and favorite organizers</span>
+              <span className="text-brand-700 group-open:hidden">Manage</span>
+              <span className="hidden text-brand-700 group-open:inline">Close</span>
+            </summary>
+          <form action={saveSubscriptions} className="space-y-6 border-t border-slate-200 p-4 sm:p-5">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Email alerts</h2>
                   <p className="mt-1 text-sm text-slate-500">
@@ -409,7 +458,7 @@ export default async function AccountPage({
               </div>
 
               <div className="mt-6 border-t border-slate-200 pt-6">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">Favorite show hosts</h3>
                     <p className="mt-1 text-sm text-slate-500">
@@ -452,15 +501,22 @@ export default async function AccountPage({
 
             <button
               type="submit"
-              className="inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+              className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:w-auto"
             >
               Save subscriptions
             </button>
           </form>
+          </details>
 
-          <form action={savePassword} className="mt-8 space-y-6">
+          <details className="group mt-4 rounded-3xl border border-slate-200 bg-slate-50">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold text-slate-950 marker:content-none">
+              <span>Password and security</span>
+              <span className="text-brand-700 group-open:hidden">Update</span>
+              <span className="hidden text-brand-700 group-open:inline">Close</span>
+            </summary>
+          <form action={savePassword} className="space-y-6 border-t border-slate-200 p-4 sm:p-5">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Password</h2>
                   <p className="mt-1 text-sm text-slate-500">
@@ -520,11 +576,12 @@ export default async function AccountPage({
 
             <button
               type="submit"
-              className="inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+              className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:w-auto"
             >
               Update password
             </button>
           </form>
+          </details>
         </section>
 
         <aside className="space-y-6">
@@ -565,21 +622,6 @@ export default async function AccountPage({
               View floor planner
             </Link>
           </section>
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Account stats
-            </p>
-            <div className="mt-4 grid gap-4">
-              <StatCard label="Tracked states" value={String(account.subscriptions.length)} />
-              <StatCard label="Favorite hosts" value={String(account.favoriteOrganizers.length)} />
-              <StatCard label="Saved shows" value={String(account._count.savedShows)} />
-              <StatCard label="Delivery" value="Email first" />
-              <StatCard
-                label="Email status"
-                value={account.emailVerifiedAt ? "Verified" : "Needs verification"}
-              />
-            </div>
-          </section>
           <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-6">
             <h2 className="font-semibold text-slate-950">Email choices</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">Stop all state alert email. You can re-enable states later.</p>
@@ -587,15 +629,15 @@ export default async function AccountPage({
               <button className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800">Unsubscribe from alerts</button>
             </form>
           </section>
-          <section className="rounded-[2rem] border border-red-200 bg-red-50 p-6">
-            <h2 className="font-semibold text-red-900">Delete account</h2>
-            <p className="mt-2 text-sm leading-6 text-red-800">This permanently deletes your profile, preferences, and saved shows. Type DELETE and enter your password.</p>
+          <details className="group rounded-[2rem] border border-red-200 bg-red-50 p-6">
+            <summary className="cursor-pointer list-none font-semibold text-red-900 marker:content-none">Delete account</summary>
+            <p className="mt-3 text-sm leading-6 text-red-800">This permanently deletes your profile, preferences, and saved shows. Type DELETE and enter your password.</p>
             <form action={deleteMyAccount} className="mt-4 space-y-3">
               <input name="deleteConfirmation" required placeholder="Type DELETE" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
               <input name="deletePassword" type="password" required placeholder="Current password" autoComplete="current-password" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
-              <button className="rounded-full bg-red-700 px-4 py-2 text-sm font-semibold text-white">Permanently delete account</button>
+              <button className="w-full rounded-full bg-red-700 px-4 py-2 text-sm font-semibold text-white sm:w-auto">Permanently delete account</button>
             </form>
-          </section>
+          </details>
         </aside>
       </div>
     </div>
