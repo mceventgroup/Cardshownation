@@ -21,6 +21,7 @@ import {
   updateFanFavoriteOrganizers,
   updateFanStateSubscriptions,
 } from "@/lib/users";
+import { PasswordField, StateMultiSelect } from "@/components/account/signup-form-controls";
 import { GoogleSignInLink } from "@/components/auth/google-sign-in-link";
 import { getPromoterSessionSecret } from "@/lib/promoter-auth";
 import { registerPromoterAccount } from "@/lib/promoters";
@@ -56,6 +57,14 @@ async function delay(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function listFavoriteOrganizerOptionsSafe() {
+  try {
+    return await listFavoriteOrganizerOptions();
+  } catch {
+    return [];
+  }
+}
+
 async function handleSignup(formData: FormData) {
   "use server";
 
@@ -65,7 +74,6 @@ async function handleSignup(formData: FormData) {
   const name = readRequiredString(formData, "name", 120);
   const organizerName = readRequiredString(formData, "organizerName", 160);
   const email = readRequiredString(formData, "email", 320).toLowerCase();
-  const confirmEmail = readRequiredString(formData, "confirmEmail", 320).toLowerCase();
   const password = readPasswordInput(formData, "password");
   const confirmPassword = readPasswordInput(formData, "confirmPassword");
   const stateCodes = formData
@@ -103,7 +111,6 @@ async function handleSignup(formData: FormData) {
   if (
     !name ||
     !isValidEmail(email) ||
-    email !== confirmEmail ||
     password.length < MIN_PASSWORD_LENGTH ||
     password !== confirmPassword ||
     (isPromoter && !organizerName)
@@ -156,7 +163,7 @@ export default async function UserSignupPage({
     getUserSessionSecretStatus(),
     searchParams,
   ]);
-  const favoriteOrganizers = await listFavoriteOrganizerOptions();
+  const favoriteOrganizers = await listFavoriteOrganizerOptionsSafe();
   if (session) {
     redirect("/account");
   }
@@ -189,15 +196,15 @@ export default async function UserSignupPage({
 
   const errorMessage =
     sp.error === "disabled"
-        ? secretStatus.error === "too_short"
-          ? `USER_SESSION_SECRET must be at least ${MIN_USER_SESSION_SECRET_LENGTH} characters.`
-          : "User accounts are disabled until USER_SESSION_SECRET is set on the server."
-        : sp.error === "rate"
-          ? "Too many attempts. Wait a bit and try again."
-          : sp.error === "validation"
-            ? `Check your information. Email addresses and passwords must match; passwords must be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
-            : sp.error === "try-again"
-              ? "We couldn't create that account right now. Double-check your information or try signing in / resetting your password if you may already have an account."
+      ? secretStatus.error === "too_short"
+        ? `USER_SESSION_SECRET must be at least ${MIN_USER_SESSION_SECRET_LENGTH} characters.`
+        : "User accounts are disabled until USER_SESSION_SECRET is set on the server."
+      : sp.error === "rate"
+        ? "Too many attempts. Wait a bit and try again."
+        : sp.error === "validation"
+          ? `Check your information. Passwords must match and be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
+          : sp.error === "try-again"
+            ? "We couldn't create that account right now. Double-check your information or try signing in / resetting your password if you may already have an account."
             : null;
 
   return (
@@ -211,6 +218,9 @@ export default async function UserSignupPage({
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
           Every account includes collector features. If you organize shows, add promoter tools to the same account below.
+        </p>
+        <p className="mt-3 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800">
+          Free during beta
         </p>
 
         {!secret && (
@@ -272,97 +282,55 @@ export default async function UserSignupPage({
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
               />
           </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                disabled={!secret}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label htmlFor="confirmEmail" className="mb-2 block text-sm font-medium text-slate-700">
-                Confirm email
-              </label>
-              <input
-                id="confirmEmail"
-                name="confirmEmail"
-                type="email"
-                required
-                autoComplete="email"
-                disabled={!secret}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
-              />
-            </div>
+          <div>
+            <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
+              Email
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              disabled={!secret}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
+            />
+            <p className="mt-2 text-sm text-slate-500">
+              We will send a verification link to this address before the account is activated.
+            </p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-700">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                minLength={MIN_PASSWORD_LENGTH}
-                maxLength={MAX_PASSWORD_LENGTH}
-                disabled={!secret}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium text-slate-700">
-                Confirm password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                minLength={MIN_PASSWORD_LENGTH}
-                maxLength={MAX_PASSWORD_LENGTH}
-                disabled={!secret}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
-              />
-            </div>
+            <PasswordField
+              id="password"
+              name="password"
+              label="Password"
+              minLength={MIN_PASSWORD_LENGTH}
+              maxLength={MAX_PASSWORD_LENGTH}
+              disabled={!secret}
+            />
+            <PasswordField
+              id="confirmPassword"
+              name="confirmPassword"
+              label="Confirm password"
+              minLength={MIN_PASSWORD_LENGTH}
+              maxLength={MAX_PASSWORD_LENGTH}
+              disabled={!secret}
+            />
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Email alert states</h2>
+                <h2 className="text-lg font-semibold text-slate-900">States to be notified about</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Choose any states you want to follow. You can change this later.
+                  Search, scroll, and select multiple states. You can change this later.
                 </p>
               </div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Future: SMS / push</p>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {US_STATES.map((state) => (
-                <label
-                  key={state.code}
-                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
-                >
-                  <input
-                    type="checkbox"
-                    name="stateCodes"
-                    value={state.code}
-                    disabled={!secret}
-                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                  />
-                  <span>{state.name}</span>
-                </label>
-              ))}
-            </div>
+            <StateMultiSelect states={US_STATES} disabled={!secret} />
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
