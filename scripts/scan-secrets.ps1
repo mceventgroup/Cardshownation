@@ -85,6 +85,38 @@ function Test-IsIgnoredFinding {
     return $true
   }
 
+  if (
+    $PatternName -eq 'Credential-like string assignment' -and
+    $path -eq 'apps/web/lib/google-oauth.test.ts' -and
+    $text -eq 'const SECRET = "a-secure-test-secret-that-is-long-enough";'
+  ) {
+    return $true
+  }
+
+  if (
+    $PatternName -eq 'Credential-like string assignment' -and
+    $path -eq 'apps/web/lib/google-oauth.ts' -and
+    $text -eq 'const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";'
+  ) {
+    return $true
+  }
+
+  if (
+    $PatternName -eq 'Credential-like string assignment' -and
+    $path -eq 'docs/GOOGLE_AUTH_SETUP.md' -and
+    $text -eq 'GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret"'
+  ) {
+    return $true
+  }
+
+  if (
+    $PatternName -eq 'Credential-like string assignment' -and
+    $path -eq 'README.md' -and
+    $text -eq 'DISCORD_BOT_TOKEN="your-bot-token"'
+  ) {
+    return $true
+  }
+
   if ($path -like '*.env.example') {
     if ($PatternName -eq 'Credential-like string assignment' -and $text -match '=\s*"replace-me"$') {
       return $true
