@@ -299,11 +299,13 @@ if ($sourceFindings.Count -eq 0 -and $historyFindings.Count -eq 0) {
 }
 
 Write-Host 'Secret scan found potential leaks:'
-foreach ($finding in ($sourceFindings + $historyFindings | Sort-Object -Unique)) {
+$safeFindings = $sourceFindings + $historyFindings | Sort-Object -Unique
+foreach ($finding in $safeFindings) {
   Write-Host $finding
 }
 
 if ($Ci) {
+  $safeFindings | Set-Content -Path 'secret-scan-findings.txt' -Encoding utf8
   Write-Error 'Secret scan failed.'
 } else {
   exit 1
