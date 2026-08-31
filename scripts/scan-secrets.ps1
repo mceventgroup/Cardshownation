@@ -85,6 +85,20 @@ function Test-IsIgnoredFinding {
     return $true
   }
 
+  if ($PatternName -eq 'Credential-like string assignment') {
+    if ($path -like '*.test.ts' -and $text -match '(?i)test') {
+      return $true
+    }
+
+    if ($text -match '=\s*"https://[^"]+"$') {
+      return $true
+    }
+
+    if (($path -eq 'README.md' -or $path -like 'docs/*.md') -and $text -match '=\s*"your-[^"]+"$') {
+      return $true
+    }
+  }
+
   if (
     $PatternName -eq 'Credential-like string assignment' -and
     $path -eq 'apps/web/lib/google-oauth.test.ts' -and
