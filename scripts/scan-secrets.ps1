@@ -157,7 +157,7 @@ function Test-IsExcludedPath {
     [string]$RelativePath
   )
 
-  $normalizedPath = $RelativePath.Replace('\', '/')
+  $normalizedPath = $RelativePath.Replace('\', '/').TrimStart('.', '/')
   foreach ($exclude in $pathExcludes) {
     if ($normalizedPath.StartsWith($exclude, [System.StringComparison]::OrdinalIgnoreCase)) {
       return $true
