@@ -5,6 +5,7 @@ const scrypt = promisify(scryptCallback);
 const KEY_LENGTH = 64;
 const HASH_PREFIX = "s2";
 export const MIN_PASSWORD_LENGTH = 8;
+export const MIN_MODERATOR_PASSWORD_LENGTH = 12;
 export const MAX_PASSWORD_LENGTH = 200;
 
 function toBase64Url(value: Buffer) {

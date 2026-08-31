@@ -30,8 +30,27 @@ const child = spawn(
   },
 );
 
+let shuttingDown = false;
+
+function stopChild(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  if (process.platform === "win32") {
+    const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+    });
+    killer.on("exit", () => process.exit(0));
+    setTimeout(() => process.exit(0), 5_000).unref();
+    return;
+  }
+
+  child.kill(signal);
+  setTimeout(() => process.exit(0), 5_000).unref();
+}
+
 for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => child.kill(signal));
+  process.on(signal, () => stopChild(signal));
 }
 
 child.on("exit", (code, signal) => {

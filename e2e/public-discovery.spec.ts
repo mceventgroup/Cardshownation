@@ -19,10 +19,9 @@ test("homepage leads collectors into a filtered show search", async ({ page }) =
 test("public account entry points remain available", async ({ page }) => {
   await page.goto("/login");
 
-  await expect(
-    page.getByRole("heading", { name: "Login once. We'll send you to the right place." }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
   await expect(page.getByLabel("Password")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Create account", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Create an account" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Submit a show free" })).toBeVisible();
 });

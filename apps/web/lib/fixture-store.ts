@@ -251,6 +251,10 @@ export async function approveFixtureSubmission(submissionId: string) {
   const now = new Date();
   const organizerName = getPayloadString(payload, "organizerName");
   const organizerEmail = getPayloadString(payload, "organizerEmail");
+  const publicEmail =
+    payload.publicPromoterEmailConsent === true
+      ? getPayloadString(payload, "publicPromoterEmail")
+      : null;
   const venueName = getPayloadString(payload, "venueName");
   const venueAddress = getPayloadString(payload, "venueAddress");
 
@@ -260,6 +264,8 @@ export async function approveFixtureSubmission(submissionId: string) {
           id: `local-organizer-${randomUUID()}`,
           name: organizerName,
           email: organizerEmail,
+          publicEmail,
+          publicEmailConsentAt: publicEmail ? now : null,
           websiteUrl: getPayloadString(payload, "websiteUrl"),
           facebookUrl: getPayloadString(payload, "facebookUrl"),
           instagramUrl: null,

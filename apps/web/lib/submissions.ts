@@ -48,6 +48,15 @@ function readString(payload: Record<string, unknown>, key: string) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function readConsentedPublicEmail(payload: Record<string, unknown>) {
+  const email = readString(payload, "publicPromoterEmail")?.toLowerCase() ?? null;
+  if (!email || payload.publicPromoterEmailConsent !== true) {
+    return null;
+  }
+
+  return email;
+}
+
 function readStringArray(payload: Record<string, unknown>, key: string) {
   const value = payload[key];
   if (!Array.isArray(value)) return [];
@@ -195,6 +204,8 @@ async function resolveOrganizerForSubmission(input: {
     data: {
       name: readString(input.payloadJson, "organizerName") ?? input.submitterName,
       email,
+      publicEmail: readConsentedPublicEmail(input.payloadJson),
+      publicEmailConsentAt: readConsentedPublicEmail(input.payloadJson) ? new Date() : null,
       websiteUrl: normalizeExternalUrl(readString(input.payloadJson, "websiteUrl")),
       facebookUrl: normalizeExternalUrl(readString(input.payloadJson, "facebookUrl")),
       moderationStatus: "NEW",
@@ -344,10 +355,23 @@ export async function createApprovedShowFromPayload(payload: Record<string, unkn
         data: {
           name: organizerName,
           email: readString(payload, "organizerEmail"),
+          publicEmail: readConsentedPublicEmail(payload),
+          publicEmailConsentAt: readConsentedPublicEmail(payload) ? new Date() : null,
           websiteUrl: normalizeExternalUrl(readString(payload, "websiteUrl")),
           facebookUrl: normalizeExternalUrl(readString(payload, "facebookUrl")),
         },
       }));
+
+    const consentedPublicEmail = readConsentedPublicEmail(payload);
+    if (existingOrganizer && consentedPublicEmail) {
+      await db.organizer.update({
+        where: { id: existingOrganizer.id },
+        data: {
+          publicEmail: consentedPublicEmail,
+          publicEmailConsentAt: new Date(),
+        },
+      });
+    }
 
     organizerId = organizer.id;
   }
@@ -472,6 +496,16 @@ export async function submitShowForModeration(input: {
   const organizer = await resolveOrganizerForSubmission(input);
   if (organizer.moderationStatus === "BLOCKED") {
     return { status: "BLOCKED" as const, organizerId: organizer.id };
+  }
+  const consentedPublicEmail = readConsentedPublicEmail(input.payloadJson);
+  if (consentedPublicEmail) {
+    await db.organizer.update({
+      where: { id: organizer.id },
+      data: {
+        publicEmail: consentedPublicEmail,
+        publicEmailConsentAt: new Date(),
+      },
+    });
   }
   const payloadJson = {
     ...input.payloadJson,

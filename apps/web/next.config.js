@@ -1,4 +1,20 @@
 /** @type {import('next').NextConfig} */
+const cspReportOnly = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://pagead2.googlesyndication.com https://connect.facebook.net",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://www.facebook.com https://connect.facebook.net",
+  "frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com",
+  "worker-src 'self' blob:",
+  "upgrade-insecure-requests",
+].join("; ");
+
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR?.trim() || ".next",
   output: "standalone",
@@ -42,6 +58,10 @@ const nextConfig = {
           {
             key: "X-Frame-Options",
             value: "DENY",
+          },
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: cspReportOnly,
           },
         ],
       },

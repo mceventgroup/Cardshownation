@@ -42,6 +42,8 @@ export async function assertPublicHttpUrl(value: string) {
 
 export async function fetchPublicUrl(value: string, init: RequestInit = {}, timeoutMs = 10_000) {
   const url = await assertPublicHttpUrl(value);
+  // The Vercel/Next.js fetch runtime does not expose reliable socket address
+  // pinning, so we pair DNS preflight with no redirects and bounded reads.
   return fetch(url, { ...init, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(timeoutMs) });
 }
 

@@ -272,7 +272,7 @@ function PromoterLandingPage() {
         {[
           {
             title: "Saved promoter profile",
-            body: "Your organizer name, contact email, and links stay attached to your account so each new show starts mostly filled in.",
+            body: "Your organizer name and links stay attached to your account so each new show starts mostly filled in.",
           },
           {
             title: "Trust-based review",

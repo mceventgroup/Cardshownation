@@ -12,6 +12,8 @@ type RegisterPromoterInput = {
   password: string;
   contactName: string;
   organizerName: string;
+  publicEmail?: string | null;
+  publicEmailConsent?: boolean;
   websiteUrl?: string | null;
   facebookUrl?: string | null;
   instagramUrl?: string | null;
@@ -174,6 +176,10 @@ function buildPromoterDuplicateKey(input: {
 
 export async function registerPromoterAccount(input: RegisterPromoterInput) {
   const email = input.email.trim().toLowerCase();
+  const publicEmail =
+    input.publicEmailConsent && input.publicEmail?.trim()
+      ? input.publicEmail.trim().toLowerCase()
+      : null;
   const existingUser = await db.user.findUnique({ where: { email } });
   if (existingUser) {
     throw new Error("An account already exists for that email.");
@@ -205,6 +211,8 @@ export async function registerPromoterAccount(input: RegisterPromoterInput) {
         websiteUrl: normalizeExternalUrl(input.websiteUrl),
         facebookUrl: normalizeExternalUrl(input.facebookUrl),
         instagramUrl: normalizeExternalUrl(input.instagramUrl),
+        publicEmail,
+        publicEmailConsentAt: publicEmail ? new Date() : null,
       },
     });
     return user;
@@ -220,6 +228,8 @@ export async function registerPromoterAccount(input: RegisterPromoterInput) {
         create: {
           name: input.organizerName,
           email,
+          publicEmail,
+          publicEmailConsentAt: publicEmail ? new Date() : null,
           websiteUrl: normalizeExternalUrl(input.websiteUrl),
           facebookUrl: normalizeExternalUrl(input.facebookUrl),
           instagramUrl: normalizeExternalUrl(input.instagramUrl),
@@ -319,6 +329,8 @@ export async function getPromoterDashboardData(userId: string) {
               id: true,
               name: true,
               email: true,
+              publicEmail: true,
+              publicEmailConsentAt: true,
               websiteUrl: true,
               facebookUrl: true,
               instagramUrl: true,
@@ -350,6 +362,8 @@ export async function getPromoterDashboardData(userId: string) {
               id: true,
               name: true,
               email: true,
+              publicEmail: true,
+              publicEmailConsentAt: true,
               websiteUrl: true,
               facebookUrl: true,
               instagramUrl: true,
@@ -456,6 +470,8 @@ export async function createPromoterShow(userId: string, input: PromoterShowInpu
           id: true,
           name: true,
           email: true,
+          publicEmail: true,
+          publicEmailConsentAt: true,
           websiteUrl: true,
           facebookUrl: true,
           moderationStatus: true,
@@ -495,6 +511,8 @@ export async function createPromoterShow(userId: string, input: PromoterShowInpu
     organizerId: organizer.id,
     organizerName: organizer.name,
     organizerEmail: organizer.email,
+    publicPromoterEmail: organizer.publicEmailConsentAt ? organizer.publicEmail : null,
+    publicPromoterEmailConsent: Boolean(organizer.publicEmail && organizer.publicEmailConsentAt),
     description: input.description ?? null,
     tableCount: input.tableCount ?? null,
     vendorDetails: input.vendorDetails ?? null,
@@ -550,6 +568,8 @@ export async function bulkCreatePromoterShows(
           id: true,
           name: true,
           email: true,
+          publicEmail: true,
+          publicEmailConsentAt: true,
           websiteUrl: true,
           facebookUrl: true,
           moderationStatus: true,

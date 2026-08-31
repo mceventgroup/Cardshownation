@@ -2,6 +2,8 @@ export type FixtureOrganizer = {
   id: string;
   name: string;
   email: string | null;
+  publicEmail: string | null;
+  publicEmailConsentAt: Date | null;
   websiteUrl: string | null;
   facebookUrl: string | null;
   instagramUrl: string | null;
@@ -86,6 +88,8 @@ const organizers: Record<string, FixtureOrganizer> = {
     id: "org-kansas-card-show",
     name: "Kansas Card Show",
     email: "info@kansascardshow.com",
+    publicEmail: "info@kansascardshow.com",
+    publicEmailConsentAt: new Date("2026-01-01T00:00:00.000Z"),
     websiteUrl: "https://kansascardshow.com",
     facebookUrl: null,
     instagramUrl: null,
@@ -95,6 +99,8 @@ const organizers: Record<string, FixtureOrganizer> = {
     id: "org-midwest-hobby-events",
     name: "Midwest Hobby Events",
     email: "team@midwesthobbyevents.com",
+    publicEmail: null,
+    publicEmailConsentAt: null,
     websiteUrl: null,
     facebookUrl: null,
     instagramUrl: null,
@@ -104,6 +110,8 @@ const organizers: Record<string, FixtureOrganizer> = {
     id: "org-red-dirt-collectibles",
     name: "Red Dirt Collectibles",
     email: "hello@reddirtcollectibles.com",
+    publicEmail: null,
+    publicEmailConsentAt: null,
     websiteUrl: null,
     facebookUrl: null,
     instagramUrl: null,
@@ -113,6 +121,8 @@ const organizers: Record<string, FixtureOrganizer> = {
     id: "org-plains-card-market",
     name: "Plains Card Market",
     email: "info@plainscardmarket.com",
+    publicEmail: null,
+    publicEmailConsentAt: null,
     websiteUrl: null,
     facebookUrl: null,
     instagramUrl: null,
@@ -122,6 +132,8 @@ const organizers: Record<string, FixtureOrganizer> = {
     id: "org-gateway-card-promotions",
     name: "Gateway Card Promotions",
     email: "events@gatewaycardpromotions.com",
+    publicEmail: null,
+    publicEmailConsentAt: null,
     websiteUrl: null,
     facebookUrl: null,
     instagramUrl: null,

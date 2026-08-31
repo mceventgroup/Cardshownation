@@ -8,7 +8,12 @@ import {
   sendPasswordResetEmail,
 } from "@/lib/email";
 import { createPasswordResetToken } from "@/lib/password-reset-token";
-import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from "@/lib/passwords";
+import {
+  hashPassword,
+  MIN_MODERATOR_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  verifyPassword,
+} from "@/lib/passwords";
 import { US_STATES } from "@/lib/states";
 import { hashOpaqueToken } from "@/lib/token-hash";
 import { isFloorplannerSubscriptionTerminal } from "@/lib/floorplanner-access";
@@ -339,6 +344,9 @@ export async function updateFanStateSubscriptions(userId: string, stateCodes: st
 
 export async function createModeratorAccountByAdmin(input: CreateModeratorInput) {
   const email = input.email.trim().toLowerCase();
+  if (input.password.length < MIN_MODERATOR_PASSWORD_LENGTH) {
+    throw new Error(`Moderator passwords must be at least ${MIN_MODERATOR_PASSWORD_LENGTH} characters.`);
+  }
   const passwordHash = await hashPassword(input.password);
   const existingUser = await db.user.findUnique({ where: { email } });
 
@@ -835,6 +843,9 @@ export async function resetModeratorPasswordByAdmin(
 
   if (!user || user.role !== "MODERATOR") {
     throw new Error("Moderator account not found.");
+  }
+  if (input.nextPassword.length < MIN_MODERATOR_PASSWORD_LENGTH) {
+    throw new Error(`Moderator passwords must be at least ${MIN_MODERATOR_PASSWORD_LENGTH} characters.`);
   }
 
   const passwordHash = await hashPassword(input.nextPassword);

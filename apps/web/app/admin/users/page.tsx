@@ -22,6 +22,7 @@ import {
 } from "@/lib/users";
 import { isFloorplannerSubscriptionActive } from "@/lib/floorplanner-access";
 import type { UserRole } from "@csn/db";
+import { MIN_MODERATOR_PASSWORD_LENGTH } from "@/lib/passwords";
 
 type SearchParams = {
   accountCreated?: string;
@@ -138,7 +139,12 @@ async function createModerator(formData: FormData) {
   const password = readRequiredString(formData, "password", 200);
   const confirmPassword = readRequiredString(formData, "confirmPassword", 200);
 
-  if (!name || !isValidEmail(email) || password.length < 8 || password !== confirmPassword) {
+  if (
+    !name ||
+    !isValidEmail(email) ||
+    password.length < MIN_MODERATOR_PASSWORD_LENGTH ||
+    password !== confirmPassword
+  ) {
     redirect("/admin/users?error=moderator");
   }
 
@@ -425,7 +431,7 @@ function getMessage(sp: SearchParams) {
   }
 
   if (sp.error === "moderator") {
-    return sp.errorMessage ?? "Moderator creation failed. Check the name, email, and password fields.";
+    return sp.errorMessage ?? `Moderator creation failed. Passwords must be at least ${MIN_MODERATOR_PASSWORD_LENGTH} characters.`;
   }
 
   if (sp.error === "account-create") {
@@ -620,12 +626,14 @@ export default async function AdminUsersPage({
               <input
                 name="password"
                 type="password"
+                minLength={MIN_MODERATOR_PASSWORD_LENGTH}
                 placeholder="Temporary password"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
               <input
                 name="confirmPassword"
                 type="password"
+                minLength={MIN_MODERATOR_PASSWORD_LENGTH}
                 placeholder="Confirm password"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />

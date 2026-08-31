@@ -169,6 +169,8 @@ model Organizer {
   id           String   @id @default(cuid())
   name         String
   email        String?
+  publicEmail  String?
+  publicEmailConsentAt DateTime?
   websiteUrl   String?
   facebookUrl  String?
   instagramUrl String?

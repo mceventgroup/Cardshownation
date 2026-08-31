@@ -359,7 +359,7 @@ export function PromoterShowForm({
           <div className="rounded-3xl border border-brand-100 bg-brand-50/60 p-5">
             <p className="text-sm font-semibold text-slate-900">Posting as</p>
             <p className="mt-2 text-base font-semibold text-slate-950">{organizerName}</p>
-            <p className="mt-1 text-sm text-slate-600">{organizerEmail}</p>
+            <p className="mt-1 text-sm text-slate-600">Private account: {organizerEmail}</p>
             <p className="mt-3 text-sm leading-6 text-slate-600">
               Your profile links are prefilled below so you do not need to retype them for each
               show.

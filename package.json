@@ -50,7 +50,7 @@
     "react-reconciler": "0.33.0",
     "postcss": "8.5.24",
     "sharp": "0.35.3",
-    "undici": "6.27.0",
+    "undici": "6.28.0",
     "uuid": "14.0.0"
   },
   "packageManager": "npm@10.8.0",

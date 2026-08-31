@@ -65,6 +65,8 @@ async function handleSignup(formData: FormData) {
   const websiteUrl = readOptionalString(formData, "websiteUrl", 2048);
   const facebookUrl = readOptionalString(formData, "facebookUrl", 2048);
   const instagramUrl = readOptionalString(formData, "instagramUrl", 2048);
+  const publicEmail = readOptionalString(formData, "publicEmail", 320)?.toLowerCase() ?? null;
+  const publicEmailConsent = formData.get("publicEmailConsent") === "on";
   const requestHeaders = await headers();
   const ip = getRequestIp(requestHeaders) ?? "unknown";
   const rateLimit = await consumeRateLimit("promoter-signup", ip, {
@@ -94,7 +96,8 @@ async function handleSignup(formData: FormData) {
     !password ||
     password.length < 8 ||
     password !== confirmPassword ||
-    !isValidEmail(email)
+    !isValidEmail(email) ||
+    (publicEmail && (!publicEmailConsent || !isValidEmail(publicEmail)))
   ) {
     redirect("/promoter/signup?error=validation");
   }
@@ -105,6 +108,8 @@ async function handleSignup(formData: FormData) {
       organizerName,
       email,
       password,
+      publicEmail,
+      publicEmailConsent,
       websiteUrl,
       facebookUrl,
       instagramUrl,
@@ -231,7 +236,7 @@ export default async function PromoterSignupPage({
 
           <div>
             <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
-              Email
+              Private login email
             </label>
             <input
               id="email"
@@ -242,6 +247,35 @@ export default async function PromoterSignupPage({
               disabled={!secret}
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
             />
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Used for login and account notices. This email is not published.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <label htmlFor="publicEmail" className="mb-2 block text-sm font-medium text-slate-700">
+              Public promoter email
+            </label>
+            <input
+              id="publicEmail"
+              name="publicEmail"
+              type="email"
+              autoComplete="email"
+              disabled={!secret}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
+              placeholder="contact@example.com"
+            />
+            <label className="mt-4 flex items-start gap-3 text-sm leading-6 text-slate-600">
+              <input
+                type="checkbox"
+                name="publicEmailConsent"
+                disabled={!secret}
+                className="mt-1 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span>
+                Publish this email on show pages so collectors and vendors can contact the promoter.
+              </span>
+            </label>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">

@@ -414,6 +414,97 @@ test("submitShowForModeration stops exact published duplicates", async () => {
   assert.equal(createSubmissionMock.mock.calls.length, 0);
 });
 
+test("submitShowForModeration does not publish submitter email without public-email consent", async () => {
+  stubMethod(db.show, "findUnique", async () => null);
+  stubMethod(db.show, "findMany", async () => []);
+  stubMethod(db.showSubmission, "findFirst", async () => null);
+  stubMethod(db.showSubmission, "findMany", async () => []);
+  stubMethod(db.organizer, "findFirst", async () => null);
+  const createOrganizerMock = stubMethod(db.organizer, "create", async ({ data }) => ({
+    id: "organizer-1",
+    moderationStatus: "NEW",
+    ...data,
+  }));
+  const updateOrganizerMock = stubMethod(db.organizer, "update", async () => {
+    throw new Error("public email must not be updated without consent");
+  });
+  const createSubmissionMock = stubMethod(db.showSubmission, "create", async ({ data }) => ({
+    id: "submission-1",
+    ...data,
+  }));
+
+  const result = await submitShowForModeration({
+    submitterName: "Private Submitter",
+    submitterEmail: "private@example.com",
+    payloadJson: {
+      showName: "Private Contact Show",
+      startDate: "2026-10-17",
+      city: "Kansas City",
+      state: "MO",
+    },
+  });
+
+  assert.equal(result.status, "PENDING");
+  assert.deepEqual(createOrganizerMock.mock.calls[0]?.arguments[0].data, {
+    name: "Private Submitter",
+    email: "private@example.com",
+    publicEmail: null,
+    publicEmailConsentAt: null,
+    websiteUrl: null,
+    facebookUrl: null,
+    moderationStatus: "NEW",
+  });
+  assert.equal(updateOrganizerMock.mock.calls.length, 0);
+  assert.equal(
+    (createSubmissionMock.mock.calls[0]?.arguments[0].data.payloadJson as Record<string, unknown>)
+      .publicPromoterEmail,
+    undefined
+  );
+});
+
+test("submitShowForModeration stores public promoter email only with explicit consent", async () => {
+  stubMethod(db.show, "findUnique", async () => null);
+  stubMethod(db.show, "findMany", async () => []);
+  stubMethod(db.showSubmission, "findFirst", async () => null);
+  stubMethod(db.showSubmission, "findMany", async () => []);
+  stubMethod(db.organizer, "findUnique", async () => ({
+    id: "organizer-1",
+    name: "Consented Organizer",
+    email: "private@example.com",
+    moderationStatus: "NEW",
+  }));
+  const updateOrganizerMock = stubMethod(db.organizer, "update", async (input) => input);
+  const createSubmissionMock = stubMethod(db.showSubmission, "create", async ({ data }) => ({
+    id: "submission-1",
+    ...data,
+  }));
+
+  const result = await submitShowForModeration({
+    submitterName: "Private Submitter",
+    submitterEmail: "private@example.com",
+    payloadJson: {
+      organizerId: "organizer-1",
+      showName: "Public Contact Show",
+      startDate: "2026-10-17",
+      city: "Kansas City",
+      state: "MO",
+      publicPromoterEmail: "CONTACT@Example.com",
+      publicPromoterEmailConsent: true,
+    },
+  });
+
+  assert.equal(result.status, "PENDING");
+  assert.deepEqual(updateOrganizerMock.mock.calls[0]?.arguments[0], {
+    where: { id: "organizer-1" },
+    data: {
+      publicEmail: "contact@example.com",
+      publicEmailConsentAt: updateOrganizerMock.mock.calls[0]?.arguments[0].data.publicEmailConsentAt,
+    },
+  });
+  assert.ok(updateOrganizerMock.mock.calls[0]?.arguments[0].data.publicEmailConsentAt instanceof Date);
+  assert.equal(createSubmissionMock.mock.calls.length, 1);
+});
+
 test("getModeratorVisibleSubmissionById allows pending submissions for any moderator", async () => {
   const getSubmissionMock = stubMethod(db.showSubmission, "findUnique", async () => ({
     id: "submission-1",

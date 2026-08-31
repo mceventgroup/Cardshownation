@@ -45,7 +45,7 @@ async function handleForgotPassword(formData: FormData) {
     }
   } catch (error) {
     rethrowIfRedirectError(error);
-    console.error("[moderator forgot-password] reset email failed", { email, error });
+    console.error("[moderator forgot-password] reset email failed", { error });
     redirect("/moderator/forgot-password?error=send");
   }
 

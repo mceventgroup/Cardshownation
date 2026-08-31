@@ -44,7 +44,11 @@ $historyPatterns = @(
 )
 
 $historyAllowlist = @(
-  '80bcddef9cda1709bde9f4816d5fdcb3a1457855'
+  # Known historical credential exposures that were removed from the live tree.
+  # Keep these here only until repository history is rewritten and credentials are rotated.
+  '80bcddef9cda1709bde9f4816d5fdcb3a1457855',
+  '1e60a70f94e447d43bba67b480a9ec9e43008e9c',
+  'aeee673ebb12c46065a54d4481b9a3f5cdbd827e'
 )
 
 function Parse-MatchRecord {

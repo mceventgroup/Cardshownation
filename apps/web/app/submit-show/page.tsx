@@ -133,6 +133,8 @@ async function handleSubmission(formData: FormData) {
     const venueName = readRequiredString(formData, "venueName", 160);
     const websiteUrlInput = readOptionalString(formData, "websiteUrl", 2048);
     const facebookUrlInput = readOptionalString(formData, "facebookUrl", 2048);
+    const publicPromoterEmailInput = readOptionalString(formData, "publicPromoterEmail", 320);
+    const publicPromoterEmailConsent = formData.get("publicPromoterEmailConsent") === "on";
     const websiteUrl = normalizeExternalUrl(websiteUrlInput);
     const facebookUrl = normalizeExternalUrl(facebookUrlInput);
     const dailySchedule = readDailySchedule(formData, startDate, endDate, sameTimesEachDay);
@@ -150,7 +152,8 @@ async function handleSubmission(formData: FormData) {
       (!sameTimesEachDay && startDate !== endDate && !dailySchedule) ||
       !US_STATES.some((option) => option.code === state) ||
       (websiteUrlInput && !websiteUrl) ||
-      (facebookUrlInput && !facebookUrl)
+      (facebookUrlInput && !facebookUrl) ||
+      (publicPromoterEmailInput && (!publicPromoterEmailConsent || !isValidEmail(publicPromoterEmailInput)))
     ) {
       redirect("/submit-show?error=validation");
     }
@@ -172,7 +175,8 @@ async function handleSubmission(formData: FormData) {
         .getAll("categories")
         .filter((value): value is string => typeof value === "string" && SHOW_CATEGORIES.includes(value as (typeof SHOW_CATEGORIES)[number])),
       organizerName: submitterName,
-      organizerEmail: submitterEmail,
+      publicPromoterEmail: publicPromoterEmailInput?.toLowerCase() ?? null,
+      publicPromoterEmailConsent,
       description: readOptionalString(formData, "description", 4000),
       tableCount: readOptionalString(formData, "tableCount", 6),
       vendorDetails: readOptionalString(formData, "vendorDetails", 200),

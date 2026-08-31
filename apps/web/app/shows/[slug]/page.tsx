@@ -123,7 +123,10 @@ export default async function ShowDetailPage({ params }: Props) {
     : null;
   const admissionPriceMatch = show.admissionPrice?.match(/\$\s*(\d+(?:\.\d{1,2})?)/);
   const structuredPrice = show.isFree ? 0 : admissionPriceMatch?.[1];
-  const organizerEmail = show.organizer?.email?.trim() || null;
+  const organizerEmail =
+    show.organizer?.publicEmailConsentAt && show.organizer.publicEmail?.trim()
+      ? show.organizer.publicEmail.trim()
+      : null;
   const promoterContacts: Array<{
     href: string;
     icon: "email" | "globe" | "ticket" | "link";

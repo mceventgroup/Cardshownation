@@ -328,7 +328,7 @@ export function SubmitShowFormSteps({
               Step 2 · Where and Contact
             </p>
             <p className="mt-1 text-lg font-semibold text-slate-950">
-              Venue, contact email, and optional extras
+              Venue, private contact, and optional extras
             </p>
           </div>
           <span
@@ -410,7 +410,7 @@ export function SubmitShowFormSteps({
                 htmlFor="submitterEmail"
                 className="mb-2 block text-sm font-medium text-slate-700"
               >
-                Your email *
+                Your private email *
               </label>
               <input
                 id="submitterEmail"
@@ -423,7 +423,39 @@ export function SubmitShowFormSteps({
                 className={inputClass}
                 placeholder="jane@example.com"
               />
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Used by Card Show Nation to review this submission. This email is not published.
+              </p>
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <label
+              htmlFor="publicPromoterEmail"
+              className="mb-2 block text-sm font-medium text-slate-700"
+            >
+              Public promoter email
+            </label>
+            <input
+              id="publicPromoterEmail"
+              name="publicPromoterEmail"
+              type="email"
+              inputMode="email"
+              autoCapitalize="off"
+              autoComplete="email"
+              className={inputClass}
+              placeholder="contact@example.com"
+            />
+            <label className="mt-4 flex items-start gap-3 text-sm leading-6 text-slate-600">
+              <input
+                type="checkbox"
+                name="publicPromoterEmailConsent"
+                className="mt-1 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span>
+                Publish this email on the show page so visitors can contact the promoter.
+              </span>
+            </label>
           </div>
 
           <details className="group rounded-3xl border border-slate-200 bg-slate-50 p-5">
