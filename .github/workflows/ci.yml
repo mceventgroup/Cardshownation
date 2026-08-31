@@ -48,6 +48,8 @@ jobs:
       DIRECT_URL: postgresql://user@localhost:5432/csn?schema=public
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       ADMIN_PASSWORD: ci-password
+      USER_SESSION_SECRET: ci-session-key-placeholder-000001
+      PROMOTER_SESSION_SECRET: ci-promoter-key-placeholder-00001
 
     steps:
       - uses: actions/checkout@v6
