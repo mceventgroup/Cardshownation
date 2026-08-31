@@ -134,6 +134,12 @@ export default async function PromoterLoginPage({
           </p>
         )}
 
+        {sp.error === "unverified" && (
+          <Link href="/account/resend-verification?audience=promoter" className="mt-4 inline-flex text-sm font-semibold text-brand-700 hover:text-brand-800">
+            Send a new verification link
+          </Link>
+        )}
+
         {successMessage && (
           <p className="mt-5 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
             {successMessage}

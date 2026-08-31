@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { getEmailConfigStatus, sendFanVerificationEmail } from "@/lib/email";
+import { getEmailConfigStatus, sendFanVerificationEmail, sendPromoterVerificationEmail } from "@/lib/email";
 import { createVerificationToken } from "@/lib/verification-token";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getRequestIp } from "@/lib/request-ip";
@@ -12,6 +12,7 @@ async function resendVerification(formData: FormData) {
   "use server";
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase().slice(0, 320);
+  const audience = formData.get("audience") === "promoter" ? "promoter" : "member";
   const requestHeaders = await headers();
   const ip = getRequestIp(requestHeaders) ?? "unknown";
   const ipLimit = await consumeRateLimit("user-resend-verification", ip, {
@@ -19,7 +20,7 @@ async function resendVerification(formData: FormData) {
     maxAttempts: 5,
     windowMs: 60 * 60 * 1000,
   });
-  if (!ipLimit.allowed) redirect("/account/resend-verification?error=rate");
+  if (!ipLimit.allowed) redirect(`/account/resend-verification?audience=${audience}&error=rate`);
 
   if (email) {
     const emailLimit = await consumeRateLimit(
@@ -31,31 +32,35 @@ async function resendVerification(formData: FormData) {
         windowMs: 6 * 60 * 60 * 1000,
       },
     );
-    if (!emailLimit.allowed) redirect("/account/resend-verification?sent=1");
+    if (!emailLimit.allowed) redirect(`/account/resend-verification?audience=${audience}&sent=1`);
   }
 
   try {
     const user = email
       ? await db.user.findUnique({ where: { email } })
       : null;
-    if (user?.role === "FAN" && !user.emailVerifiedAt) {
+    const expectedRole = audience === "promoter" ? "ORGANIZER" : "FAN";
+    if (user?.role === expectedRole && !user.emailVerifiedAt) {
       const token = await createVerificationToken(user.id);
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
-      await sendFanVerificationEmail(email, `${appUrl}/account/verify?token=${token}`);
+      const verifyUrl = `${appUrl}/${audience === "promoter" ? "promoter" : "account"}/verify?token=${token}`;
+      if (audience === "promoter") await sendPromoterVerificationEmail(email, verifyUrl);
+      else await sendFanVerificationEmail(email, verifyUrl);
     }
   } catch (error) {
     console.error("[account verification] resend failed", { error });
   }
 
-  redirect("/account/resend-verification?sent=1");
+  redirect(`/account/resend-verification?audience=${audience}&sent=1`);
 }
 
 export default async function ResendVerificationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: Promise<{ audience?: string; error?: string; sent?: string }>;
 }) {
   const sp = await searchParams;
+  const audience = sp.audience === "promoter" ? "promoter" : "member";
   const emailStatus = getEmailConfigStatus();
 
   if (sp.sent === "1") {
@@ -65,7 +70,7 @@ export default async function ResendVerificationPage({
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">Check your inbox</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Verification link requested</h1>
           <p className="mt-4 text-base leading-7 text-slate-600">
-            If that email belongs to an unverified member account, a new link is on the way.
+            If that email belongs to an unverified {audience} account, a new link is on the way.
           </p>
           <Link href="/login" className="mt-6 inline-flex font-semibold text-brand-700 hover:text-brand-800">
             Return to login
@@ -78,10 +83,10 @@ export default async function ResendVerificationPage({
   return (
     <div className="container-narrow py-6 sm:py-10">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">Member verification</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">{audience === "promoter" ? "Promoter verification" : "Member verification"}</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Send a new verification link</h1>
         <p className="mt-4 text-base leading-7 text-slate-600">
-          Enter the exact email address used when the member account was created.
+          Enter the exact email address used when the {audience} account was created.
         </p>
         {sp.error === "rate" && (
           <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -94,6 +99,7 @@ export default async function ResendVerificationPage({
           </p>
         )}
         <form action={resendVerification} className="mt-8 space-y-5">
+          <input type="hidden" name="audience" value={audience} />
           <div>
             <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">Email</label>
             <input

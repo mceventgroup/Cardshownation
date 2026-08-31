@@ -43,10 +43,10 @@ function VerifyError({ message }: { message: string }) {
         </h1>
         <p className="mt-4 text-base leading-7 text-slate-600">{message}</p>
         <Link
-          href="/account/signup?promoter=1"
+          href="/account/resend-verification?audience=promoter"
           className="mt-6 inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Back to sign up
+          Send a new verification link
         </Link>
       </div>
     </div>
