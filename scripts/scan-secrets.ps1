@@ -163,6 +163,21 @@ function Test-IsExcludedPath {
   return $false
 }
 
+function Format-Finding {
+  param(
+    [string]$Scope,
+    [string]$PatternName,
+    [string]$Record
+  )
+
+  if ($Scope -eq 'source') {
+    $parsed = Parse-MatchRecord -Record $Record
+    return "[source] $($PatternName): $($parsed.Path):$($parsed.Line)"
+  }
+
+  return "[history] $($PatternName): $Record"
+}
+
 function Get-SearchableFiles {
   Get-ChildItem -Path . -Recurse -File -Force | Where-Object {
     $relativePath = Resolve-Path -LiteralPath $_.FullName -Relative
@@ -230,7 +245,7 @@ foreach ($pattern in $sourcePatterns) {
   $matches = Invoke-SourceScan -Regex $pattern.Regex
   foreach ($match in $matches) {
     if (-not (Test-IsIgnoredFinding -PatternName $pattern.Name -Record $match)) {
-      $sourceFindings.Add("[source] $($pattern.Name): $match")
+      $sourceFindings.Add((Format-Finding -Scope 'source' -PatternName $pattern.Name -Record $match))
     }
   }
 }
@@ -247,7 +262,7 @@ foreach ($pattern in $historyPatterns) {
     $_.Trim() -and
     ($historyAllowlist -notcontains (($_ -split ' ')[0]))
   })) {
-    $historyFindings.Add("[history] $($pattern.Name): $match")
+    $historyFindings.Add((Format-Finding -Scope 'history' -PatternName $pattern.Name -Record $match))
   }
 }
 
