@@ -58,7 +58,7 @@ function Parse-MatchRecord {
 
   if ($Record -match '^(?<path>.*?):(?<line>\d+):(?<text>.*)$') {
     return @{
-      Path = $Matches.path.Replace('\', '/').TrimStart('.', '/')
+      Path = Normalize-RelativePath -RelativePath $Matches.path
       Line = [int]$Matches.line
       Text = $Matches.text
     }
@@ -69,6 +69,19 @@ function Parse-MatchRecord {
     Line = 0
     Text = $Record
   }
+}
+
+function Normalize-RelativePath {
+  param(
+    [string]$RelativePath
+  )
+
+  $normalizedPath = $RelativePath.Replace('\', '/')
+  if ($normalizedPath.StartsWith('./')) {
+    return $normalizedPath.Substring(2)
+  }
+
+  return $normalizedPath
 }
 
 function Test-IsIgnoredFinding {
@@ -157,7 +170,7 @@ function Test-IsExcludedPath {
     [string]$RelativePath
   )
 
-  $normalizedPath = $RelativePath.Replace('\', '/').TrimStart('.', '/')
+  $normalizedPath = Normalize-RelativePath -RelativePath $RelativePath
   foreach ($exclude in $pathExcludes) {
     if ($normalizedPath.StartsWith($exclude, [System.StringComparison]::OrdinalIgnoreCase)) {
       return $true
