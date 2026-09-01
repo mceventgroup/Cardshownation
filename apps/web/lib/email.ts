@@ -16,6 +16,10 @@ const PERSONAL_EMAIL_DOMAINS = new Set([
   "aol.com",
 ]);
 
+export function isSignupEmailVerificationRequired() {
+  return process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED === "true";
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",

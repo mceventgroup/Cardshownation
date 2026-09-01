@@ -15,6 +15,7 @@ import {
 import { createVerificationToken } from "@/lib/verification-token";
 import {
   getEmailConfigStatus,
+  isSignupEmailVerificationRequired,
   sendFanVerificationEmail,
   sendPromoterVerificationEmail,
 } from "@/lib/email";
@@ -31,6 +32,7 @@ import {
 import { GoogleSignInLink } from "@/components/auth/google-sign-in-link";
 import { getPromoterSessionSecret } from "@/lib/promoter-auth";
 import { registerPromoterAccount } from "@/lib/promoters";
+import { db } from "@/lib/db";
 
 const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
 const SIGNUP_BLOCK_MS = 2 * 60 * 60 * 1000;
@@ -68,6 +70,7 @@ async function handleSignup(formData: FormData) {
 
   const sessionSecret = await getUserSessionSecret();
   const promoterSessionSecret = await getPromoterSessionSecret();
+  const verificationRequired = isSignupEmailVerificationRequired();
   const isPromoter = formData.get("isPromoter") === "on";
   const name = readRequiredString(formData, "name", 120);
   const organizerName = readRequiredString(formData, "organizerName", 160);
@@ -100,7 +103,7 @@ async function handleSignup(formData: FormData) {
   if (
     !sessionSecret ||
     (isPromoter && !promoterSessionSecret) ||
-    !getEmailConfigStatus().ready
+    (verificationRequired && !getEmailConfigStatus().ready)
   ) {
     redirect("/account/signup?error=disabled");
   }
@@ -130,6 +133,15 @@ async function handleSignup(formData: FormData) {
     if (isPromoter) {
       await updateFanStateSubscriptions(user.id, stateCodes);
     }
+
+    if (!verificationRequired) {
+      await db.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+      redirect(`/account/signup?ready=1&type=${isPromoter ? "promoter" : "member"}`);
+    }
+
     const token = await createVerificationToken(user.id);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
     const verifyUrl = `${appUrl}/${isPromoter ? "promoter" : "account"}/verify?token=${token}`;
@@ -157,7 +169,13 @@ async function handleSignup(formData: FormData) {
 export default async function UserSignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string; promoter?: string; type?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    promoter?: string;
+    ready?: string;
+    sent?: string;
+    type?: string;
+  }>;
 }) {
   const [session, secret, secretStatus, sp] = await Promise.all([
     getUserSession(),
@@ -165,9 +183,35 @@ export default async function UserSignupPage({
     getUserSessionSecretStatus(),
     searchParams,
   ]);
+  const verificationRequired = isSignupEmailVerificationRequired();
   const emailStatus = getEmailConfigStatus();
   if (session) {
     redirect("/account");
+  }
+
+  if (sp.ready === "1") {
+    const loginHref = sp.type === "promoter" ? "/promoter/login" : "/account/login";
+    return (
+      <div className="container-wide py-6 sm:py-10">
+        <div className="mx-auto max-w-4xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
+            Account ready
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+            Your account has been created
+          </h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
+            Email verification is temporarily turned off. You can sign in now.
+          </p>
+          <Link
+            href={loginHref}
+            className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"
+          >
+            Sign in
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (sp.sent === "1") {
@@ -201,7 +245,7 @@ export default async function UserSignupPage({
 
   const errorMessage =
     sp.error === "disabled"
-      ? !emailStatus.ready
+      ? verificationRequired && !emailStatus.ready
         ? emailStatus.error
         : secretStatus.error === "too_short"
         ? `USER_SESSION_SECRET must be at least ${MIN_USER_SESSION_SECRET_LENGTH} characters.`
@@ -285,7 +329,9 @@ export default async function UserSignupPage({
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
             />
             <p className="mt-2 text-sm text-slate-500">
-              We will send a verification link to this address before the account is activated.
+              {verificationRequired
+                ? "We will send a verification link to this address before the account is activated."
+                : "Email verification is temporarily turned off. You can sign in immediately after signup."}
             </p>
           </div>
 
@@ -310,7 +356,7 @@ export default async function UserSignupPage({
 
           <PromoterOptInFields
             defaultChecked={sp.promoter === "1"}
-            disabled={!secret || !emailStatus.ready}
+            disabled={!secret || (verificationRequired && !emailStatus.ready)}
           />
 
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
@@ -333,7 +379,7 @@ export default async function UserSignupPage({
 
           <button
             type="submit"
-            disabled={!secret || !emailStatus.ready}
+            disabled={!secret || (verificationRequired && !emailStatus.ready)}
             className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
           >
             Create account

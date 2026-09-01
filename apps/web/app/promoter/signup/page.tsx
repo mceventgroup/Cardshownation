@@ -11,7 +11,11 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { hashOpaqueToken } from "@/lib/token-hash";
 import { rethrowIfRedirectError } from "@/lib/next-control-flow";
 import { createVerificationToken } from "@/lib/verification-token";
-import { sendPromoterVerificationEmail } from "@/lib/email";
+import {
+  isSignupEmailVerificationRequired,
+  sendPromoterVerificationEmail,
+} from "@/lib/email";
+import { db } from "@/lib/db";
 
 const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
 const SIGNUP_BLOCK_MS = 2 * 60 * 60 * 1000;
@@ -57,6 +61,7 @@ async function handleSignup(formData: FormData) {
   "use server";
 
   const sessionSecret = await getPromoterSessionSecret();
+  const verificationRequired = isSignupEmailVerificationRequired();
   const contactName = readRequiredString(formData, "contactName", 120);
   const organizerName = readRequiredString(formData, "organizerName", 160);
   const email = readRequiredString(formData, "email", 320).toLowerCase();
@@ -115,6 +120,14 @@ async function handleSignup(formData: FormData) {
       instagramUrl,
     });
 
+    if (!verificationRequired) {
+      await db.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+      redirect("/promoter/signup?ready=1");
+    }
+
     const token = await createVerificationToken(user.id);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
     const verifyUrl = `${appUrl}/promoter/verify?token=${token}`;
@@ -131,7 +144,7 @@ async function handleSignup(formData: FormData) {
 export default async function PromoterSignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: Promise<{ error?: string; ready?: string; sent?: string }>;
 }) {
   const [session, secret, sp] = await Promise.all([
     getPromoterSession(),
@@ -140,6 +153,30 @@ export default async function PromoterSignupPage({
   ]);
   if (session) {
     redirect("/promoter");
+  }
+
+  if (sp.ready === "1") {
+    return (
+      <div className="container-narrow py-6 sm:py-10">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
+            Account ready
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+            Your promoter account has been created
+          </h1>
+          <p className="mt-4 text-base leading-7 text-slate-600">
+            Email verification is temporarily turned off. You can sign in now.
+          </p>
+          <Link
+            href="/promoter/login"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"
+          >
+            Sign in
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (sp.sent === "1") {
