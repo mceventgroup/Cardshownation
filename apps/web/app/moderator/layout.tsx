@@ -3,6 +3,7 @@ import { ClipboardCheck, LayoutDashboard, LogOut, Map, UserRound } from "lucide-
 import { getModeratorSession } from "@/lib/moderator-auth";
 import { logoutModerator } from "@/app/moderator/actions";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
+import { MobileMenu } from "@/components/layout/mobile-menu";
 
 export default async function ModeratorLayout({ children }: { children: React.ReactNode }) {
   const session = await getModeratorSession();
@@ -70,39 +71,35 @@ export default async function ModeratorLayout({ children }: { children: React.Re
             <p className="mt-0.5 text-xs text-slate-400">Review queue</p>
           </div>
 
-          {session ? (
-            <form action={logoutModerator}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
-              >
-                <LogOut className="h-4 w-4" />
-                Log out
-              </button>
-            </form>
-          ) : (
-            <Link
-              href="/moderator/login"
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
-            >
-              <LogOut className="h-4 w-4 rotate-180" />
-              Log in
-            </Link>
-          )}
+          <MobileMenu>
+            <nav aria-label="Moderator navigation" className="space-y-1">
+              {navItems.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {label}
+                </Link>
+              ))}
+              <div className="my-1 border-t border-slate-100" />
+              {session ? (
+                <form action={logoutModerator}>
+                  <button type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    Log out
+                  </button>
+                </form>
+              ) : (
+                <Link href="/moderator/login" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  <LogOut className="h-4 w-4 rotate-180" aria-hidden="true" />
+                  Log in
+                </Link>
+              )}
+            </nav>
+          </MobileMenu>
         </div>
-
-        <nav aria-label="Moderator navigation" className="flex gap-2 overflow-x-auto px-4 pb-3">
-          {navItems.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </Link>
-          ))}
-        </nav>
       </header>
       }
     >

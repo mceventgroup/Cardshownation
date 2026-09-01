@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { MapPin, Plus, Search } from "lucide-react";
+import { LayoutDashboard, Map, MapPin, Plus, Search, UserRound } from "lucide-react";
 import { getDataModeLabel, isFixtureMode } from "@/lib/data-mode";
 import { getPublicPortalLink } from "@/lib/public-portal";
+import { MobileMenu } from "@/components/layout/mobile-menu";
 
 export async function Header() {
   const portalLink = await getPublicPortalLink();
@@ -32,13 +33,38 @@ export async function Header() {
             </div>
           </Link>
 
-          <Link
-            href="/submit-show"
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:hidden"
-          >
-            <Plus className="h-4 w-4" />
-            Submit show
-          </Link>
+          <div className="shrink-0 sm:hidden">
+            <MobileMenu>
+              <nav aria-label="Main navigation" className="space-y-1">
+                <Link href="/card-shows" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  <Search className="h-4 w-4" aria-hidden="true" />
+                  Browse Shows
+                </Link>
+                <Link href="/floorplanner" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  <Map className="h-4 w-4" aria-hidden="true" />
+                  Floor Planner
+                </Link>
+                <Link href={portalLink.href} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-100">
+                  {portalLink.href === "/account" ? (
+                    <UserRound className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {portalLink.label}
+                </Link>
+                {showGuestCta && (
+                  <Link href="/account/signup" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-800 hover:bg-brand-50">
+                    <UserRound className="h-4 w-4" aria-hidden="true" />
+                    Create Account
+                  </Link>
+                )}
+                <Link href="/submit-show" className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Submit a Show
+                </Link>
+              </nav>
+            </MobileMenu>
+          </div>
 
           <nav className="hidden items-center justify-end gap-2 sm:flex lg:gap-3">
             <Link
@@ -76,17 +102,6 @@ export async function Header() {
             </Link>
           </nav>
         </div>
-        <nav className="mt-2 flex items-center justify-center gap-1 border-t border-slate-100 pt-2 sm:hidden" aria-label="Main navigation">
-          <Link href="/card-shows" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
-            <Search className="h-3.5 w-3.5" /> Browse
-          </Link>
-          <Link href="/floorplanner" className="inline-flex flex-1 items-center justify-center rounded-full px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
-            Planner
-          </Link>
-          <Link href={portalLink.href} className="inline-flex flex-1 items-center justify-center rounded-full px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
-            {portalLink.shortLabel}
-          </Link>
-        </nav>
       </div>
     </header>
   );

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { logoutAdmin } from "@/app/admin/actions";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
+import { MobileMenu } from "@/components/layout/mobile-menu";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const navItems = [
@@ -31,6 +32,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       subtitle="Launch restricted internal apps from here."
       launchHref="/admin/floorplanner"
       launchLabel="Launch Floorplanner"
+      mobileHeader={
+        <header className="border-b border-slate-200 bg-white md:hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0">
+              <Link href="/admin" className="text-sm font-bold text-slate-900">CSN Admin</Link>
+              <p className="mt-0.5 text-xs text-slate-400">Card Show Nation</p>
+            </div>
+            <MobileMenu>
+              <nav aria-label="Admin navigation" className="space-y-1">
+                {navItems.map(({ href, label, icon: Icon }) => (
+                  <Link key={href} href={href} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {label}
+                  </Link>
+                ))}
+                <div className="my-1 border-t border-slate-100" />
+                <Link href="/" className="flex items-center rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Back to site</Link>
+                <form action={logoutAdmin}>
+                  <button type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    Log out
+                  </button>
+                </form>
+              </nav>
+            </MobileMenu>
+          </div>
+        </header>
+      }
       desktopSidebar={
         <aside className="hidden w-56 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
         <div className="border-b border-slate-100 px-4 py-5">
