@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Map, MapPin, Plus, Search, UserRound } from "lucide-react";
+import { Home, LayoutDashboard, Map, MapPin, Plus, Search, UserRound } from "lucide-react";
 import { getDataModeLabel, isFixtureMode } from "@/lib/data-mode";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { MobileMenu } from "@/components/layout/mobile-menu";
@@ -36,6 +36,10 @@ export async function Header() {
           <div className="shrink-0 sm:hidden">
             <MobileMenu>
               <nav aria-label="Main navigation" className="space-y-1">
+                <Link href="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  <Home className="h-4 w-4" aria-hidden="true" />
+                  Main website
+                </Link>
                 <Link href="/card-shows" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
                   <Search className="h-4 w-4" aria-hidden="true" />
                   Browse Shows

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardCheck, LayoutDashboard, LogOut, Map, UserRound } from "lucide-react";
+import { ClipboardCheck, Home, LayoutDashboard, LogOut, Map, UserRound } from "lucide-react";
 import { getModeratorSession } from "@/lib/moderator-auth";
 import { logoutModerator } from "@/app/moderator/actions";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
@@ -38,6 +38,14 @@ export default async function ModeratorLayout({ children }: { children: React.Re
                 {label}
               </Link>
             ))}
+
+            <Link
+              href="/"
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            >
+              <Home className="h-4 w-4" />
+              Main website
+            </Link>
 
             {session ? (
               <form action={logoutModerator}>
@@ -84,6 +92,10 @@ export default async function ModeratorLayout({ children }: { children: React.Re
                 </Link>
               ))}
               <div className="my-1 border-t border-slate-100" />
+              <Link href="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                <Home className="h-4 w-4" aria-hidden="true" />
+                Main website
+              </Link>
               {session ? (
                 <form action={logoutModerator}>
                   <button type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">

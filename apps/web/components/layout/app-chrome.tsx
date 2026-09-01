@@ -25,7 +25,11 @@ export function AppChrome({
   return (
     <div className="flex min-h-screen flex-col">
       {!workspaceMode && header}
-      <main className="flex-1">{children}</main>
+      {workspaceMode ? (
+        <div id="main-content" tabIndex={-1} className="flex-1 outline-none">{children}</div>
+      ) : (
+        <main id="main-content" tabIndex={-1} className="flex-1 outline-none">{children}</main>
+      )}
       {!workspaceMode && footer}
     </div>
   );

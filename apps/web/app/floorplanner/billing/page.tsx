@@ -97,13 +97,14 @@ export default async function FloorplannerBillingPage() {
               </button>
             </form>
           ) : !complimentary && purchasingEnabled ? (
-            <form action={startFloorplannerCheckout}>
+            <form action={startFloorplannerCheckout} className="space-y-2">
               <button
                 type="submit"
                 className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:w-auto"
               >
                 Subscribe
               </button>
+              <p className="max-w-xs text-xs leading-5 text-slate-500">By subscribing, you agree to the <Link href="/billing-terms" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Billing Terms</Link> and recurring monthly charges until cancellation.</p>
             </form>
           ) : !complimentary ? (
             <span className="inline-flex items-center justify-center rounded-full bg-slate-100 px-6 py-3 text-sm font-semibold text-slate-500">

@@ -5,6 +5,7 @@ import { endUserSession, requireUserSession } from "@/lib/user-auth";
 import { db } from "@/lib/db";
 import { isFloorplannerSubscriptionTerminal } from "@/lib/floorplanner-access";
 import { verifyPassword } from "@/lib/passwords";
+import { deleteCloudLayoutsForUser } from "@floorplanner/lib/server/cloud-layout-store";
 
 export async function logoutUser() {
   await endUserSession();
@@ -36,7 +37,7 @@ export async function deleteMyAccount(formData: FormData) {
       },
     },
   });
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  if (!user || (user.passwordHash !== null && !(await verifyPassword(password, user.passwordHash)))) {
     redirect("/account?error=delete");
   }
   if (
@@ -45,7 +46,12 @@ export async function deleteMyAccount(formData: FormData) {
   ) {
     redirect("/account?error=billing");
   }
-  await db.user.delete({ where: { id: session.user.id } });
+  try {
+    await deleteCloudLayoutsForUser(session.user.id);
+    await db.user.delete({ where: { id: session.user.id } });
+  } catch {
+    redirect("/account?error=delete");
+  }
   await endUserSession();
   redirect("/?accountDeleted=1");
 }

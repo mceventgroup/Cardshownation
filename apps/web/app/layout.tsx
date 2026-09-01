@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Suspense } from "react";
 import { GooglePageViewTracker } from "@/components/analytics/google-page-view-tracker";
 import { MetaPixelTracker } from "@/components/analytics/meta-pixel-tracker";
@@ -51,9 +51,11 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const consentValue = (await cookies()).get("csn_cookie_consent")?.value;
+  const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+  const consentValue = cookieStore.get("csn_cookie_consent")?.value;
   const consent = consentValue === "optional" || consentValue === "essential" ? consentValue : null;
-  const allowOptional = consent === "optional";
+  const globalPrivacyControl = requestHeaders.get("sec-gpc") === "1";
+  const allowOptional = consent === "optional" && !globalPrivacyControl;
   return (
     <html lang="en" className={inter.variable}>
       <head>
@@ -100,6 +102,9 @@ export default async function RootLayout({
         )}
       </head>
       <body className="min-h-screen bg-slate-50 font-sans text-slate-950 antialiased">
+        <a href="#main-content" className="fixed left-4 top-3 z-[120] -translate-y-20 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0">
+          Skip to main content
+        </a>
         <Suspense fallback={null}>
           {allowOptional && GOOGLE_TAG_ID && <GooglePageViewTracker />}
           {allowOptional && META_PIXEL_ID && <MetaPixelTracker />}
@@ -121,7 +126,7 @@ export default async function RootLayout({
         <AppChrome header={<Header />} footer={<Footer />}>
           {children}
         </AppChrome>
-        <CookieConsent initialConsent={consent} />
+        <CookieConsent initialConsent={consent} globalPrivacyControl={globalPrivacyControl} />
       </body>
     </html>
   );

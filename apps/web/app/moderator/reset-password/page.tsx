@@ -93,7 +93,7 @@ export default async function ModeratorResetPasswordPage({
         </p>
 
         {errorMessage && (
-          <p className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMessage}
           </p>
         )}

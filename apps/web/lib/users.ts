@@ -17,6 +17,7 @@ import {
 import { US_STATES } from "@/lib/states";
 import { hashOpaqueToken } from "@/lib/token-hash";
 import { isFloorplannerSubscriptionTerminal } from "@/lib/floorplanner-access";
+import { deleteCloudLayoutsForUser } from "@floorplanner/lib/server/cloud-layout-store";
 import type { Prisma, UserRole } from "@csn/db";
 
 type RegisterFanInput = {
@@ -983,7 +984,10 @@ export async function sendPasswordResetByAdmin(input: AdminUserActionInput) {
   });
 }
 
-export async function deleteUserAccountByAdmin(input: AdminUserActionInput) {
+export async function deleteUserAccountByAdmin(
+  input: AdminUserActionInput,
+  deleteOwnedCloudLayouts: (userId: string) => Promise<void> = deleteCloudLayoutsForUser,
+) {
   const user = await db.user.findUnique({
     where: { id: input.userId },
     include: {
@@ -1015,6 +1019,8 @@ export async function deleteUserAccountByAdmin(input: AdminUserActionInput) {
       "Cancel this user's floor-planner subscription before deleting the account.",
     );
   }
+
+  await deleteOwnedCloudLayouts(user.id);
 
   await db.$transaction(async (tx) => {
     if (user.organizer?.id) {

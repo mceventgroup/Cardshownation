@@ -234,3 +234,12 @@ export async function deleteCloudLayout(id: string, owner: CloudLayoutOwner): Pr
       )
   `
 }
+
+export async function deleteCloudLayoutsForUser(userId: string): Promise<void> {
+  await ensureCloudLayoutsTable()
+  const sql = getSql()
+  await sql`
+    delete from floorplanner_cloud_layouts
+    where owner_user_id = ${userId}
+  `
+}

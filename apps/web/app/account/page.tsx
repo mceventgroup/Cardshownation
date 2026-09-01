@@ -308,7 +308,7 @@ export default async function AccountPage({
           )}
 
           {errorMessage && (
-            <p className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {errorMessage}
             </p>
           )}
@@ -584,8 +584,14 @@ export default async function AccountPage({
               <h2 className="mt-3 text-xl font-semibold text-slate-950">Add promoter tools to this account</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">Keep all your collector features and use the same login.</p>
               <form action={becomePromoter} className="mt-5 space-y-3">
-                <input name="organizerName" required placeholder="Organizer or business name" className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm" />
-                <input name="websiteUrl" type="url" placeholder="Website (optional)" className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm" />
+                <div>
+                  <label htmlFor="promoter-organizer-name" className="mb-1.5 block text-sm font-medium text-slate-700">Organizer or business name</label>
+                  <input id="promoter-organizer-name" name="organizerName" required autoComplete="organization" className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm" />
+                </div>
+                <div>
+                  <label htmlFor="promoter-website" className="mb-1.5 block text-sm font-medium text-slate-700">Website <span className="font-normal text-slate-500">(optional)</span></label>
+                  <input id="promoter-website" name="websiteUrl" type="url" autoComplete="url" className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm" />
+                </div>
                 <button type="submit" className="inline-flex rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-700">Become a promoter</button>
               </form>
             </section>
@@ -618,10 +624,20 @@ export default async function AccountPage({
           </section>
           <details className="group rounded-[2rem] border border-red-200 bg-red-50 p-6">
             <summary className="cursor-pointer list-none font-semibold text-red-900 marker:content-none">Delete account</summary>
-            <p className="mt-3 text-sm leading-6 text-red-800">This permanently deletes your profile, preferences, and saved shows. Type DELETE and enter your password.</p>
+            <p id="delete-account-help" className="mt-3 text-sm leading-6 text-red-800">This permanently deletes your login profile, preferences, saved shows, and account-linked cloud layouts. Public show or organizer records may remain without the login attached. Type DELETE{account.passwordHash ? " and enter your password" : " to confirm"}.</p>
             <form action={deleteMyAccount} className="mt-4 space-y-3">
-              <input name="deleteConfirmation" required placeholder="Type DELETE" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
-              <input name="deletePassword" type="password" required placeholder="Current password" autoComplete="current-password" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
+              <div>
+                <label htmlFor="delete-confirmation" className="mb-1.5 block text-sm font-medium text-red-900">Confirmation</label>
+                <input id="delete-confirmation" name="deleteConfirmation" required aria-describedby="delete-account-help" placeholder="Type DELETE" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
+              </div>
+              {account.passwordHash ? (
+                <div>
+                  <label htmlFor="delete-password" className="mb-1.5 block text-sm font-medium text-red-900">Current password</label>
+                  <input id="delete-password" name="deletePassword" type="password" required autoComplete="current-password" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
+                </div>
+              ) : (
+                <input type="hidden" name="deletePassword" value="" />
+              )}
               <button className="w-full rounded-full bg-red-700 px-4 py-2 text-sm font-semibold text-white sm:w-auto">Permanently delete account</button>
             </form>
           </details>

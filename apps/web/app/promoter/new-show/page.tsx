@@ -249,7 +249,7 @@ export default async function NewPromoterShowPage({
         )}
 
         {errorMessage && (
-          <p className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMessage}
           </p>
         )}
@@ -270,8 +270,7 @@ export default async function NewPromoterShowPage({
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-slate-500">
-            Submission handling for each market is managed by admin review and promoter trust
-            settings.
+            By submitting, you confirm you are authorized to publish these details and agree to our <Link href="/terms" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Terms</Link>. See the <Link href="/privacy" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Privacy Policy</Link>.
           </p>
           <button
             type="submit"

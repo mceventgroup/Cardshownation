@@ -275,12 +275,16 @@ test("deleteUserAccountByAdmin deletes non-admin users and records the action", 
   });
 
   const auditLogMock = stubMethod(db.auditLog, "create", async (input) => input);
+  const cloudLayoutDeletes: string[] = [];
 
   await usersModule.deleteUserAccountByAdmin({
     actorId: "admin-1",
     userId: "user-1",
+  }, async (userId) => {
+    cloudLayoutDeletes.push(userId);
   });
 
+  assert.deepEqual(cloudLayoutDeletes, ["user-1"]);
   assert.equal(transactionCalls.length, 1);
   assert.equal(organizerUpdateCalls.length, 0);
   assert.deepEqual(userDeleteCalls[0], {
@@ -340,12 +344,16 @@ test("deleteUserAccountByAdmin explicitly detaches organizer records before dele
   });
 
   const auditLogMock = stubMethod(db.auditLog, "create", async (input) => input);
+  const cloudLayoutDeletes: string[] = [];
 
   await usersModule.deleteUserAccountByAdmin({
     actorId: "admin-1",
     userId: "organizer-user-1",
+  }, async (userId) => {
+    cloudLayoutDeletes.push(userId);
   });
 
+  assert.deepEqual(cloudLayoutDeletes, ["organizer-user-1"]);
   assert.equal(transactionCalls.length, 1);
   assert.deepEqual(organizerUpdateCalls[0], {
     where: { id: "organizer-1" },

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Check } from "lucide-react";
@@ -289,7 +290,7 @@ export default async function SubmitShowPage({
           </li>
         </ul>
         {errorMessage && (
-          <p className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMessage}
           </p>
         )}
@@ -305,8 +306,7 @@ export default async function SubmitShowPage({
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-slate-500">
-            Free listing. We review and publish within 24 hours. We&apos;ll
-            only email you if we need to clarify something.
+            By submitting, you confirm you are authorized to publish these details and agree to our <Link href="/terms" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Terms</Link>. See how we use submission information in our <Link href="/privacy" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Privacy Policy</Link>.
           </p>
           <button
             type="submit"
