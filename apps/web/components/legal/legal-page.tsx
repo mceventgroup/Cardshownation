@@ -6,6 +6,7 @@ const legalLinks = [
   { href: "/cookies", label: "Cookie Policy" },
   { href: "/billing-terms", label: "Billing Terms" },
   { href: "/accessibility", label: "Accessibility" },
+  { href: "/contact", label: "Contact & Support" },
 ];
 
 export function LegalPage({ title, summary, updated, currentPath, sections, children }: {

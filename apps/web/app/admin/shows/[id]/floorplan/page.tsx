@@ -7,6 +7,7 @@ import { FloorplanEditorPage } from "@/app/floorplanner/editor-page";
 export const metadata: Metadata = {
   title: "Admin Show Floorplanner",
   description: "Review and edit a show floorplan as an admin.",
+  robots: { index: false, follow: false },
 };
 
 export default async function AdminShowFloorplanPage({

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireAdminSession } from "@/lib/admin-auth";
-import { updateAdminPassword } from "@/lib/admins";
+import { MIN_ADMIN_PASSWORD_LENGTH, updateAdminPassword } from "@/lib/admins";
 import { getRecentAuditLogs } from "@/lib/audit-log";
 import { sendAdminCreatedAccountEmail, sendModeratorVerificationEmail } from "@/lib/email";
 import { rethrowIfRedirectError } from "@/lib/next-control-flow";
@@ -275,7 +275,7 @@ async function changeMyPassword(formData: FormData) {
   const nextPassword = readRequiredString(formData, "nextPassword", 200);
   const confirmPassword = readRequiredString(formData, "confirmPassword", 200);
 
-  if (nextPassword.length < 12 || nextPassword !== confirmPassword) {
+  if (nextPassword.length < MIN_ADMIN_PASSWORD_LENGTH || nextPassword !== confirmPassword) {
     redirect("/admin/users?error=password");
   }
 
@@ -690,7 +690,7 @@ export default async function AdminUsersPage({
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-lg font-semibold text-slate-900">Rotate admin password</h2>
           <p className="mt-2 text-sm text-slate-500">
-            Your current admin account is {session.user.email}. Use at least 12 characters for
+            Your current admin account is {session.user.email}. Use at least {MIN_ADMIN_PASSWORD_LENGTH} characters for
             the replacement password.
           </p>
 
@@ -705,12 +705,18 @@ export default async function AdminUsersPage({
               <input
                 name="nextPassword"
                 type="password"
+                required
+                minLength={MIN_ADMIN_PASSWORD_LENGTH}
+                autoComplete="new-password"
                 placeholder="New password"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
               <input
                 name="confirmPassword"
                 type="password"
+                required
+                minLength={MIN_ADMIN_PASSWORD_LENGTH}
+                autoComplete="new-password"
                 placeholder="Confirm new password"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />

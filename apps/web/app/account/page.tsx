@@ -624,7 +624,7 @@ export default async function AccountPage({
           </section>
           <details className="group rounded-[2rem] border border-red-200 bg-red-50 p-6">
             <summary className="cursor-pointer list-none font-semibold text-red-900 marker:content-none">Delete account</summary>
-            <p id="delete-account-help" className="mt-3 text-sm leading-6 text-red-800">This permanently deletes your login profile, preferences, saved shows, and account-linked cloud layouts. Public show or organizer records may remain without the login attached. Type DELETE{account.passwordHash ? " and enter your password" : " to confirm"}.</p>
+            <p id="delete-account-help" className="mt-3 text-sm leading-6 text-red-800">This permanently deletes your login profile, preferences, saved shows, and account-linked cloud layouts. Public show or organizer records may remain without the login attached. Type DELETE{account.passwordHash ? " and enter your password" : " and account email"} to confirm.</p>
             <form action={deleteMyAccount} className="mt-4 space-y-3">
               <div>
                 <label htmlFor="delete-confirmation" className="mb-1.5 block text-sm font-medium text-red-900">Confirmation</label>
@@ -636,8 +636,13 @@ export default async function AccountPage({
                   <input id="delete-password" name="deletePassword" type="password" required autoComplete="current-password" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
                 </div>
               ) : (
-                <input type="hidden" name="deletePassword" value="" />
+                <div>
+                  <label htmlFor="delete-email" className="mb-1.5 block text-sm font-medium text-red-900">Account email</label>
+                  <input id="delete-email" name="deleteEmail" type="email" required autoComplete="email" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-slate-950" />
+                  <input type="hidden" name="deletePassword" value="" />
+                </div>
               )}
+              {account.passwordHash ? <input type="hidden" name="deleteEmail" value="" /> : null}
               <button className="w-full rounded-full bg-red-700 px-4 py-2 text-sm font-semibold text-white sm:w-auto">Permanently delete account</button>
             </form>
           </details>

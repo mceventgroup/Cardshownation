@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const cspReportOnly = [
+const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -45,7 +45,7 @@ const nextConfig = {
         headers: [
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=()",
+            value: "camera=(), microphone=(), browsing-topics=()",
           },
           {
             key: "Referrer-Policy",
@@ -60,11 +60,27 @@ const nextConfig = {
             value: "DENY",
           },
           {
-            key: "Content-Security-Policy-Report-Only",
-            value: cspReportOnly,
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000",
+          },
+          {
+            key: "Content-Security-Policy",
+            value: contentSecurityPolicy,
           },
         ],
       },
+      ...[
+        "/account/:path*",
+        "/admin/:path*",
+        "/moderator/:path*",
+        "/promoter/:path*",
+        "/floorplanner/billing",
+        "/floorplanner/workspace",
+        "/api/floorplanner/:path*",
+      ].map((source) => ({
+        source,
+        headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
+      })),
     ];
   },
   webpack: (config, { isServer, dev }) => {

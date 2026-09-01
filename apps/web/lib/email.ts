@@ -17,7 +17,7 @@ const PERSONAL_EMAIL_DOMAINS = new Set([
 ]);
 
 export function isSignupEmailVerificationRequired() {
-  return process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED === "true";
+  return process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED !== "false";
 }
 
 function escapeHtml(value: string) {

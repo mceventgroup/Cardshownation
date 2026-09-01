@@ -12,14 +12,14 @@ import {
 
 const TEST_RESEND_CREDENTIAL = ["re", "test", "key"].join("_");
 
-test("public signup email verification is off unless explicitly enabled", () => {
+test("public signup email verification is on unless explicitly disabled", () => {
   const originalSetting = process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED;
 
   delete process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED;
-  assert.equal(isSignupEmailVerificationRequired(), false);
-
-  process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED = "true";
   assert.equal(isSignupEmailVerificationRequired(), true);
+
+  process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED = "false";
+  assert.equal(isSignupEmailVerificationRequired(), false);
 
   process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED = originalSetting;
 });

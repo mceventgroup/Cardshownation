@@ -74,6 +74,7 @@ export function Footer() {
               <Link href="/cookies#choices" className="transition-colors hover:text-brand-700">Your Privacy Choices</Link>
               <Link href="/billing-terms" className="transition-colors hover:text-brand-700">Billing Terms</Link>
               <Link href="/accessibility" className="transition-colors hover:text-brand-700">Accessibility</Link>
+              <Link href="/contact" className="transition-colors hover:text-brand-700">Contact &amp; Support</Link>
             </div>
           </nav>
         </div>
@@ -86,6 +87,7 @@ export function Footer() {
             </Link>
             <Link href="/legal" className="transition-colors hover:text-slate-800">Legal</Link>
             <Link href="/accessibility" className="transition-colors hover:text-slate-800">Accessibility</Link>
+            <Link href="/contact" className="transition-colors hover:text-slate-800">Contact</Link>
             <Link href="/admin" className="transition-colors hover:text-slate-800">
               Admin
             </Link>

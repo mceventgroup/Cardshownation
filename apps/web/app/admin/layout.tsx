@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Home,
@@ -13,6 +14,8 @@ import {
 import { logoutAdmin } from "@/app/admin/actions";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { MobileMenu } from "@/components/layout/mobile-menu";
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const navItems = [

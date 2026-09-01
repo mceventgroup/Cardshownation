@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { CompactLegalFooter } from "@/components/layout/compact-legal-footer";
 
 function isWorkspacePath(pathname: string) {
   return (
@@ -30,7 +31,7 @@ export function AppChrome({
       ) : (
         <main id="main-content" tabIndex={-1} className="flex-1 outline-none">{children}</main>
       )}
-      {!workspaceMode && footer}
+      {workspaceMode ? <CompactLegalFooter /> : footer}
     </div>
   );
 }

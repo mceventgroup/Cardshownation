@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getRequestIp, isLocalIp } from "@/lib/request-ip";
 
+function readCoordinate(value: string | null, min: number, max: number) {
+  if (value === null) return null;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max
+    ? coordinate
+    : null;
+}
+
+function readCity(value: string | null) {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value).slice(0, 120);
+  } catch {
+    return value.slice(0, 120);
+  }
+}
+
 export async function GET(req: NextRequest) {
   const ip = getRequestIp(req.headers);
 
@@ -19,24 +36,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ lat: null, lng: null, error: "rate limited" }, { status: 429 });
   }
 
-  try {
-    const res = await fetch(
-      `https://ip-api.com/json/${ip}?fields=status,lat,lon,city,regionName`,
-      { next: { revalidate: 3600 } }
-    );
-    const data = await res.json();
-
-    if (data.status === "success") {
-      return NextResponse.json({
-        lat: data.lat,
-        lng: data.lon,
-        city: data.city,
-        region: data.regionName,
-      });
-    }
-
-    return NextResponse.json({ lat: null, lng: null, error: "lookup failed" });
-  } catch {
-    return NextResponse.json({ lat: null, lng: null, error: "fetch failed" });
+  const lat = readCoordinate(req.headers.get("x-vercel-ip-latitude"), -90, 90);
+  const lng = readCoordinate(req.headers.get("x-vercel-ip-longitude"), -180, 180);
+  if (lat === null || lng === null) {
+    return NextResponse.json({ lat: null, lng: null, city: null, error: "unavailable" });
   }
+
+  return NextResponse.json({
+    lat,
+    lng,
+    city: readCity(req.headers.get("x-vercel-ip-city")),
+    region: req.headers.get("x-vercel-ip-country-region")?.slice(0, 12) ?? null,
+  });
 }

@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Floor Planner Workspace",
   description: "Build and save your card-show floor plan.",
+  robots: { index: false, follow: false },
 };
 
 export default async function FloorplannerWorkspacePage() {

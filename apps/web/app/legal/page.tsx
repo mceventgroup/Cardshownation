@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Accessibility, Cookie, CreditCard, FileText, LockKeyhole } from "lucide-react";
+import { Accessibility, Cookie, CreditCard, FileText, LockKeyhole, Mail } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Legal Center",
@@ -13,6 +13,7 @@ const documents = [
   { href: "/cookies", title: "Cookie Policy", description: "Essential and optional technologies used on the site.", icon: Cookie },
   { href: "/billing-terms", title: "Billing Terms", description: "Subscription renewal, cancellation, plan changes, and refunds.", icon: CreditCard },
   { href: "/accessibility", title: "Accessibility Statement", description: "Our accessibility approach and how to report a barrier.", icon: Accessibility },
+  { href: "/contact", title: "Contact & Support", description: "Billing, privacy, accessibility, content, and security support channels.", icon: Mail },
 ];
 
 export default function LegalCenterPage() {

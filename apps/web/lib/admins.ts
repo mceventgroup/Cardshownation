@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit-log";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
 
-export const MIN_ADMIN_PASSWORD_LENGTH = 12;
+export const MIN_ADMIN_PASSWORD_LENGTH = 15;
 
 type RegisterAdminInput = {
   email: string;
@@ -76,6 +76,10 @@ export async function updateAdminPassword(input: {
   currentPassword: string;
   nextPassword: string;
 }) {
+  if (input.nextPassword.length < MIN_ADMIN_PASSWORD_LENGTH) {
+    throw new Error(`Admin passwords must be at least ${MIN_ADMIN_PASSWORD_LENGTH} characters.`);
+  }
+
   const user = await db.user.findUnique({
     where: { id: input.userId },
   });

@@ -39,3 +39,25 @@ test("Global Privacy Control overrides an earlier optional-cookie choice", async
   await expect(page.getByRole("status")).toContainText("Global Privacy Control is active");
   await expect(page.getByRole("button", { name: "Allow analytics" })).toBeDisabled();
 });
+
+test("switching back to essential-only unloads optional tracking", async ({ page, context }) => {
+  await context.addCookies([{
+    name: "csn_cookie_consent",
+    value: "optional",
+    url: "http://127.0.0.1:3100",
+  }]);
+  await page.goto("/");
+  await expect(page.locator(optionalScripts)).not.toHaveCount(0);
+
+  await page.getByRole("button", { name: "Cookie settings" }).click();
+  await Promise.all([
+    page.waitForNavigation(),
+    page.getByRole("button", { name: "Essential only" }).click(),
+  ]);
+
+  await expect(page.locator(optionalScripts)).toHaveCount(0);
+  const consentCookie = (await context.cookies()).find(
+    (cookie) => cookie.name === "csn_cookie_consent",
+  );
+  expect(consentCookie?.value).toBe("essential");
+});

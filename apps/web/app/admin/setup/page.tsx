@@ -223,7 +223,7 @@ export default async function AdminSetupPage({
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 focus:border-brand-400 focus:outline-none"
               />
             </div>
-            {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+            {errorMessage && <p role="alert" className="text-sm text-red-600">{errorMessage}</p>}
             <button
               type="submit"
               className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"

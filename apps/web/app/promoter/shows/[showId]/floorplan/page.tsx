@@ -7,6 +7,7 @@ import { FloorplanEditorPage } from "@/app/floorplanner/editor-page";
 export const metadata: Metadata = {
   title: "Promoter Show Floorplanner",
   description: "Build and manage a show floorplan from the promoter portal.",
+  robots: { index: false, follow: false },
 };
 
 export default async function PromoterShowFloorplanPage({

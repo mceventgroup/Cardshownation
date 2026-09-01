@@ -27,7 +27,7 @@ export function CookieConsent({ initialConsent, globalPrivacyControl }: { initia
     const secure = window.location.protocol === "https:" ? "; Secure" : "";
     document.cookie = `csn_cookie_consent=${value}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
     closePanel();
-    if (value === "optional") window.location.reload();
+    if (initialConsent !== null || value === "optional") window.location.reload();
   }
   return <div id="cookie-preferences-dialog" ref={dialogRef} tabIndex={-1} onKeyDown={(event) => { if (event.key === "Escape") closePanel(); }} className="fixed inset-x-2 bottom-2 z-[100] mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:inset-x-4 sm:bottom-4 sm:p-5" role="dialog" aria-labelledby="cookie-dialog-title" aria-describedby="cookie-dialog-description">
     <div className="flex items-start justify-between gap-4">

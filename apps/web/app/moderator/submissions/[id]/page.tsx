@@ -173,7 +173,7 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
       </p>
 
       {sp.error && (
-        <p className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {sp.error === "duplicate"
             ? "A matching show or pending submission already exists."
             : "Check the edited fields and try again."}

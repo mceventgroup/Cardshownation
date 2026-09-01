@@ -43,6 +43,7 @@ function isValidIpv6(value: string) {
 
 export function getRequestIp(headers: HeaderSource) {
   return (
+    normalizeIpCandidate(headers.get("x-vercel-forwarded-for")) ??
     normalizeIpCandidate(headers.get("x-real-ip")) ??
     normalizeIpCandidate(headers.get("x-forwarded-for"))
   );

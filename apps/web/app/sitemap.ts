@@ -19,6 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/cookies`, priority: 0.3, changeFrequency: "monthly" },
     { url: `${BASE_URL}/billing-terms`, priority: 0.3, changeFrequency: "monthly" },
     { url: `${BASE_URL}/accessibility`, priority: 0.3, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/contact`, priority: 0.3, changeFrequency: "monthly" },
   ];
 
   if (isFixtureMode()) return staticPages;

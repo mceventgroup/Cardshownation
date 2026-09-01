@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ClipboardCheck, Home, LayoutDashboard, LogOut, Map, UserRound } from "lucide-react";
 import { getModeratorSession } from "@/lib/moderator-auth";
 import { logoutModerator } from "@/app/moderator/actions";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { MobileMenu } from "@/components/layout/mobile-menu";
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function ModeratorLayout({ children }: { children: React.ReactNode }) {
   const session = await getModeratorSession();

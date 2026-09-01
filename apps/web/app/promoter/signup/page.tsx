@@ -16,6 +16,7 @@ import {
   sendPromoterVerificationEmail,
 } from "@/lib/email";
 import { db } from "@/lib/db";
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
 
 const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
 const SIGNUP_BLOCK_MS = 2 * 60 * 60 * 1000;
@@ -65,8 +66,8 @@ async function handleSignup(formData: FormData) {
   const contactName = readRequiredString(formData, "contactName", 120);
   const organizerName = readRequiredString(formData, "organizerName", 160);
   const email = readRequiredString(formData, "email", 320).toLowerCase();
-  const password = readRequiredString(formData, "password", 200);
-  const confirmPassword = readRequiredString(formData, "confirmPassword", 200);
+  const password = readPasswordInput(formData, "password");
+  const confirmPassword = readPasswordInput(formData, "confirmPassword");
   const websiteUrl = readOptionalString(formData, "websiteUrl", 2048);
   const facebookUrl = readOptionalString(formData, "facebookUrl", 2048);
   const instagramUrl = readOptionalString(formData, "instagramUrl", 2048);
@@ -99,7 +100,7 @@ async function handleSignup(formData: FormData) {
     !organizerName ||
     !email ||
     !password ||
-    password.length < 8 ||
+    password.length < MIN_PASSWORD_LENGTH ||
     password !== confirmPassword ||
     !isValidEmail(email) ||
     (publicEmail && (!publicEmailConsent || !isValidEmail(publicEmail)))
@@ -211,7 +212,7 @@ export default async function PromoterSignupPage({
       : sp.error === "rate"
         ? "Too many attempts. Wait a bit and try again."
       : sp.error === "validation"
-        ? "Check your information. Passwords must match and be at least 8 characters."
+        ? `Check your information. Passwords must match and be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
         : sp.error === "try-again"
           ? "We couldn't create that promoter account right now. Double-check your information or try signing in / resetting your password if you may already have an account."
         : null;
@@ -328,7 +329,7 @@ export default async function PromoterSignupPage({
                 name="password"
                 type="password"
                 required
-                minLength={8}
+                minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 disabled={!secret}
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
@@ -347,7 +348,7 @@ export default async function PromoterSignupPage({
                 name="confirmPassword"
                 type="password"
                 required
-                minLength={8}
+                minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 disabled={!secret}
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
