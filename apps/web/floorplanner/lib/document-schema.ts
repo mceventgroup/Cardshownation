@@ -14,6 +14,9 @@ import type { DocumentSlice } from '@floorplanner/lib/persistence'
 
 type UnknownRecord = Record<string, unknown>
 
+export const MAX_BACKGROUND_IMAGE_DATA_BYTES = 4 * 1024 * 1024
+const SAFE_BACKGROUND_IMAGE_DATA_URL = /^data:image\/(?:png|jpeg|webp);base64,([a-z0-9+/]*={0,2})$/i
+
 function asRecord(value: unknown, label: string): UnknownRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} must be an object.`)
@@ -41,6 +44,27 @@ function expectBoolean(value: unknown, label: string): boolean {
 function expectNullableString(value: unknown, label: string): string | null {
   if (value === null) return null
   return expectString(value, label)
+}
+
+function expectBackgroundImageDataUrl(value: unknown, label: string): string {
+  const dataUrl = expectString(value, label)
+  // Browser-only saves intentionally detach image bytes into IndexedDB before
+  // validating the remaining document, so an empty value is a valid placeholder.
+  if (dataUrl === '') return dataUrl
+
+  const match = SAFE_BACKGROUND_IMAGE_DATA_URL.exec(dataUrl)
+  if (!match) {
+    throw new Error(`${label} must be a PNG, JPEG, or WebP data URL.`)
+  }
+
+  const encoded = match[1]
+  const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0
+  const decodedBytes = Math.floor(encoded.length * 3 / 4) - padding
+  if (decodedBytes > MAX_BACKGROUND_IMAGE_DATA_BYTES) {
+    throw new Error(`${label} is too large. Maximum: ${MAX_BACKGROUND_IMAGE_DATA_BYTES} bytes.`)
+  }
+
+  return dataUrl
 }
 
 function expectPoint(value: unknown, label: string): Point {
@@ -169,7 +193,7 @@ function parseBackgroundImage(value: unknown, label: string): BackgroundImage {
   return {
     id: expectString(record.id, `${label}.id`) as BackgroundImage['id'],
     name: expectString(record.name, `${label}.name`),
-    dataUrl: expectString(record.dataUrl, `${label}.dataUrl`),
+    dataUrl: expectBackgroundImageDataUrl(record.dataUrl, `${label}.dataUrl`),
     x: expectNumber(record.x, `${label}.x`),
     y: expectNumber(record.y, `${label}.y`),
     width: expectNumber(record.width, `${label}.width`),

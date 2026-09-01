@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteShowFloorplan, getShowFloorplan } from "@/lib/floorplans";
+import { enforceFloorplannerMutationRateLimit } from "@/lib/floorplanner-rate-limit";
 import { getFloorplanAccess, unauthorizedResponse } from "../../shared";
 
 function notFoundResponse() {
@@ -33,6 +34,9 @@ export async function DELETE(
   if (!access) {
     return unauthorizedResponse();
   }
+
+  const rateLimitResponse = await enforceFloorplannerMutationRateLimit(access.actorUserId);
+  if (rateLimitResponse) return rateLimitResponse;
 
   await deleteShowFloorplan(showId, id);
   return NextResponse.json({ ok: true });

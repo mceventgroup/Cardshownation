@@ -212,6 +212,8 @@ export function NearMeButton({
     >
       <button
         type="button"
+        data-analytics-event={isActive ? "clear_near_me" : "use_near_me"}
+        data-analytics-source={tone === "dark" ? "homepage" : "show_directory"}
         onClick={handleClick}
         disabled={loading}
         className={cn(

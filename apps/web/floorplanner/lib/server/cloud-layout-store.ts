@@ -1,5 +1,7 @@
 import { neon } from '@neondatabase/serverless'
 import type { DocumentSlice } from '@floorplanner/lib/persistence'
+import { validateDocumentSlice } from '@floorplanner/lib/document-schema'
+import { assertDocumentLimits } from '@floorplanner/lib/document-limits'
 
 export type CloudLayoutOwnerRole = 'ADMIN' | 'MODERATOR' | 'ORGANIZER' | 'FAN'
 
@@ -126,7 +128,12 @@ export async function getCloudLayout(id: string, owner: CloudLayoutOwner): Promi
       )
     limit 1
   `
-  return (rows as CloudLayoutRow[])[0] ?? null
+  const row = (rows as CloudLayoutRow[])[0] ?? null
+  if (!row?.data) return row
+
+  row.data = validateDocumentSlice(row.data)
+  assertDocumentLimits(row.data)
+  return row
 }
 
 export async function upsertCloudLayout(input: {
@@ -141,41 +148,49 @@ export async function upsertCloudLayout(input: {
   const vendorCount = Object.keys(input.data.vendors).length
 
   if (input.expectedRevision === null) {
-    const currentCount = await countOwnedCloudLayouts(input.owner)
     const maxLayouts = input.owner.maxCloudProjects
-    if (currentCount >= maxLayouts) {
-      throw new CloudLayoutQuotaError(maxLayouts)
-    }
-
-    const inserted = await sql`
-      insert into floorplanner_cloud_layouts (
-        id,
-        name,
-        data,
-        revision,
-        table_count,
-        vendor_count,
-        owner_user_id,
-        owner_role,
-        saved_at
-      )
-      values (
-        ${input.id},
-        ${input.name},
-        ${JSON.stringify(input.data)},
-        1,
-        ${tableCount},
-        ${vendorCount},
-        ${input.owner.userId},
-        ${input.owner.role},
-        now()
-      )
-      on conflict (id) do nothing
-      returning id, name, saved_at, revision, table_count, vendor_count
-    `
+    const lockKey = `floorplanner-owner:${input.owner.userId}:${input.owner.role}`
+    const [, inserted] = await sql.transaction(tx => [
+      tx`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+      tx`
+        insert into floorplanner_cloud_layouts (
+          id,
+          name,
+          data,
+          revision,
+          table_count,
+          vendor_count,
+          owner_user_id,
+          owner_role,
+          saved_at
+        )
+        select
+          ${input.id},
+          ${input.name},
+          ${JSON.stringify(input.data)},
+          1,
+          ${tableCount},
+          ${vendorCount},
+          ${input.owner.userId},
+          ${input.owner.role},
+          now()
+        where (
+          select count(*)
+          from floorplanner_cloud_layouts
+          where owner_user_id = ${input.owner.userId}
+            and owner_role = ${input.owner.role}
+        ) < ${maxLayouts}
+        on conflict (id) do nothing
+        returning id, name, saved_at, revision, table_count, vendor_count
+      `,
+    ])
 
     const row = (inserted as CloudLayoutRow[])[0]
     if (row) return row
+
+    if (await countOwnedCloudLayouts(input.owner) >= maxLayouts) {
+      throw new CloudLayoutQuotaError(maxLayouts)
+    }
 
     const current = await getCloudLayout(input.id, input.owner)
     throw new CloudLayoutConflictError(

@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateDocumentSlice } from "@floorplanner/lib/document-schema";
 import { assertDocumentLimits, MAX_FLOORPLAN_NAME_LENGTH, MAX_FLOORPLAN_REQUEST_BYTES } from "@floorplanner/lib/document-limits";
 import { readJsonBodyLimited, RequestTooLargeError } from "@/lib/request-json";
-import { listShowFloorplans, saveShowFloorplan, ShowFloorplanRevisionConflictError } from "@/lib/floorplans";
+import {
+  listShowFloorplans,
+  saveShowFloorplan,
+  ShowFloorplanQuotaError,
+  ShowFloorplanRevisionConflictError,
+} from "@/lib/floorplans";
+import { enforceFloorplannerMutationRateLimit } from "@/lib/floorplanner-rate-limit";
 import { getFloorplanAccess, unauthorizedResponse } from "../shared";
 
 function unavailableResponse(message: string) {
@@ -40,6 +46,9 @@ export async function POST(
   if (!access) {
     return unauthorizedResponse();
   }
+
+  const rateLimitResponse = await enforceFloorplannerMutationRateLimit(access.actorUserId);
+  if (rateLimitResponse) return rateLimitResponse;
 
   let body: {
     id?: string | null;
@@ -90,6 +99,17 @@ export async function POST(
           currentLayout: error.currentLayout,
         },
         { status: 409 }
+      );
+    }
+
+    if (error instanceof ShowFloorplanQuotaError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "quota-exceeded",
+          limit: error.limit,
+        },
+        { status: 409 },
       );
     }
 

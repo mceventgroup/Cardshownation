@@ -6,6 +6,7 @@ import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
 import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
+import { isPurchasingEnabled } from "@/lib/purchasing";
 import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
 import { US_STATES } from "@/lib/states";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
@@ -29,6 +30,7 @@ export const metadata: Metadata = {
 const HOME_INLINE_AD_SLOT = process.env.NEXT_PUBLIC_AD_SLOT_HOME_INLINE?.trim() ?? "";
 
 export default async function HomePage() {
+  const floorPlannerAvailable = isPurchasingEnabled();
   const [portalLink, upcomingShows, stats] = await Promise.all([
     getPublicPortalLink(),
     getUpcomingShows({ limit: 8 }).catch((err) => {
@@ -56,6 +58,7 @@ export default async function HomePage() {
         "@id": `${absoluteSiteUrl()}/#organization`,
         name: "Card Show Nation",
         url: absoluteSiteUrl(),
+        logo: absoluteSiteUrl("/csn-brand-mark.png"),
         description: "A free national directory for sports card, Pokemon, and trading card shows.",
       },
     ],
@@ -190,6 +193,60 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {/* Floor Planner */}
+      <section className="container-wide pb-10">
+        <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 shadow-xl shadow-slate-200/60">
+          <div className="grid items-center gap-8 p-6 sm:p-8 lg:grid-cols-[0.78fr_1.22fr] lg:gap-10 lg:p-10">
+            <div className="text-white">
+              <span
+                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ring-1 ${
+                  floorPlannerAvailable
+                    ? "bg-emerald-400/10 text-emerald-300 ring-emerald-300/30"
+                    : "bg-amber-400/10 text-amber-200 ring-amber-300/30"
+                }`}
+              >
+                {floorPlannerAvailable ? "Available now" : "Coming soon"}
+              </span>
+              <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em] text-cyan-300">
+                Floor Planner
+              </p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                See your show before the doors open.
+              </h2>
+              <p className="mt-4 text-base leading-7 text-slate-300">
+                Build room layouts, place and number tables, assign vendors, and export a
+                clear plan for setup and show day.
+              </p>
+              <Link
+                href="/floorplanner"
+                className="mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-200"
+              >
+                Explore Floor Planner
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <Link
+              href="/floorplanner"
+              aria-label="See the Card Show Nation Floor Planner"
+              className="group relative block overflow-hidden rounded-2xl border border-white/15 bg-slate-900 shadow-2xl"
+            >
+              <Image
+                src="/floor-planner-preview.png"
+                alt="Card Show Nation Floor Planner showing a room layout with rows of vendor tables"
+                width={1265}
+                height={650}
+                sizes="(min-width: 1024px) 57vw, 100vw"
+                className="h-auto w-full transition-transform duration-500 group-hover:scale-[1.015]"
+              />
+              <span className="absolute bottom-3 right-3 rounded-full bg-slate-950/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur">
+                View Floor Planner
+              </span>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* State directory */}
       <section className="container-wide pb-10">

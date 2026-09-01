@@ -29,6 +29,13 @@ export const metadata: Metadata = {
   title: "Floor Planner",
   description:
     "Build one professional card-show floor plan with cloud saves, vendor assignments, and exports.",
+  alternates: { canonical: "/floorplanner" },
+  openGraph: {
+    title: "Card Show Floor Planner",
+    description:
+      "Build a professional card-show floor plan with cloud saves, vendor assignments, and exports.",
+    url: "/floorplanner",
+  },
 };
 
 export default async function FloorplannerPage({

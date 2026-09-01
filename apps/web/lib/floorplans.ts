@@ -1,6 +1,8 @@
 import type { Prisma } from "@csn/db";
 import { db } from "@/lib/db";
 import type { DocumentSlice } from "@floorplanner/lib/persistence";
+import { validateDocumentSlice } from "@floorplanner/lib/document-schema";
+import { assertDocumentLimits } from "@floorplanner/lib/document-limits";
 
 export type ShowFloorplanSummary = {
   id: string;
@@ -15,6 +17,8 @@ export type ShowFloorplanRecord = ShowFloorplanSummary & {
   data: DocumentSlice;
 };
 
+export const MAX_SHOW_FLOORPLANS_PER_SHOW = 10;
+
 export class ShowFloorplanRevisionConflictError extends Error {
   currentLayout: ShowFloorplanSummary | null;
 
@@ -22,6 +26,16 @@ export class ShowFloorplanRevisionConflictError extends Error {
     super(message);
     this.name = "ShowFloorplanRevisionConflictError";
     this.currentLayout = currentLayout;
+  }
+}
+
+export class ShowFloorplanQuotaError extends Error {
+  limit: number;
+
+  constructor(limit: number) {
+    super(`This show has reached the cloud floorplan limit (${limit}). Delete an old floorplan before saving a new one.`);
+    this.name = "ShowFloorplanQuotaError";
+    this.limit = limit;
   }
 }
 
@@ -123,34 +137,20 @@ export async function saveShowFloorplan(input: {
   const vendorCount = Object.keys(input.data.vendors).length;
 
   if (input.id) {
-    const existing = await db.showFloorplan.findFirst({
-      where: { id: input.id, showId: input.showId },
-      select: {
-        id: true,
-        name: true,
-        updatedAt: true,
-        revision: true,
-        tableCount: true,
-        vendorCount: true,
-      },
-    });
-
-    if (!existing) {
-      throw new Error("Floorplan not found.");
-    }
-
-    if (
-      input.expectedRevision != null &&
-      existing.revision !== input.expectedRevision
-    ) {
+    if (input.expectedRevision == null) {
+      const current = await getShowFloorplanSummary(input.showId, input.id);
       throw new ShowFloorplanRevisionConflictError(
-        "This floorplan changed on the server. Reload it before saving again.",
-        toSummary(existing)
+        "A revision is required to overwrite this floorplan. Reload it before saving again.",
+        current,
       );
     }
 
-    const saved = await db.showFloorplan.update({
-      where: { id: existing.id },
+    const updated = await db.showFloorplan.updateMany({
+      where: {
+        id: input.id,
+        showId: input.showId,
+        revision: input.expectedRevision,
+      },
       data: {
         name: normalizedName,
         dataJson: asInputJsonValue(input.data),
@@ -160,6 +160,28 @@ export async function saveShowFloorplan(input: {
         venueId: input.venueId ?? null,
         updatedById: input.actorUserId,
       },
+    });
+
+    if (updated.count !== 1) {
+      const current = await getShowFloorplanSummary(input.showId, input.id);
+      throw new ShowFloorplanRevisionConflictError(
+        "This floorplan changed on the server. Reload it before saving again.",
+        current,
+      );
+    }
+
+    const saved = await getShowFloorplanSummary(input.showId, input.id);
+    if (!saved) throw new Error("Floorplan disappeared after it was saved.");
+    return saved;
+  }
+
+  return db.$transaction(async (tx) => {
+    // Serialize creates for one show so concurrent requests cannot both pass
+    // the quota check. The lock is released automatically with the transaction.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`floorplanner-show:${input.showId}`}, 0))`;
+
+    const existingByName = await tx.showFloorplan.findFirst({
+      where: { showId: input.showId, name: normalizedName },
       select: {
         id: true,
         name: true,
@@ -169,41 +191,29 @@ export async function saveShowFloorplan(input: {
         vendorCount: true,
       },
     });
-
-    return toSummary(saved);
-  }
-
-  const existingByName = await db.showFloorplan.findFirst({
-    where: { showId: input.showId, name: normalizedName },
-    select: {
-      id: true,
-      name: true,
-      updatedAt: true,
-      revision: true,
-      tableCount: true,
-      vendorCount: true,
-    },
-  });
-
-  if (existingByName) {
-    if (
-      input.expectedRevision != null &&
-      existingByName.revision !== input.expectedRevision
-    ) {
+    if (existingByName) {
       throw new ShowFloorplanRevisionConflictError(
-        "This floorplan changed on the server. Reload it before saving again.",
-        toSummary(existingByName)
+        "A floorplan with this name already exists. Load it before overwriting it.",
+        toSummary(existingByName),
       );
     }
 
-    const saved = await db.showFloorplan.update({
-      where: { id: existingByName.id },
+    const currentCount = await tx.showFloorplan.count({
+      where: { showId: input.showId },
+    });
+    if (currentCount >= MAX_SHOW_FLOORPLANS_PER_SHOW) {
+      throw new ShowFloorplanQuotaError(MAX_SHOW_FLOORPLANS_PER_SHOW);
+    }
+
+    const saved = await tx.showFloorplan.create({
       data: {
+        showId: input.showId,
+        venueId: input.venueId ?? null,
+        name: normalizedName,
         dataJson: asInputJsonValue(input.data),
-        revision: { increment: 1 },
         tableCount,
         vendorCount,
-        venueId: input.venueId ?? null,
+        createdById: input.actorUserId,
         updatedById: input.actorUserId,
       },
       select: {
@@ -217,19 +227,21 @@ export async function saveShowFloorplan(input: {
     });
 
     return toSummary(saved);
-  }
+  });
+}
 
-  const saved = await db.showFloorplan.create({
-    data: {
-      showId: input.showId,
-      venueId: input.venueId ?? null,
-      name: normalizedName,
-      dataJson: asInputJsonValue(input.data),
-      tableCount,
-      vendorCount,
-      createdById: input.actorUserId,
-      updatedById: input.actorUserId,
-    },
+export async function deleteShowFloorplan(showId: string, id: string): Promise<void> {
+  await db.showFloorplan.deleteMany({
+    where: { showId, id },
+  });
+}
+
+async function getShowFloorplanSummary(
+  showId: string,
+  id: string,
+): Promise<ShowFloorplanSummary | null> {
+  const row = await db.showFloorplan.findFirst({
+    where: { id, showId },
     select: {
       id: true,
       name: true,
@@ -239,17 +251,12 @@ export async function saveShowFloorplan(input: {
       vendorCount: true,
     },
   });
-
-  return toSummary(saved);
-}
-
-export async function deleteShowFloorplan(showId: string, id: string): Promise<void> {
-  await db.showFloorplan.deleteMany({
-    where: { showId, id },
-  });
+  return row ? toSummary(row) : null;
 }
 function asDocumentSlice(value: Prisma.JsonValue): DocumentSlice {
-  return value as unknown as DocumentSlice;
+  const data = validateDocumentSlice(value);
+  assertDocumentLimits(data);
+  return data;
 }
 
 function asInputJsonValue(value: DocumentSlice): Prisma.InputJsonValue {

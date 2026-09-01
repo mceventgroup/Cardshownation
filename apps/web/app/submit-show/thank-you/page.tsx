@@ -4,6 +4,7 @@ import { CheckCircle } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Show Submitted",
+  robots: { index: false, follow: false },
 };
 
 export default function ThankYouPage() {

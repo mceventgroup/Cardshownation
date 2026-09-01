@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Home, LayoutDashboard, Map, MapPin, Plus, Search, UserRound } from "lucide-react";
+import { Home, LayoutDashboard, Map, Plus, Search, UserRound } from "lucide-react";
 import { getDataModeLabel, isFixtureMode } from "@/lib/data-mode";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { MobileMenu } from "@/components/layout/mobile-menu";
@@ -12,25 +12,15 @@ export async function Header() {
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="container-wide py-2.5 sm:py-3">
         <div className="flex items-center justify-between gap-3">
-          <Link href="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm sm:h-10 sm:w-10 sm:rounded-2xl">
-              <MapPin className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold leading-tight text-slate-950 sm:text-base sm:leading-none">
-                  Card Show Nation
-                </p>
-                {isFixtureMode() && (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                    {getDataModeLabel()}
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-                Card show discovery for collectors and promoters
-              </p>
-            </div>
+          <Link href="/" className="flex min-w-0 items-center gap-2.5">
+            <span className="whitespace-nowrap text-lg font-bold tracking-tight text-slate-950 sm:text-xl">
+              Card Show Nation
+            </span>
+            {isFixtureMode() && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                {getDataModeLabel()}
+              </span>
+            )}
           </Link>
 
           <div className="shrink-0 sm:hidden">

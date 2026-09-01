@@ -13,6 +13,7 @@ import {
 } from "@floorplanner/lib/server/cloud-layout-store";
 import { authorizeCloudRequest, isCloudSessionConfigured } from "@floorplanner/lib/server/cloud-auth";
 import { getFloorplannerWorkspaceSession } from "@/lib/floorplanner-workspace-auth";
+import { enforceFloorplannerMutationRateLimit } from "@/lib/floorplanner-rate-limit";
 
 function unavailableResponse(message: string) {
   return NextResponse.json({ error: message }, { status: 503 });
@@ -68,6 +69,9 @@ export async function POST(request: NextRequest) {
   if (!authorizeCloudRequest(request)) {
     return unauthorizedResponse();
   }
+
+  const rateLimitResponse = await enforceFloorplannerMutationRateLimit(session.user.id);
+  if (rateLimitResponse) return rateLimitResponse;
 
   let body: {
     id?: string | null;

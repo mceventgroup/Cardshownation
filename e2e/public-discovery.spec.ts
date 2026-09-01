@@ -23,7 +23,7 @@ test("public account entry points remain available", async ({ page }) => {
   await expect(page.getByLabel("Email")).toBeVisible();
   await expect(page.getByLabel("Password")).toBeVisible();
   await expect(page.getByRole("link", { name: "Create an account" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Submit a show free" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Submit a show" })).toBeVisible();
 });
 
 test("signup keeps email simple and supports searchable state alerts", async ({ page }) => {

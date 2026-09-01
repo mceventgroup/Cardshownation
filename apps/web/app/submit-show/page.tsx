@@ -296,7 +296,7 @@ export default async function SubmitShowPage({
         )}
       </div>
 
-      <form action={handleSubmission} className="mt-8 space-y-8">
+      <form action={handleSubmission} data-analytics-event="submit_show_attempt" className="mt-8 space-y-8">
         <SubmitShowFormSteps
           categories={SHOW_CATEGORIES}
           inputClass={inputClass}

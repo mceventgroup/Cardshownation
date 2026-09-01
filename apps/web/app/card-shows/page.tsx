@@ -250,10 +250,10 @@ export default async function CardShowsPage({
       <aside className="mt-10 rounded-3xl border border-brand-200 bg-brand-50 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-6">
         <div>
           <h2 className="text-lg font-semibold text-slate-950">Help keep the card show database complete</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">Know about a show we missed? Anyone can add it for free—no account required.</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">Know about a show we missed? Add it to the directory—no account required.</p>
         </div>
         <Link href="/submit-show" className="mt-4 inline-flex shrink-0 items-center justify-center rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 sm:mt-0">
-          Submit a show free
+          Submit a show
         </Link>
       </aside>
 

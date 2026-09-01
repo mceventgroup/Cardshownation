@@ -287,8 +287,8 @@ export default async function UnifiedLoginPage({
 
         <aside className="mt-5 rounded-2xl bg-brand-50 p-4">
           <p className="font-semibold text-slate-950">Know about an upcoming card show?</p>
-          <p className="mt-1 text-sm leading-5 text-slate-600">Help collectors find it. Listings are free and you don&apos;t need an account.</p>
-          <Link href="/submit-show" className="mt-3 inline-flex rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Submit a show free</Link>
+          <p className="mt-1 text-sm leading-5 text-slate-600">Help collectors find it. You don&apos;t need an account to add a show.</p>
+          <Link href="/submit-show" className="mt-3 inline-flex rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Submit a show</Link>
         </aside>
       </div>
     </div>

@@ -5,11 +5,13 @@ import { cookies, headers } from "next/headers";
 import { Suspense } from "react";
 import { GooglePageViewTracker } from "@/components/analytics/google-page-view-tracker";
 import { MetaPixelTracker } from "@/components/analytics/meta-pixel-tracker";
+import { SiteEventTracker } from "@/components/analytics/site-event-tracker";
 import { AppChrome } from "@/components/layout/app-chrome";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import "./globals.css";
 import { CookieConsent } from "@/components/privacy/cookie-consent";
+import { isPrivateBrowserRoute } from "@/lib/private-routes";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -18,6 +20,8 @@ const inter = Inter({
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() ?? "";
 const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim() ?? "";
+const GOOGLE_ADS_CONVERSION_LABEL =
+  process.env.NEXT_PUBLIC_GOOGLE_ADS_LEAD_CONVERSION_LABEL?.trim() ?? "";
 const GOOGLE_TAG_ID = GA_MEASUREMENT_ID || GOOGLE_ADS_ID;
 const META_PIXEL_ID =
   process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim() || "1680224933357763";
@@ -29,6 +33,10 @@ export const metadata: Metadata = {
   },
   description:
     "The national card show directory. Find upcoming sports card, Pokemon, and TCG shows by state, city, and date.",
+  icons: {
+    icon: "/csn-brand-mark.png",
+    apple: "/csn-brand-mark.png",
+  },
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com"
   ),
@@ -37,8 +45,18 @@ export const metadata: Metadata = {
     type: "website",
     title: "Card Show Nation | Card Show Directory",
     description: "Find upcoming sports card, Pokemon, and TCG shows by state, city, and date.",
+    locale: "en_US",
+    images: [{ url: "/cardshow_hero.webp", alt: "Collectors browsing a card show" }],
   },
-  twitter: { card: "summary_large_image" },
+  twitter: {
+    card: "summary_large_image",
+    title: "Card Show Nation | Card Show Directory",
+    description: "Find upcoming sports card, Pokemon, and TCG shows by state, city, and date.",
+    images: ["/cardshow_hero.webp"],
+  },
+  verification: process.env.GOOGLE_SITE_VERIFICATION?.trim()
+    ? { google: process.env.GOOGLE_SITE_VERIFICATION.trim() }
+    : undefined,
   robots: {
     index: true,
     follow: true,
@@ -55,7 +73,19 @@ export default async function RootLayout({
   const consentValue = cookieStore.get("csn_cookie_consent")?.value;
   const consent = consentValue === "optional" || consentValue === "essential" ? consentValue : null;
   const globalPrivacyControl = requestHeaders.get("sec-gpc") === "1";
-  const allowOptional = consent === "optional" && !globalPrivacyControl;
+  const pathname = requestHeaders.get("x-csn-pathname") ?? "/";
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
+  const hasAuthenticatedSession = [
+    "csn_admin",
+    "csn_moderator",
+    "csn_promoter",
+    "csn_user",
+  ].some((cookieName) => cookieStore.has(cookieName));
+  const allowOptional =
+    consent === "optional" &&
+    !globalPrivacyControl &&
+    !hasAuthenticatedSession &&
+    !isPrivateBrowserRoute(pathname);
   return (
     <html lang="en" className={inter.variable}>
       <head>
@@ -67,8 +97,9 @@ export default async function RootLayout({
                 GOOGLE_TAG_ID
               )}`}
               strategy="afterInteractive"
+              nonce={nonce}
             />
-            <Script id="google-tag-config" strategy="afterInteractive">
+            <Script id="google-tag-config" strategy="afterInteractive" nonce={nonce}>
               {`
                 window.dataLayer = window.dataLayer || [];
                 function gtag(){dataLayer.push(arguments);}
@@ -84,9 +115,10 @@ export default async function RootLayout({
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8982218628461022"
           strategy="afterInteractive"
           crossOrigin="anonymous"
+          nonce={nonce}
         />}
         {allowOptional && META_PIXEL_ID && (
-          <Script id="meta-pixel-init" strategy="afterInteractive">
+          <Script id="meta-pixel-init" strategy="afterInteractive" nonce={nonce}>
             {`
               !function(f,b,e,v,n,t,s)
               {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -108,6 +140,17 @@ export default async function RootLayout({
         <Suspense fallback={null}>
           {allowOptional && GOOGLE_TAG_ID && <GooglePageViewTracker />}
           {allowOptional && META_PIXEL_ID && <MetaPixelTracker />}
+          {allowOptional && (GOOGLE_TAG_ID || META_PIXEL_ID) && (
+            <SiteEventTracker
+              googleEnabled={Boolean(GOOGLE_TAG_ID)}
+              metaEnabled={Boolean(META_PIXEL_ID)}
+              googleAdsConversionId={
+                GOOGLE_ADS_ID && GOOGLE_ADS_CONVERSION_LABEL
+                  ? `${GOOGLE_ADS_ID}/${GOOGLE_ADS_CONVERSION_LABEL}`
+                  : undefined
+              }
+            />
+          )}
         </Suspense>
         {allowOptional && META_PIXEL_ID && (
           <noscript>
