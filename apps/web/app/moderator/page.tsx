@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { logoutModerator } from "@/app/moderator/actions";
 import { getModeratorSession } from "@/lib/moderator-auth";
 import { getModeratorDashboardData } from "@/lib/moderators";
 import { getModeratorVisibleSubmissions } from "@/lib/submissions";
@@ -46,14 +45,6 @@ export default async function ModeratorDashboardPage() {
             >
               Open queue
             </Link>
-            <form action={logoutModerator}>
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-              >
-                Log out
-              </button>
-            </form>
           </div>
         </div>
 

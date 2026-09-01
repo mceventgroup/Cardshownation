@@ -634,9 +634,12 @@ export async function updateFanFavoriteOrganizers(userId: string, organizerIds: 
   });
 }
 
-export async function listFavoriteOrganizerOptions(): Promise<FavoriteOrganizerOption[]> {
+export async function listFavoriteOrganizerOptions(
+  stateCodes: string[] = [],
+): Promise<FavoriteOrganizerOption[]> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const followedStates = [...new Set(stateCodes.map((code) => code.trim().toUpperCase()).filter(Boolean))];
 
   const organizers = await db.organizer.findMany({
     where: {
@@ -644,6 +647,7 @@ export async function listFavoriteOrganizerOptions(): Promise<FavoriteOrganizerO
         some: {
           status: "APPROVED",
           startDate: { gte: today },
+          ...(followedStates.length ? { state: { in: followedStates } } : {}),
           OR: [{ expiresAt: null }, { expiresAt: { gte: today } }],
         },
       },

@@ -13,15 +13,21 @@ import {
   MIN_USER_SESSION_SECRET_LENGTH,
 } from "@/lib/user-auth";
 import { createVerificationToken } from "@/lib/verification-token";
-import { sendFanVerificationEmail, sendPromoterVerificationEmail } from "@/lib/email";
+import {
+  getEmailConfigStatus,
+  sendFanVerificationEmail,
+  sendPromoterVerificationEmail,
+} from "@/lib/email";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, readPasswordInput } from "@/lib/passwords";
 import {
-  listFavoriteOrganizerOptions,
   registerFanAccount,
-  updateFanFavoriteOrganizers,
   updateFanStateSubscriptions,
 } from "@/lib/users";
-import { PasswordField, StateMultiSelect } from "@/components/account/signup-form-controls";
+import {
+  PasswordField,
+  PromoterOptInFields,
+  StateMultiSelect,
+} from "@/components/account/signup-form-controls";
 import { GoogleSignInLink } from "@/components/auth/google-sign-in-link";
 import { getPromoterSessionSecret } from "@/lib/promoter-auth";
 import { registerPromoterAccount } from "@/lib/promoters";
@@ -57,14 +63,6 @@ async function delay(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function listFavoriteOrganizerOptionsSafe() {
-  try {
-    return await listFavoriteOrganizerOptions();
-  } catch {
-    return [];
-  }
-}
-
 async function handleSignup(formData: FormData) {
   "use server";
 
@@ -80,11 +78,6 @@ async function handleSignup(formData: FormData) {
     .getAll("stateCodes")
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim().toUpperCase())
-    .filter(Boolean);
-  const organizerIds = formData
-    .getAll("organizerIds")
-    .filter((value): value is string => typeof value === "string")
-    .map((value) => value.trim())
     .filter(Boolean);
   const requestHeaders = await headers();
   const ip = getRequestIp(requestHeaders) ?? "unknown";
@@ -104,7 +97,11 @@ async function handleSignup(formData: FormData) {
   });
   if (!emailRateLimit.allowed) redirect("/account/signup?error=rate");
 
-  if (!sessionSecret || (isPromoter && !promoterSessionSecret)) {
+  if (
+    !sessionSecret ||
+    (isPromoter && !promoterSessionSecret) ||
+    !getEmailConfigStatus().ready
+  ) {
     redirect("/account/signup?error=disabled");
   }
 
@@ -129,20 +126,25 @@ async function handleSignup(formData: FormData) {
           facebookUrl: readOptionalString(formData, "facebookUrl", 2048),
           instagramUrl: readOptionalString(formData, "instagramUrl", 2048),
         })
-      : await registerFanAccount({ email, password, name, stateCodes, organizerIds });
+      : await registerFanAccount({ email, password, name, stateCodes, organizerIds: [] });
     if (isPromoter) {
-      await Promise.all([
-        updateFanStateSubscriptions(user.id, stateCodes),
-        updateFanFavoriteOrganizers(user.id, organizerIds),
-      ]);
+      await updateFanStateSubscriptions(user.id, stateCodes);
     }
     const token = await createVerificationToken(user.id);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com";
     const verifyUrl = `${appUrl}/${isPromoter ? "promoter" : "account"}/verify?token=${token}`;
-    if (isPromoter) {
-      await sendPromoterVerificationEmail(email, verifyUrl);
-    } else {
-      await sendFanVerificationEmail(email, verifyUrl);
+    try {
+      if (isPromoter) {
+        await sendPromoterVerificationEmail(email, verifyUrl);
+      } else {
+        await sendFanVerificationEmail(email, verifyUrl);
+      }
+    } catch (error) {
+      console.error("[account verification] initial send failed", {
+        error,
+        userId: user.id,
+      });
+      redirect(`/account/signup?error=email&type=${isPromoter ? "promoter" : "member"}`);
     }
     redirect(`/account/signup?sent=1&type=${isPromoter ? "promoter" : "member"}`);
   } catch (error) {
@@ -163,7 +165,7 @@ export default async function UserSignupPage({
     getUserSessionSecretStatus(),
     searchParams,
   ]);
-  const favoriteOrganizers = await listFavoriteOrganizerOptionsSafe();
+  const emailStatus = getEmailConfigStatus();
   if (session) {
     redirect("/account");
   }
@@ -184,8 +186,11 @@ export default async function UserSignupPage({
           </p>
           <p className="mt-4 text-sm text-slate-500">
             Didn&apos;t get it? Check your spam folder or{" "}
-            <Link href="/account/signup" className="font-semibold text-brand-700 hover:text-brand-800">
-              try again
+            <Link
+              href={`/account/resend-verification?audience=${sp.type === "promoter" ? "promoter" : "member"}`}
+              className="font-semibold text-brand-700 hover:text-brand-800"
+            >
+              send a new verification link
             </Link>
             .
           </p>
@@ -196,13 +201,17 @@ export default async function UserSignupPage({
 
   const errorMessage =
     sp.error === "disabled"
-      ? secretStatus.error === "too_short"
+      ? !emailStatus.ready
+        ? emailStatus.error
+        : secretStatus.error === "too_short"
         ? `USER_SESSION_SECRET must be at least ${MIN_USER_SESSION_SECRET_LENGTH} characters.`
         : "User accounts are disabled until USER_SESSION_SECRET is set on the server."
       : sp.error === "rate"
         ? "Too many attempts. Wait a bit and try again."
         : sp.error === "validation"
           ? `Check your information. Passwords must match and be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
+          : sp.error === "email"
+            ? "Your account was created, but the verification email could not be delivered. Request a new link below."
           : sp.error === "try-again"
             ? "We couldn't create that account right now. Double-check your information or try signing in / resetting your password if you may already have an account."
             : null;
@@ -237,38 +246,18 @@ export default async function UserSignupPage({
           </p>
         )}
 
+        {sp.error === "email" && (
+          <Link
+            href={`/account/resend-verification?audience=${sp.type === "promoter" ? "promoter" : "member"}`}
+            className="mt-4 inline-flex font-semibold text-brand-700 hover:text-brand-800"
+          >
+            Send a new verification link
+          </Link>
+        )}
+
         <GoogleSignInLink />
 
         <form action={handleSignup} className="mt-8 space-y-6">
-          <label className="flex items-start gap-3 rounded-3xl border border-brand-200 bg-brand-50 p-5 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              name="isPromoter"
-              defaultChecked={sp.promoter === "1"}
-              disabled={!secret}
-              className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-            />
-            <span>
-              <span className="block font-semibold text-slate-950">I organize card shows</span>
-              <span className="mt-1 block leading-6">Add promoter tools to this account. You will still have all collector features.</span>
-            </span>
-          </label>
-
-          <details open={sp.promoter === "1"} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-            <summary className="cursor-pointer font-semibold text-slate-900">Promoter profile details</summary>
-            <p className="mt-2 text-sm text-slate-600">Complete this section when selecting “I organize card shows.”</p>
-            <div className="mt-5 space-y-5">
-              <div>
-                <label htmlFor="organizerName" className="mb-2 block text-sm font-medium text-slate-700">Organizer or business name</label>
-                <input id="organizerName" name="organizerName" type="text" disabled={!secret} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none" />
-              </div>
-              <div className="grid gap-5 sm:grid-cols-3">
-                <input aria-label="Website" name="websiteUrl" type="url" placeholder="Website" disabled={!secret} className="rounded-2xl border border-slate-200 px-4 py-3 text-base" />
-                <input aria-label="Facebook" name="facebookUrl" type="url" placeholder="Facebook" disabled={!secret} className="rounded-2xl border border-slate-200 px-4 py-3 text-base" />
-                <input aria-label="Instagram" name="instagramUrl" type="url" placeholder="Instagram" disabled={!secret} className="rounded-2xl border border-slate-200 px-4 py-3 text-base" />
-              </div>
-            </div>
-          </details>
           <div>
               <label htmlFor="name" className="mb-2 block text-sm font-medium text-slate-700">
                 Name
@@ -319,6 +308,11 @@ export default async function UserSignupPage({
             />
           </div>
 
+          <PromoterOptInFields
+            defaultChecked={sp.promoter === "1"}
+            disabled={!secret || !emailStatus.ready}
+          />
+
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -333,50 +327,13 @@ export default async function UserSignupPage({
             <StateMultiSelect states={US_STATES} disabled={!secret} />
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Favorite show hosts</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Follow the promoters you want to hear from first.
-                </p>
-              </div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Host alerts</p>
-            </div>
-
-            {favoriteOrganizers.length === 0 ? (
-              <p className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-                Promoter favorites will show up here as more hosts are linked to upcoming shows.
-              </p>
-            ) : (
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {favoriteOrganizers.map((organizer) => (
-                  <label
-                    key={organizer.id}
-                    className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
-                  >
-                    <input
-                      type="checkbox"
-                      name="organizerIds"
-                      value={organizer.id}
-                      disabled={!secret}
-                      className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                    />
-                    <span>
-                      <span className="block font-medium text-slate-900">{organizer.name}</span>
-                      <span className="block text-xs text-slate-500">
-                        {organizer.verified ? "Verified promoter" : "Promoter profile"}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          <p className="text-center text-sm text-slate-500">
+            After signup, choose favorite show hosts from your account settings.
+          </p>
 
           <button
             type="submit"
-            disabled={!secret}
+            disabled={!secret || !emailStatus.ready}
             className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
           >
             Create account

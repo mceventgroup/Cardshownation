@@ -40,3 +40,31 @@ export async function getModeratorDashboardData(userId: string) {
     reviewedCount,
   };
 }
+
+export async function getModeratorAccountData(userId: string) {
+  return db.user.findFirst({
+    where: {
+      id: userId,
+      role: "MODERATOR",
+    },
+    include: {
+      subscriptions: {
+        orderBy: { stateCode: "asc" },
+      },
+      favoriteOrganizers: {
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              verified: true,
+            },
+          },
+        },
+        orderBy: {
+          organizer: { name: "asc" },
+        },
+      },
+    },
+  });
+}

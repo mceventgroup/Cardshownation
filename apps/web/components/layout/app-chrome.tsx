@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 
 function isWorkspacePath(pathname: string) {
   return (
+    pathname.startsWith("/moderator") ||
     pathname === "/floorplanner/workspace" ||
     (pathname !== "/floorplanner" && pathname.endsWith("/floorplanner"))
   );

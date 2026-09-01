@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardCheck, LayoutDashboard, LogOut, Map } from "lucide-react";
+import { ClipboardCheck, LayoutDashboard, LogOut, Map, UserRound } from "lucide-react";
 import { getModeratorSession } from "@/lib/moderator-auth";
 import { logoutModerator } from "@/app/moderator/actions";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
@@ -10,6 +10,7 @@ export default async function ModeratorLayout({ children }: { children: React.Re
     { href: "/moderator", label: "Dashboard", icon: LayoutDashboard },
     { href: "/moderator/submissions", label: "Submissions", icon: ClipboardCheck },
     { href: "/moderator/floorplanner", label: "Floorplanner", icon: Map },
+    { href: "/moderator/account", label: "Account", icon: UserRound },
   ];
 
   return (
@@ -61,8 +62,8 @@ export default async function ModeratorLayout({ children }: { children: React.Re
       }
       mobileHeader={
         <header className="border-b border-slate-200 bg-white md:hidden">
-        <div className="flex items-center justify-between px-4 py-4">
-          <div>
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="min-w-0">
             <Link href="/moderator" className="text-sm font-bold text-slate-900">
               CSN Moderator
             </Link>
@@ -90,12 +91,12 @@ export default async function ModeratorLayout({ children }: { children: React.Re
           )}
         </div>
 
-        <nav className="flex gap-2 overflow-x-auto px-4 pb-4">
+        <nav aria-label="Moderator navigation" className="flex gap-2 overflow-x-auto px-4 pb-3">
           {navItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"
+              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"
             >
               <Icon className="h-4 w-4" />
               {label}

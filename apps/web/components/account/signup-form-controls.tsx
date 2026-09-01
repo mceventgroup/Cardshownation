@@ -4,6 +4,92 @@ import { useMemo, useState } from "react";
 import { Check, ChevronDown, Eye, EyeOff, Search } from "lucide-react";
 import type { DirectoryState } from "@/lib/states";
 
+export function PromoterOptInFields({
+  defaultChecked = false,
+  disabled,
+}: {
+  defaultChecked?: boolean;
+  disabled?: boolean;
+}) {
+  const [isPromoter, setIsPromoter] = useState(defaultChecked);
+
+  return (
+    <div className="space-y-4">
+      <label className="flex items-start gap-3 rounded-3xl border border-brand-200 bg-brand-50 p-5 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          name="isPromoter"
+          checked={isPromoter}
+          disabled={disabled}
+          onChange={(event) => setIsPromoter(event.target.checked)}
+          className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+        />
+        <span>
+          <span className="block font-semibold text-slate-950">I organize card shows</span>
+          <span className="mt-1 block leading-6">
+            Add promoter tools to this account. You will still have all collector features.
+          </span>
+        </span>
+      </label>
+
+      {isPromoter && (
+        <section
+          aria-labelledby="promoter-profile-heading"
+          className="rounded-3xl border border-slate-200 bg-slate-50 p-5"
+        >
+          <h2 id="promoter-profile-heading" className="font-semibold text-slate-900">
+            Promoter profile details
+          </h2>
+          <div className="mt-5 space-y-5">
+            <div>
+              <label
+                htmlFor="organizerName"
+                className="mb-2 block text-sm font-medium text-slate-700"
+              >
+                Organizer or business name
+              </label>
+              <input
+                id="organizerName"
+                name="organizerName"
+                type="text"
+                required
+                disabled={disabled}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:border-brand-400 focus:outline-none"
+              />
+            </div>
+            <div className="grid gap-5 sm:grid-cols-3">
+              <input
+                aria-label="Website"
+                name="websiteUrl"
+                type="url"
+                placeholder="Website"
+                disabled={disabled}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-base"
+              />
+              <input
+                aria-label="Facebook"
+                name="facebookUrl"
+                type="url"
+                placeholder="Facebook"
+                disabled={disabled}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-base"
+              />
+              <input
+                aria-label="Instagram"
+                name="instagramUrl"
+                type="url"
+                placeholder="Instagram"
+                disabled={disabled}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-base"
+              />
+            </div>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 type PasswordFieldProps = {
   disabled?: boolean;
   id: string;
@@ -56,15 +142,19 @@ export function PasswordField({
 }
 
 export function StateMultiSelect({
+  defaultSelectedCodes = [],
   disabled,
   states,
 }: {
+  defaultSelectedCodes?: string[];
   disabled?: boolean;
   states: DirectoryState[];
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(
+    () => new Set(defaultSelectedCodes),
+  );
 
   const filteredStates = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

@@ -43,12 +43,16 @@ export function WorkspaceShell({
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen flex-col bg-slate-50 md:flex-row">
       {mobileHeader}
       {desktopSidebar}
-      <main className="min-w-0 flex-1">
+      <main className="min-w-0 w-full flex-1">
         {topBar ?? (
-          <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:px-6">
+          <div
+            className={`sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:px-6 ${
+              mobileHeader ? "hidden md:block" : ""
+            }`}
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
                 <Link href={homeHref} className="text-sm font-semibold text-slate-900">

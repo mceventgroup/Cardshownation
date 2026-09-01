@@ -33,13 +33,17 @@ function getSenderConfigError() {
     process.env.RESEND_FROM_EMAIL?.trim() || process.env.RESEND_FROM_ADDRESS?.trim() || "";
 
   if (!configuredFromAddress) {
-    return null;
+    return "Email sending is not configured: set RESEND_FROM_EMAIL to an address on your verified sending domain.";
   }
 
   const emailAddress = extractEmailAddress(configuredFromAddress);
   const atIndex = emailAddress.lastIndexOf("@");
   if (atIndex === -1) {
     return "Email sending is not configured: RESEND_FROM_EMAIL must be a valid sender address.";
+  }
+
+  if (emailAddress === "onboarding@resend.dev") {
+    return "Email sending is not configured for customer delivery: replace the Resend onboarding sender with an address on your verified sending domain.";
   }
 
   const domain = emailAddress.slice(atIndex + 1);

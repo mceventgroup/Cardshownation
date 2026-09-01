@@ -56,6 +56,43 @@ test("getEmailConfigStatus reports missing Resend API keys", () => {
   process.env.RESEND_FROM_EMAIL = originalFromEmail;
 });
 
+test("getEmailConfigStatus requires an explicit verified-domain sender", () => {
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFromEmail = process.env.RESEND_FROM_EMAIL;
+  const originalFromAddress = process.env.RESEND_FROM_ADDRESS;
+
+  process.env.RESEND_API_KEY = TEST_RESEND_CREDENTIAL;
+  delete process.env.RESEND_FROM_EMAIL;
+  delete process.env.RESEND_FROM_ADDRESS;
+
+  assert.deepEqual(getEmailConfigStatus(), {
+    ready: false,
+    error:
+      "Email sending is not configured: set RESEND_FROM_EMAIL to an address on your verified sending domain.",
+  });
+
+  process.env.RESEND_API_KEY = originalApiKey;
+  process.env.RESEND_FROM_EMAIL = originalFromEmail;
+  process.env.RESEND_FROM_ADDRESS = originalFromAddress;
+});
+
+test("getEmailConfigStatus rejects the Resend onboarding sender for customer delivery", () => {
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFromEmail = process.env.RESEND_FROM_EMAIL;
+
+  process.env.RESEND_API_KEY = TEST_RESEND_CREDENTIAL;
+  process.env.RESEND_FROM_EMAIL = "Card Show Nation <onboarding@resend.dev>";
+
+  assert.deepEqual(getEmailConfigStatus(), {
+    ready: false,
+    error:
+      "Email sending is not configured for customer delivery: replace the Resend onboarding sender with an address on your verified sending domain.",
+  });
+
+  process.env.RESEND_API_KEY = originalApiKey;
+  process.env.RESEND_FROM_EMAIL = originalFromEmail;
+});
+
 test("getEmailConfigStatus rejects personal inbox senders", () => {
   const originalApiKey = process.env.RESEND_API_KEY;
   const originalFromEmail = process.env.RESEND_FROM_EMAIL;

@@ -23,6 +23,7 @@ import {
 import { endUserSession } from "@/lib/user-auth";
 import { enablePromoterAccess } from "@/lib/promoters";
 import { startPromoterSession } from "@/lib/promoter-auth";
+import { StateMultiSelect } from "@/components/account/signup-form-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -214,9 +215,8 @@ export default async function AccountPage({
   if (!account) {
     redirect("/account/login");
   }
-  const favoriteOrganizers = await listFavoriteOrganizerOptions();
-
-  const selectedStates = new Set(account.subscriptions.map((subscription) => subscription.stateCode));
+  const selectedStateCodes = account.subscriptions.map((subscription) => subscription.stateCode);
+  const favoriteOrganizers = await listFavoriteOrganizerOptions(selectedStateCodes);
   const selectedOrganizerIds = new Set(
     account.favoriteOrganizers.map((favoriteOrganizer) => favoriteOrganizer.organizerId)
   );
@@ -325,7 +325,7 @@ export default async function AccountPage({
               <span className="hidden text-brand-700 group-open:inline">Close</span>
             </summary>
           <form action={saveProfile} className="space-y-6 border-t border-slate-200 p-4 sm:p-5">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
               <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Personal information</h2>
@@ -439,30 +439,17 @@ export default async function AccountPage({
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">SMS / push later</p>
               </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {US_STATES.map((state) => (
-                  <label
-                    key={state.code}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
-                  >
-                    <input
-                      type="checkbox"
-                      name="stateCodes"
-                      value={state.code}
-                      defaultChecked={selectedStates.has(state.code)}
-                      className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                    />
-                    <span>{state.name}</span>
-                  </label>
-                ))}
-              </div>
+              <StateMultiSelect
+                states={US_STATES}
+                defaultSelectedCodes={selectedStateCodes}
+              />
 
               <div className="mt-6 border-t border-slate-200 pt-6">
                 <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">Favorite show hosts</h3>
                     <p className="mt-1 text-sm text-slate-500">
-                      Save your preferred promoters so future account features can highlight their shows first.
+                      Choose promoters with upcoming shows in your followed states.
                     </p>
                   </div>
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Promoters</p>
