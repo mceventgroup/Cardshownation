@@ -20,7 +20,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy" summary="This policy explains what information Card Show Nation handles, why we use it, and the choices available to you." updated="September 1, 2026" currentPath="/privacy" sections={sections}>
       <LegalSection id="scope" title="1. Scope">
-        <p>This policy applies to cardshownation.com, Card Show Nation accounts, show submissions, promoter tools, the Floor Planner, and related communications. It does not control the practices of independent event organizers, venues, payment providers, or websites that we link to.</p>
+        <p>Card Show Nation is operated by MC Event Group LLC, a Kansas limited liability company. This policy applies to cardshownation.com, Card Show Nation accounts, show submissions, promoter tools, the Floor Planner, and related communications. It does not control the practices of independent event organizers, venues, payment providers, or websites that we link to.</p>
       </LegalSection>
       <LegalSection id="information" title="2. Information we collect">
         <p>Depending on how you use the service, we may collect:</p>
@@ -83,7 +83,7 @@ export default function PrivacyPage() {
       </LegalSection>
       <LegalSection id="changes" title="11. Changes and contact">
         <p>We may update this policy as the service or law changes. We will update the date above and provide additional notice when a change is material.</p>
-        <LegalContact><p className="font-semibold text-slate-950">Privacy questions or requests</p><p className="mt-1">Email <a href="mailto:privacy@cardshownation.com" className="font-semibold text-brand-700 underline-offset-4 hover:underline">privacy@cardshownation.com</a>. General support is available at <a href="mailto:support@cardshownation.com" className="font-semibold text-brand-700 underline-offset-4 hover:underline">support@cardshownation.com</a>.</p></LegalContact>
+        <LegalContact><p className="font-semibold text-slate-950">MC Event Group LLC</p><address className="mt-1 not-italic">PO Box 655<br />Moundridge, KS 67107</address><p className="mt-2">Privacy requests: <a href="mailto:privacy@cardshownation.com" className="font-semibold text-brand-700 underline-offset-4 hover:underline">privacy@cardshownation.com</a><br />General support: <a href="mailto:support@cardshownation.com" className="font-semibold text-brand-700 underline-offset-4 hover:underline">support@cardshownation.com</a></p></LegalContact>
       </LegalSection>
     </LegalPage>
   );

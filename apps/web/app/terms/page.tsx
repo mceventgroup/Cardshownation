@@ -13,6 +13,7 @@ const sections = [
   { id: "events", label: "Events and third parties" }, { id: "floorplanner", label: "Floor Planner" },
   { id: "billing", label: "Subscriptions and billing" }, { id: "intellectual-property", label: "Intellectual property" },
   { id: "disclaimers", label: "Disclaimers and liability" }, { id: "termination", label: "Termination and changes" },
+  { id: "governing-law", label: "Governing law and disputes" },
   { id: "contact", label: "Contact" },
 ];
 
@@ -20,7 +21,7 @@ export default function TermsPage() {
   return (
     <LegalPage title="Terms of Use" summary="These terms govern access to Card Show Nation's directory, accounts, promoter tools, submissions, and Floor Planner." updated="September 1, 2026" currentPath="/terms" sections={sections}>
       <LegalSection id="agreement" title="1. Agreement to these terms">
-        <p>By accessing or using Card Show Nation, you agree to these Terms of Use and our <Link href="/privacy" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Privacy Policy</Link>. If you do not agree, do not use the service. If you use the service for a business or organization, you represent that you can accept these terms for it.</p>
+        <p>Card Show Nation is operated by MC Event Group LLC, a Kansas limited liability company. By accessing or using Card Show Nation, you agree to these Terms of Use and our <Link href="/privacy" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Privacy Policy</Link>. If you do not agree, do not use the service. If you use the service for a business or organization, you represent that you can accept these terms for it.</p>
       </LegalSection>
       <LegalSection id="accounts" title="2. Eligibility and accounts">
         <p>You must be at least 13 years old to create an account. If you are under the age of legal majority where you live, use the service only with permission from a parent or legal guardian.</p>
@@ -72,8 +73,11 @@ export default function TermsPage() {
         <p>You may stop using the service at any time. We may restrict or terminate access, remove content, or preserve evidence when we reasonably believe these terms were violated, security or users are at risk, fees are unpaid, or the service is being discontinued.</p>
         <p>We may update these terms as the service or law changes. The updated date will appear above. Material changes may receive additional notice. Continued use after the effective date means you accept the revised terms.</p>
       </LegalSection>
-      <LegalSection id="contact" title="11. Contact">
-        <LegalContact><p className="font-semibold text-slate-950">Questions about these terms</p><p className="mt-1">Email <a href="mailto:support@cardshownation.com" className="font-semibold text-brand-700 underline-offset-4 hover:underline">support@cardshownation.com</a>.</p></LegalContact>
+      <LegalSection id="governing-law" title="11. Governing law and disputes">
+        <p>These terms are governed by the laws of the State of Kansas, without regard to conflict-of-law principles. Before filing a legal claim, you and MC Event Group LLC agree to make a reasonable good-faith effort to resolve the dispute informally by contacting the other party. Any unresolved dispute may be brought in a state or federal court with jurisdiction under applicable law. These terms do not require arbitration.</p>
+      </LegalSection>
+      <LegalSection id="contact" title="12. Contact">
+        <LegalContact><p className="font-semibold text-slate-950">MC Event Group LLC</p><address className="mt-1 not-italic">PO Box 655<br />Moundridge, KS 67107</address><p className="mt-2">Email <a href="mailto:support@cardshownation.com" className="font-semibold text-brand-700 underline-offset-4 hover:underline">support@cardshownation.com</a>.</p></LegalContact>
       </LegalSection>
     </LegalPage>
   );
