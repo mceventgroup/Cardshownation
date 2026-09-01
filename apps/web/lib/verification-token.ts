@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import type { UserRole } from "@csn/db";
 import { db } from "@/lib/db";
 import { hashOpaqueToken } from "@/lib/token-hash";
 
@@ -15,7 +16,10 @@ export async function createVerificationToken(userId: string) {
   return token;
 }
 
-export async function consumeVerificationToken(token: string) {
+export async function consumeVerificationToken(
+  token: string,
+  allowedRoles?: readonly UserRole[],
+) {
   const tokenHash = hashOpaqueToken(token);
   return db.$transaction(async (tx) => {
     const record = await tx.emailVerificationToken.findUnique({
@@ -27,6 +31,14 @@ export async function consumeVerificationToken(token: string) {
         await tx.emailVerificationToken.deleteMany({ where: { id: record.id } });
       }
       return null;
+    }
+
+    if (allowedRoles) {
+      const user = await tx.user.findUnique({
+        where: { id: record.userId },
+        select: { role: true },
+      });
+      if (!user || !allowedRoles.includes(user.role)) return null;
     }
 
     const consumed = await tx.emailVerificationToken.deleteMany({

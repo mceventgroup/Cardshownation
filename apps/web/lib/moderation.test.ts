@@ -294,6 +294,35 @@ test("createVerificationToken stores a hashed token and consumeVerificationToken
   assert.deepEqual(user, { id: "user-1", email: "fan@example.com" });
 });
 
+test("consumeVerificationToken leaves a token intact when the account role is not allowed", async () => {
+  const findUniqueMock = stubMethod(db.emailVerificationToken, "findUnique", async () => ({
+    id: "verify-1",
+    userId: "user-1",
+    expiresAt: new Date(Date.now() + 60_000),
+  }));
+  const findUserMock = stubMethod(db.user, "findUnique", async () => ({
+    role: "FAN",
+  }));
+  const deleteManyMock = stubMethod(db.emailVerificationToken, "deleteMany", async () => ({
+    count: 1,
+  }));
+  const updateMock = stubMethod(db.user, "update", async () => ({
+    id: "user-1",
+  }));
+  stubMethod(db, "$transaction", async (callback) => callback(db));
+
+  const user = await consumeVerificationToken("verification-token", ["MODERATOR"]);
+
+  assert.equal(user, null);
+  assert.equal(findUniqueMock.mock.calls.length, 1);
+  assert.deepEqual(findUserMock.mock.calls[0]?.arguments[0], {
+    where: { id: "user-1" },
+    select: { role: true },
+  });
+  assert.equal(deleteManyMock.mock.calls.length, 0);
+  assert.equal(updateMock.mock.calls.length, 0);
+});
+
 test("getModeratorVisibleSubmissions returns only pending and self-reviewed submissions", async () => {
   const findManyMock = stubMethod(db.showSubmission, "findMany", async () => [
     { id: "pending-1", status: "PENDING", reviewerId: null },
