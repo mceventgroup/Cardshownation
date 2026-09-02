@@ -126,6 +126,7 @@ export default function EditorShell({
   const [showFirstRun, setShowFirstRun] = useState(false)
   const [activeTab, setActiveTab] = useState<FloorplannerSidebarTab>('tables')
   const [theme, setTheme] = useState<EditorTheme>('light')
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
     configureFloorplannerRuntime({
@@ -234,9 +235,16 @@ export default function EditorShell({
 
   return (
     <div className={`fp-theme-root fp-theme-${theme} flex h-full w-full flex-col ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-950'}`}>
-      {!showMode && <Toolbar theme={theme} onToggleTheme={handleToggleTheme} />}
+      {!showMode && (
+        <Toolbar
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+          onToggleSidebar={() => setMobileSidebarOpen(open => !open)}
+          sidebarOpen={mobileSidebarOpen}
+        />
+      )}
       <div className="flex-1 overflow-hidden">
-        <div className="flex h-full flex-row overflow-hidden">
+        <div className="relative flex h-full flex-row overflow-hidden">
           {showMode ? (
             <ShowModeSidebar
               onPrintShowSheet={() => printShowModeSheet(
@@ -286,7 +294,22 @@ export default function EditorShell({
               onExitShowMode={() => setShowMode(false)}
             />
           ) : (
-            <LeftSidebar activeTab={activeTab} onTabChange={handleTabChange} />
+            <>
+              {mobileSidebarOpen && (
+                <button
+                  aria-label="Close editor tools"
+                  onClick={() => setMobileSidebarOpen(false)}
+                  className="fixed inset-0 z-50 bg-slate-950/35 md:hidden"
+                />
+              )}
+              <div className={`fixed inset-y-0 left-0 z-[60] md:static md:z-auto md:block ${mobileSidebarOpen ? 'block' : 'hidden'}`}>
+                <LeftSidebar
+                  activeTab={activeTab}
+                  onTabChange={handleTabChange}
+                  onRequestClose={() => setMobileSidebarOpen(false)}
+                />
+              </div>
+            </>
           )}
           <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
             <div className="relative min-h-0 flex-1 overflow-hidden">

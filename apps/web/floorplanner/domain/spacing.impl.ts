@@ -24,17 +24,24 @@ function findNarrowAisles(
   minAisleWidth: number,
 ): AisleViolation[] {
   const violations: AisleViolation[] = []
+  const ordered = tables
+    .map((table, index) => ({ table, index, bounds: geometry.getBounds(table).bounds }))
+    .sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y || a.index - b.index)
 
-  for (let i = 0; i < tables.length; i++) {
-    for (let j = i + 1; j < tables.length; j++) {
-      const a = tables[i]
-      const b = tables[j]
+  for (let i = 0; i < ordered.length; i++) {
+    for (let j = i + 1; j < ordered.length; j++) {
+      const a = ordered[i].table
+      const b = ordered[j].table
 
       // Quick AABB distance check — skip pairs that are far apart
-      const boundsA = geometry.getBounds(a).bounds
-      const boundsB = geometry.getBounds(b).bounds
+      const boundsA = ordered[i].bounds
+      const boundsB = ordered[j].bounds
       const hGap = Math.max(boundsB.x - (boundsA.x + boundsA.width), boundsA.x - (boundsB.x + boundsB.width))
       const vGap = Math.max(boundsB.y - (boundsA.y + boundsA.height), boundsA.y - (boundsB.y + boundsB.height))
+
+      // Entries are sorted by their left edge. Once the horizontal gap is
+      // wider than the aisle threshold, every later entry is also irrelevant.
+      if (boundsB.x - (boundsA.x + boundsA.width) > minAisleWidth) break
 
       // If both gaps exceed minAisleWidth, tables are too far apart to matter
       if (hGap > minAisleWidth && vGap > minAisleWidth) continue

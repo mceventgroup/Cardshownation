@@ -131,15 +131,35 @@ function checkOverlap(a: TableObject, b: TableObject): OverlapResult {
 }
 
 function findAllOverlaps(tables: TableObject[]): Array<[TableObject, TableObject]> {
-  const result: Array<[TableObject, TableObject]> = []
-  for (let i = 0; i < tables.length; i++) {
-    for (let j = i + 1; j < tables.length; j++) {
-      if (checkOverlap(tables[i], tables[j]).overlaps) {
-        result.push([tables[i], tables[j]])
+  const result: Array<{ a: TableObject; b: TableObject; ai: number; bi: number }> = []
+  const ordered = tables
+    .map((table, index) => ({ table, index, bounds: getBounds(table).bounds }))
+    .sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y || a.index - b.index)
+
+  for (let i = 0; i < ordered.length; i++) {
+    const a = ordered[i]
+    const aMaxX = a.bounds.x + a.bounds.width
+    for (let j = i + 1; j < ordered.length; j++) {
+      const b = ordered[j]
+      if (b.bounds.x >= aMaxX) break
+      if (
+        a.bounds.y + a.bounds.height <= b.bounds.y ||
+        b.bounds.y + b.bounds.height <= a.bounds.y
+      ) continue
+
+      if (checkOverlap(a.table, b.table).overlaps) {
+        result.push({
+          a: a.index < b.index ? a.table : b.table,
+          b: a.index < b.index ? b.table : a.table,
+          ai: Math.min(a.index, b.index),
+          bi: Math.max(a.index, b.index),
+        })
       }
     }
   }
-  return result
+
+  result.sort((left, right) => left.ai - right.ai || left.bi - right.bi)
+  return result.map(({ a, b }) => [a, b])
 }
 
 function measureGap(a: TableObject, b: TableObject): GapResult {

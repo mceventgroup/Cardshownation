@@ -339,6 +339,15 @@ export function clearAllLayouts(): void {
   void clearAllBackgroundImagesExternally()
 }
 
+export function duplicateLayout(id: string, newName?: string): string | null {
+  const slice = loadLayout(id)
+  if (!slice) return null
+
+  const source = loadManifest().layouts.find(layout => layout.id === id)
+  const copyName = newName?.trim() || `${source?.name ?? 'Floor Plan'} Copy`
+  return saveLayoutAs(copyName, slice)
+}
+
 export function deleteLayout(id: string): void {
   const { layoutPrefix, storageKey } = getStorageKeys()
   try {

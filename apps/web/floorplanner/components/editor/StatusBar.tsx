@@ -62,9 +62,9 @@ export default function StatusBar() {
   })
 
   return (
-    <div className="shrink-0 border-t border-slate-200 bg-white/95 px-4 py-2.5 shadow-[0_-1px_0_rgba(148,163,184,0.08)] backdrop-blur">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-[180px] max-w-[260px] flex-1">
+    <div className="shrink-0 border-t border-slate-200 bg-white/95 px-2 py-1.5 shadow-[0_-1px_0_rgba(148,163,184,0.08)] backdrop-blur sm:px-4 sm:py-2.5">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="hidden min-w-[180px] max-w-[260px] flex-1 sm:block">
           <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500">
             <span>Layout Fill</span>
             <span>{percentFilled}%</span>
@@ -75,18 +75,18 @@ export default function StatusBar() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{totalCount} total</span>
+          <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700 md:inline-flex">{totalCount} total</span>
           <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">{assignedCount} assigned</span>
           <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">{unassignedCount} open</span>
-          <span className="rounded-full bg-yellow-50 px-2.5 py-1 font-medium text-yellow-700">{premiumCount} premium</span>
+          <span className="hidden rounded-full bg-yellow-50 px-2.5 py-1 font-medium text-yellow-700 lg:inline-flex">{premiumCount} premium</span>
           {selectedCount > 0 && (
             <span className="rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-700">{selectedCount} selected</span>
           )}
-          <span className="rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700">
+          <span className="hidden rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700 lg:inline-flex">
             {sourceLabel}{activeDocumentLabel ? `: ${activeDocumentLabel}` : ''}
           </span>
           {sourceSaveTime && (
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600">
+            <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600 xl:inline-flex">
               Last saved {sourceSaveTime}
             </span>
           )}
@@ -98,7 +98,7 @@ export default function StatusBar() {
         </div>
 
         <div className="flex-1" />
-        <span className="text-xs font-medium text-sky-700">{showLabel}</span>
+        <span className="hidden text-xs font-medium text-sky-700 md:inline">{showLabel}</span>
         <span className="hidden text-xs text-slate-500 xl:inline">
           Scroll to zoom | Space+drag to pan | Shift+click for multi-select
         </span>

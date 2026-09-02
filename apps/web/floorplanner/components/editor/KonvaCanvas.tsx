@@ -52,8 +52,7 @@ import TableContextMenu, { type ContextMenuAction } from './TableContextMenu'
 import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds, getRoomBoundaryEdges, findBoundaryEdgeForDoor, findNearestBoundarySample, isRectWithinWallSetback } from '@floorplanner/domain/room-contour'
 import { isPointInRoom } from '@floorplanner/domain/room-contour'
 import { useWarnings } from '@floorplanner/hooks/useWarnings'
-import { warningsModule } from '@floorplanner/domain/warnings.impl'
-import type { WarningSeverity } from '@floorplanner/domain/warnings'
+import type { LayoutWarning, WarningSeverity } from '@floorplanner/domain/warnings'
 import { getDefaultRoomId, getRoomIdForPoint, getRoomLabel, getRoomZones } from '@floorplanner/domain/room-numbering'
 import { applyRoomSplit, buildRoomSplitPreview, findRoomSegmentAtPoint } from '@floorplanner/domain/room-splitting'
 import { buildShowInventoryOptions, vendorHasInventory } from '@floorplanner/lib/show-inventory'
@@ -71,6 +70,21 @@ interface DragState {
   startPositions: Record<string, Point>
   /** Whether we've moved past the drag threshold */
   isDragging: boolean
+}
+
+function getWarningTableIds(warning: LayoutWarning): string[] {
+  switch (warning.type) {
+    case 'overlap':
+    case 'narrow-aisle':
+    case 'duplicate-label':
+      return warning.tableIds
+    case 'door-blocked':
+      return warning.blockingTableIds
+    case 'unassigned-table':
+    case 'out-of-bounds':
+    case 'wall-setback':
+      return [warning.tableId]
+  }
 }
 
 interface SelectionState {
@@ -158,6 +172,19 @@ export default function KonvaCanvas() {
 
   // Computed warnings (derived, never stored)
   const warningResult = useWarnings()
+  const warningSeverityByTable = useMemo(() => {
+    const severityRank: Record<WarningSeverity, number> = { info: 1, warning: 2, error: 3 }
+    const result = new Map<string, WarningSeverity>()
+    for (const warning of warningResult.warnings) {
+      for (const tableId of getWarningTableIds(warning)) {
+        const current = result.get(tableId)
+        if (!current || severityRank[warning.severity] > severityRank[current]) {
+          result.set(tableId, warning.severity)
+        }
+      }
+    }
+    return result
+  }, [warningResult])
 
   // Active vendor ref for mouse handler (avoids stale closure)
   const activeVendorRef = useRef(activeVendorId)
@@ -1830,16 +1857,7 @@ export default function KonvaCanvas() {
                   : sectionColor ?? OPEN_TABLE_FILL
                 : sectionColor ?? OPEN_TABLE_FILL
 
-            // Compute highest warning severity for this table
-            let warningSeverity: WarningSeverity | null = null
-            if (warningResult.affectedTableIds.has(table.id)) {
-              const tw = warningsModule.warningsForTable(warningResult, table.id)
-              for (const w of tw) {
-                if (w.severity === 'error') { warningSeverity = 'error'; break }
-                if (w.severity === 'warning') warningSeverity = 'warning'
-                else if (w.severity === 'info' && !warningSeverity) warningSeverity = 'info'
-              }
-            }
+            const warningSeverity = warningSeverityByTable.get(table.id) ?? null
 
             return (
               <TableNode

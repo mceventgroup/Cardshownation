@@ -7,6 +7,7 @@ import { extractDocumentSlice } from '@floorplanner/lib/persistence'
 import {
   clearAllLayouts,
   deleteLayout,
+  duplicateLayout,
   getActiveLayoutId,
   listLayouts,
   recoverLayoutsFromStorage,
@@ -32,7 +33,11 @@ interface Props {
 function formatSavedAt(savedAt: string): string {
   const d = new Date(savedAt)
   if (Number.isNaN(d.getTime())) return 'Unknown date'
-  return d.toISOString().slice(0, 10)
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(d)
 }
 
 export default function LayoutManagerModal({ onClose, initialView = 'browser' }: Props) {
@@ -142,6 +147,18 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
     if (!window.confirm(`Delete layout "${name}"? This cannot be undone.`)) return
     deleteLayout(id)
     refresh()
+  }
+
+  function handleDuplicate(id: string, name: string) {
+    if (!confirmDiscardCurrentWork('Duplicate another browser layout')) return
+    const duplicateId = duplicateLayout(id, `${name} Copy`)
+    if (!duplicateId) {
+      setRecoveryMessage(`Could not duplicate "${name}".`)
+      return
+    }
+    switchTo(duplicateId)
+    refresh()
+    setRecoveryMessage(`Created and opened "${name} Copy".`)
   }
 
   function handleClearAll() {
@@ -304,72 +321,86 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-3 sm:p-6" onClick={onClose}>
       <div
-        className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-5xl max-h-[80vh] flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="project-manager-title"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <div className="flex items-center gap-2">
+        <div className="border-b border-slate-700 px-5 py-4 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 id="project-manager-title" className="text-lg font-semibold text-white">Projects</h2>
+              <p className="mt-1 text-xs text-slate-400">Your work saves in this browser automatically. Use cloud sync when you need it on another device.</p>
+            </div>
+            <button onClick={onClose} aria-label="Close projects" className="rounded-lg p-1 text-2xl leading-none text-slate-400 hover:bg-slate-800 hover:text-white">&times;</button>
+          </div>
+          <div className="mt-4 inline-flex rounded-xl bg-slate-800 p-1">
             <button
               onClick={() => setActiveView('browser')}
               className={[
-                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                 activeView === 'browser'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700',
+                  : 'text-slate-300 hover:bg-slate-700',
               ].join(' ')}
             >
-              Browser Layouts
+              This device
             </button>
             <button
               onClick={() => setActiveView('cloud')}
               className={[
-                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                 activeView === 'cloud'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700',
+                  : 'text-slate-300 hover:bg-slate-700',
               ].join(' ')}
             >
-              Cloud Layouts
+              Cloud sync
             </button>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
 
-        <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-2">
+        <div className="min-h-0 flex-1">
           <div
             className={[
-              'flex min-h-0 flex-col border-gray-700',
-              activeView === 'cloud' ? 'hidden lg:flex' : 'border-b lg:border-b-0 lg:border-r',
+              'h-full min-h-0 flex-col',
+              activeView === 'cloud' ? 'hidden' : 'flex',
             ].join(' ')}
           >
-            <div className="border-b border-gray-800 px-5 py-3">
-              <h3 className="text-sm font-semibold text-white">Browser Saves</h3>
-              <p className="mt-1 text-xs text-gray-400">Stored only in this browser profile.</p>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-5 py-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Saved on this device</h3>
+                <p className="mt-1 text-xs text-slate-400">The active project is continuously autosaved.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={handleRecover} className="rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800">Recover</button>
+                {layouts.length > 0 && (
+                  <button onClick={handleClearAll} className="rounded-lg border border-red-900/60 px-2.5 py-1.5 text-xs font-medium text-red-300 hover:bg-red-950/40">Clear all</button>
+                )}
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-1">
-              <button
-                onClick={handleRecover}
-                className="w-full mb-3 px-3 py-2 text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-900/20 rounded border border-amber-900/40 hover:border-amber-700/60 transition-colors"
-              >
-                Recover Saved Layouts
-              </button>
+            <div className="flex-1 space-y-2 overflow-y-auto p-4 sm:p-5">
               {recoveryMessage && (
                 <p className="mb-3 text-xs text-amber-200 bg-amber-950/40 border border-amber-900/40 rounded px-3 py-2">
                   {recoveryMessage}
                 </p>
               )}
               {layouts.length === 0 && (
-                <p className="text-gray-500 text-sm text-center py-6">No saved layouts yet. Save your current layout below.</p>
+                <div className="rounded-2xl border border-dashed border-slate-700 px-4 py-10 text-center">
+                  <p className="text-sm font-medium text-slate-300">No named projects yet</p>
+                  <p className="mt-1 text-xs text-slate-500">Name the current floor plan below to keep it in your project list.</p>
+                </div>
               )}
               {layouts.map(l => (
                 <div
                   key={l.id}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors group ${
+                  className={`group flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition-colors ${
                     l.id === activeId
-                      ? 'bg-blue-600/20 border border-blue-500/40'
-                      : 'bg-gray-800 border border-gray-700 hover:border-gray-600'
+                      ? 'border-blue-500/50 bg-blue-500/10'
+                      : 'border-slate-700 bg-slate-800/70 hover:border-slate-600'
                   }`}
                   onClick={() => handleSwitch(l.id)}
                 >
@@ -405,23 +436,29 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                     )}
                   </div>
 
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
                     <button
                       onClick={e => {
                         e.stopPropagation()
                         setRenamingId(l.id)
                         setRenameText(l.name)
                       }}
-                      className="text-xs text-gray-400 hover:text-blue-400 px-1"
+                      className="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-700 hover:text-blue-300"
                     >
-                      rename
+                      Rename
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleDuplicate(l.id, l.name) }}
+                      className="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-700 hover:text-white"
+                    >
+                      Duplicate
                     </button>
                     {layouts.length > 1 && (
                       <button
                         onClick={e => { e.stopPropagation(); handleDelete(l.id, l.name) }}
-                        className="text-xs text-gray-400 hover:text-red-400 px-1"
+                        className="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-red-950/50 hover:text-red-300"
                       >
-                        delete
+                        Delete
                       </button>
                     )}
                   </div>
@@ -430,12 +467,23 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
             </div>
           </div>
 
-          <div className={[ 'flex min-h-0 flex-col', activeView === 'browser' ? 'hidden lg:flex' : '' ].join(' ')}>
-            <div className="border-b border-gray-800 px-5 py-3">
-              <h3 className="text-sm font-semibold text-white">Cloud Saves</h3>
-              <p className="mt-1 text-xs text-gray-400">Stored in Neon and available outside this browser.</p>
+          <div className={[ 'h-full min-h-0 flex-col', activeView === 'browser' ? 'hidden' : 'flex' ].join(' ')}>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-5 py-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Cloud sync</h3>
+                <p className="mt-1 text-xs text-slate-400">Keep one current project available across your devices.</p>
+              </div>
+              {cloudAvailable && cloudAuthenticated && (
+                <button
+                  onClick={() => void refreshCloudLayouts()}
+                  disabled={cloudLoading}
+                  className="rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  Refresh
+                </button>
+              )}
             </div>
-            <div className="border-b border-gray-800 p-4 space-y-3">
+            <div className="space-y-3 border-b border-slate-800 p-4 sm:p-5">
               {!cloudAvailable && (
                 <p className="text-xs text-gray-400">
                   Cloud save is disabled on this deployment until the server is configured with a database and floor-planner session secret.
@@ -448,16 +496,7 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
               )}
               {cloudAvailable && cloudAuthenticated && (
                 <>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => void refreshCloudLayouts()}
-                      disabled={cloudLoading}
-                      className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-gray-500 disabled:opacity-50"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <input
                       value={cloudName}
                       onChange={e => setCloudName(e.target.value)}
@@ -468,34 +507,34 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                             ? `Use title: ${title.trim()}`
                             : 'Cloud layout name...'
                       }
-                      className={`flex-1 text-sm ${darkFieldClassName}`}
+                      className={`min-w-0 flex-1 text-sm ${darkFieldClassName}`}
                     />
                     <button
                       onClick={() => void handleCloudSave(false)}
                       disabled={cloudLoading}
-                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-medium rounded"
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
                     >
-                      {activeCloudLayoutId ? 'Overwrite Active' : 'Save New To Cloud'}
+                      {activeCloudLayoutId ? 'Sync changes' : 'Save to cloud'}
                     </button>
                     {activeCloudLayoutId && (
                       <button
                         onClick={() => void handleCloudSave(true)}
                         disabled={cloudLoading}
-                        className="px-3 py-1.5 rounded border border-gray-600 text-sm text-gray-200 hover:border-emerald-500 disabled:opacity-50"
+                        className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-emerald-500 disabled:opacity-50"
                       >
                         Save As New
                       </button>
                     )}
                   </div>
                   <p className="text-xs text-gray-500">
-                    Use Overwrite on a saved layout below to replace that exact cloud copy.
+                    Cloud sync never replaces a newer revision without warning you first.
                   </p>
                 </>
               )}
               {cloudStatus && <p className="text-xs text-emerald-300">{cloudStatus}</p>}
               {cloudError && <p className="text-xs text-red-300">{cloudError}</p>}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-1">
+            <div className="flex-1 space-y-2 overflow-y-auto p-4 sm:p-5">
               {cloudLoading && cloudAuthenticated && (
                 <p className="py-6 text-center text-sm text-gray-500">Loading cloud layouts...</p>
               )}
@@ -508,10 +547,10 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
               {cloudLayouts.map(l => (
                 <div
                   key={l.id}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                  className={`flex flex-col gap-3 rounded-2xl border px-4 py-3 transition-colors sm:flex-row sm:items-center ${
                     l.id === activeCloudLayoutId
-                      ? 'bg-emerald-600/20 border border-emerald-500/40'
-                      : 'bg-gray-800 border border-gray-700'
+                      ? 'border-emerald-500/50 bg-emerald-500/10'
+                      : 'border-slate-700 bg-slate-800/70'
                   }`}
                 >
                   <div className="flex-1 min-w-0">
@@ -527,20 +566,20 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                       {formatSavedAt(l.savedAt)}
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex shrink-0 flex-wrap gap-2">
                     <button
                       onClick={() => void handleCloudOverwrite(l)}
                       disabled={cloudLoading}
                       className="text-xs rounded border border-emerald-700 px-2 py-1 text-emerald-300 hover:border-emerald-500 hover:text-emerald-200 disabled:opacity-50"
                     >
-                      Overwrite
+                      Sync here
                     </button>
                     <button
                       onClick={() => void handleCloudLoad(l.id)}
                       disabled={cloudLoading}
                       className="text-xs rounded border border-gray-600 px-2 py-1 text-gray-200 hover:border-blue-500"
                     >
-                      Load
+                      Open
                     </button>
                     <button
                       onClick={() => void handleCloudDelete(l.id, l.name)}
@@ -556,16 +595,10 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
           </div>
         </div>
 
-        <div className="px-5 py-3 border-t border-gray-700 space-y-2">
-          {layouts.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              className="w-full px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded border border-red-900/40 hover:border-red-700/60 transition-colors"
-            >
-              Clear All Layouts
-            </button>
-          )}
-          <div className="flex gap-2">
+        {activeView === 'browser' && (
+        <div className="space-y-2 border-t border-slate-700 px-5 py-4 sm:px-6">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Name this project</div>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
               value={newName}
               onChange={e => setNewName(e.target.value)}
@@ -573,18 +606,18 @@ export default function LayoutManagerModal({ onClose, initialView = 'browser' }:
                 if (e.key === 'Enter') handleSaveNew()
                 e.stopPropagation()
               }}
-              placeholder={title.trim() ? `Use title: ${title.trim()}` : 'New browser layout name...'}
-              className={`flex-1 text-sm ${darkFieldClassName}`}
+              placeholder={title.trim() ? title.trim() : 'Floor plan name'}
+              className={`min-w-0 flex-1 text-sm ${darkFieldClassName}`}
             />
             <button
               onClick={handleSaveNew}
-              disabled={!newName.trim()}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
             >
-              Save As
+              Save named copy
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   )

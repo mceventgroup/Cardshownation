@@ -30,21 +30,23 @@ export default function VendorDrawer({ active }: VendorDrawerProps) {
   const [filter, setFilter] = useState<VendorFilter>('all')
   const [drawerHeight, setDrawerHeight] = useState(COLLAPSED_HEIGHT)
   const [viewportHeight, setViewportHeight] = useState(0)
+  const [compactViewport, setCompactViewport] = useState(false)
   const dragStateRef = useRef<{ startY: number; startHeight: number } | null>(null)
   const { totals } = useVendorGridData(search, filter)
 
   const mediumHeight = useMemo(
-    () => Math.max(COLLAPSED_HEIGHT, Math.round(viewportHeight * MEDIUM_RATIO)),
-    [viewportHeight],
+    () => Math.max(COLLAPSED_HEIGHT, Math.round(viewportHeight * (compactViewport ? 0.52 : MEDIUM_RATIO))),
+    [compactViewport, viewportHeight],
   )
   const expandedHeight = useMemo(
-    () => Math.max(COLLAPSED_HEIGHT, Math.round(viewportHeight * EXPANDED_RATIO)),
-    [viewportHeight],
+    () => Math.max(COLLAPSED_HEIGHT, Math.round(viewportHeight * (compactViewport ? 0.78 : EXPANDED_RATIO))),
+    [compactViewport, viewportHeight],
   )
 
   useEffect(() => {
     function syncViewportHeight() {
       setViewportHeight(window.innerHeight)
+      setCompactViewport(window.innerWidth < 768)
     }
 
     syncViewportHeight()
@@ -66,15 +68,15 @@ export default function VendorDrawer({ active }: VendorDrawerProps) {
       setDrawerHeight(current => {
         if (current <= COLLAPSED_HEIGHT + 4) return COLLAPSED_HEIGHT
         const next = Math.min(
-          Math.round(viewportHeight * MAX_RATIO),
-          Math.max(Math.round(viewportHeight * MIN_RATIO), current),
+          Math.round(viewportHeight * (compactViewport ? 0.82 : MAX_RATIO)),
+          Math.max(Math.round(viewportHeight * (compactViewport ? 0.42 : MIN_RATIO)), current),
         )
         return next
       })
     }
 
     handleResize()
-  }, [active, viewportHeight])
+  }, [active, compactViewport, viewportHeight])
 
   const drawerState: DrawerState = drawerHeight <= COLLAPSED_HEIGHT + 4
     ? 'collapsed'
@@ -83,8 +85,8 @@ export default function VendorDrawer({ active }: VendorDrawerProps) {
       : 'medium'
 
   function clampHeight(height: number) {
-    const maxHeight = Math.round(viewportHeight * MAX_RATIO)
-    const minHeight = Math.round(viewportHeight * MIN_RATIO)
+    const maxHeight = Math.round(viewportHeight * (compactViewport ? 0.82 : MAX_RATIO))
+    const minHeight = Math.round(viewportHeight * (compactViewport ? 0.42 : MIN_RATIO))
     if (height <= COLLAPSED_HEIGHT + 8) return COLLAPSED_HEIGHT
     return Math.max(minHeight, Math.min(maxHeight, height))
   }

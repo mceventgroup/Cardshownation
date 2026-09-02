@@ -16,9 +16,11 @@ const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
 interface ToolbarProps {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
+  onToggleSidebar: () => void
+  sidebarOpen: boolean
 }
 
-export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
+export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebarOpen }: ToolbarProps) {
   const canUndo = useEditorStore(selectCanUndo)
   const canRedo = useEditorStore(selectCanRedo)
   const undo = useEditorStore(s => s.undo)
@@ -177,6 +179,13 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
   const selectedPremiumCount = selectedTableIds.filter(id => tables[id]?.premium).length
   const hasSelection = selectedTableIds.length > 0
   const allSelectedPremium = hasSelection && selectedPremiumCount === selectedTableIds.length
+  const saveIndicator = saveStatus === 'error'
+    ? 'Browser save failed'
+    : saveStatus === 'saving'
+      ? 'Saving locally...'
+      : hasPendingChanges
+        ? 'Saved locally - sync needed'
+        : 'Autosaved locally'
 
   const toggleSelectedPremium = useCallback(() => {
     if (selectedTableIds.length === 0) return
@@ -199,6 +208,14 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
     <div ref={toolbarRef} className="relative z-30 shrink-0">
       <div className="border-b border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
         <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap">
+          <button
+            onClick={onToggleSidebar}
+            aria-label={sidebarOpen ? 'Close floor planner tools' : 'Open floor planner tools'}
+            aria-expanded={sidebarOpen}
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 md:hidden"
+          >
+            Tools
+          </button>
           <button
             onClick={() => toggleMenu('project')}
             aria-haspopup="menu"
@@ -255,11 +272,17 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
               </button>
             </div>
 
-            {hasPendingChanges && (
-              <span className="hidden rounded-lg bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-700 2xl:inline-flex">
-                Not synced
-              </span>
-            )}
+            <span
+              className={`hidden rounded-lg px-2.5 py-2 text-xs font-medium lg:inline-flex ${
+                saveStatus === 'error'
+                  ? 'bg-red-50 text-red-700'
+                  : hasPendingChanges
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-emerald-50 text-emerald-700'
+              }`}
+            >
+              {saveIndicator}
+            </span>
 
             {hasSelection && (
               <button
@@ -279,7 +302,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
               onClick={saveToCloud}
               className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              Save
+              {activeDocumentSource === 'cloud' ? 'Sync' : 'Save'}
             </button>
 
             <button

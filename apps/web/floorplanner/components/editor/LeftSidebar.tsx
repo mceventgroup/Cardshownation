@@ -27,6 +27,7 @@ type SetupTab = 'settings' | 'checks'
 interface LeftSidebarProps {
   activeTab: FloorplannerSidebarTab
   onTabChange: (tab: FloorplannerSidebarTab) => void
+  onRequestClose?: () => void
 }
 
 const TABLE_TOOLS: { tool: ActiveTool; label: string; shortcut: string }[] = [
@@ -137,7 +138,7 @@ function SegmentedTabs<T extends string>({ items, value, onChange }: {
   )
 }
 
-export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps) {
+export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: LeftSidebarProps) {
   const clearVendors = useEditorStore(s => s.clearVendors)
   const hasImportedPlan = useEditorStore(s => Object.keys(s.backgroundImages).length > 0)
   const warningCount = useWarnings().warnings.length
@@ -152,7 +153,11 @@ export default function LeftSidebar({ activeTab, onTabChange }: LeftSidebarProps
   ]
 
   return (
-    <aside className="flex h-full w-[288px] shrink-0 flex-col border-r border-slate-200 bg-slate-50/95 backdrop-blur-sm lg:w-[304px]">
+    <aside className="flex h-full w-[min(88vw,304px)] shrink-0 flex-col border-r border-slate-200 bg-slate-50/95 shadow-xl backdrop-blur-sm md:w-[288px] md:shadow-none lg:w-[304px]">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 md:hidden">
+        <span className="text-sm font-semibold text-slate-800">Editor tools</span>
+        <button onClick={onRequestClose} aria-label="Close editor tools" className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100">&times;</button>
+      </div>
       <nav aria-label="Floor planner tasks" className="grid grid-cols-4 gap-1 border-b border-slate-200 bg-white p-2">
         {NAV_ITEMS.map(item => (
           <button

@@ -4,13 +4,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   useEditorStore,
   selectActiveVendorId,
+  selectAssignmentMap,
+  selectSelectedIds,
   selectSettings,
   selectTables,
   selectVendorAssignments,
   selectVendors,
 } from '@floorplanner/store/index'
-import type { Vendor } from '@floorplanner/domain/types'
+import type { TableId, Vendor, VendorAssignment } from '@floorplanner/domain/types'
 import { resolveVendorBuckets, vendorDisplayName } from '@floorplanner/lib/vendor-resolution'
+import { autoAssignVendors } from '@floorplanner/domain/auto-assign'
+import { createAssignmentId } from '@floorplanner/lib/id'
+import { DRAFT_LAYOUT_ID } from '@floorplanner/lib/defaults'
 
 type VendorFilter = 'all' | 'open' | 'complete' | 'premium'
 type VendorSortKey =
@@ -331,7 +336,12 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
     'border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400'
   const activeVendorId = useEditorStore(selectActiveVendorId)
   const settings = useEditorStore(selectSettings)
+  const tables = useEditorStore(selectTables)
   const vendors = useEditorStore(selectVendors)
+  const assignments = useEditorStore(selectVendorAssignments)
+  const assignmentMap = useEditorStore(selectAssignmentMap)
+  const selectedIds = useEditorStore(selectSelectedIds)
+  const dispatch = useEditorStore(s => s.dispatch)
   const setActiveVendor = useEditorStore(s => s.setActiveVendor)
   const setHoveredVendor = useEditorStore(s => s.setHoveredVendor)
   const updateVendor = useEditorStore(s => s.updateVendor)
@@ -340,6 +350,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS)
   const [selectedVendorIds, setSelectedVendorIds] = useState<Set<string>>(new Set())
+  const [assignmentMessage, setAssignmentMessage] = useState<string | null>(null)
   const { filteredSummaries } = useVendorGridData(search, filter, sortKey, sortDirection)
 
   const [keyboardIndex, setKeyboardIndex] = useState(0)
@@ -415,6 +426,65 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
       next.delete(vendor.id)
       return next
     })
+  }
+
+  function buildAssignment(vendor: Vendor, tableId: TableId): VendorAssignment {
+    return {
+      id: createAssignmentId(),
+      tableId,
+      layoutId: DRAFT_LAYOUT_ID,
+      vendorId: vendor.id,
+      vendorName: vendor.companyName || vendor.name,
+      vendorCategory: vendor.category,
+      colorOverride: null,
+      notes: null,
+      paymentStatus: vendor.paymentStatus,
+      importSessionId: null,
+    }
+  }
+
+  function assignActiveVendorToSelection() {
+    const vendor = activeVendorId ? vendors[activeVendorId] : null
+    if (!vendor) return
+    const tableIds = [...selectedIds].filter(id => Boolean(tables[id])) as TableId[]
+    if (tableIds.length === 0) return
+
+    const replacedAssignments = tableIds.flatMap(id => {
+      const assignment = assignmentMap.get(id)
+      return assignment ? [assignment] : []
+    })
+    dispatch({
+      type: 'BATCH_ASSIGN_VENDORS',
+      createdAssignments: tableIds.map(id => buildAssignment(vendor, id)),
+      replacedAssignments,
+      timestamp: Date.now(),
+    })
+    setAssignmentMessage(`Assigned ${tableIds.length} table${tableIds.length === 1 ? '' : 's'} to ${vendorDisplayName(vendor)}.`)
+  }
+
+  function handleAutoAssign() {
+    const result = autoAssignVendors(tables, vendors, assignments)
+    if (result.assignments.length === 0) {
+      setAssignmentMessage('No open vendor needs could be matched to available tables.')
+      return
+    }
+    if (!window.confirm(`Assign ${result.assignments.length} open table${result.assignments.length === 1 ? '' : 's'} automatically? You can undo this in one step.`)) return
+
+    const createdAssignments = result.assignments.map(item => {
+      const vendor = vendors[item.vendorId]
+      return buildAssignment(vendor, item.tableId)
+    })
+    dispatch({
+      type: 'BATCH_ASSIGN_VENDORS',
+      createdAssignments,
+      replacedAssignments: [],
+      timestamp: Date.now(),
+    })
+    setAssignmentMessage(
+      result.unassignedVendors.length > 0
+        ? `Assigned ${createdAssignments.length} tables. ${result.unassignedVendors.length} vendor${result.unassignedVendors.length === 1 ? '' : 's'} still need space.`
+        : `Assigned ${createdAssignments.length} tables. All current vendor needs are covered.`,
+    )
   }
 
   function toggleVendorSelection(vendorId: string) {
@@ -553,6 +623,8 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
   ))
   const visibleSelectedCount = visibleVendorIds.filter(id => selectedVendorIds.has(id)).length
   const allVisibleSelected = visibleVendorIds.length > 0 && visibleSelectedCount === visibleVendorIds.length
+  const activeVendor = activeVendorId ? vendors[activeVendorId] : null
+  const selectedTableCount = [...selectedIds].filter(id => Boolean(tables[id])).length
 
   useEffect(() => {
     if (!keyboardVendorKey) return
@@ -565,13 +637,45 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
       onKeyDown={handleKeyboard}
       className="flex h-full min-h-0 flex-col bg-white outline-none"
     >
+      <div className="border-b border-slate-300 bg-slate-50 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {activeVendor ? (
+            <>
+              <span className="rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-800 ring-1 ring-teal-200">
+                Assigning: {vendorDisplayName(activeVendor)}
+              </span>
+              <button
+                onClick={assignActiveVendorToSelection}
+                disabled={selectedTableCount === 0}
+                className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Assign to {selectedTableCount || 0} selected
+              </button>
+              <button onClick={() => setActiveVendor(null)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                Done
+              </button>
+            </>
+          ) : (
+            <span className="text-xs text-slate-600">Choose a vendor below, then click open tables on the map or assign the current selection.</span>
+          )}
+          <button onClick={handleAutoAssign} className="ml-auto rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100">
+            Auto-assign open booths
+          </button>
+        </div>
+        {assignmentMessage && (
+          <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-white px-2.5 py-1.5 text-xs text-slate-600 ring-1 ring-slate-200">
+            <span>{assignmentMessage}</span>
+            <button onClick={() => setAssignmentMessage(null)} aria-label="Dismiss assignment message" className="text-slate-400 hover:text-slate-700">&times;</button>
+          </div>
+        )}
+      </div>
       <div className="border-b border-slate-300 px-3 py-1.5">
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <input
             value={search}
             onChange={e => onSearchChange(e.target.value)}
             placeholder="Search company, email, category, notes, or tables"
-            className={`min-w-0 flex-1 px-2 py-1 text-xs ${fieldClassName}`}
+            className={`min-w-[220px] flex-1 px-2 py-1 text-xs ${fieldClassName}`}
           />
           <div className="flex shrink-0 items-center gap-1">
             {VENDOR_FILTERS.map(item => (
@@ -681,7 +785,11 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
                         ? 'bg-slate-50'
                         : 'bg-white hover:bg-slate-50'
                   }`}
-                  style={{ gridTemplateColumns }}
+                  style={{
+                    gridTemplateColumns,
+                    contentVisibility: 'auto',
+                    containIntrinsicSize: '34px',
+                  }}
                 >
                   <div className={`${cellClass('text-left')} flex items-center justify-center py-1`}>
                     {summary.vendor ? (
