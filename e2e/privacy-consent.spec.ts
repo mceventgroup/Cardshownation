@@ -37,7 +37,7 @@ test("Global Privacy Control overrides an earlier optional-cookie choice", async
   await expect(page.locator(optionalScripts)).toHaveCount(0);
   await page.getByRole("button", { name: "Cookie settings" }).click();
   await expect(page.getByRole("status")).toContainText("Global Privacy Control is active");
-  await expect(page.getByRole("button", { name: "Allow analytics" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Allow optional cookies" })).toBeDisabled();
 });
 
 test("switching back to essential-only unloads optional tracking", async ({ page, context }) => {

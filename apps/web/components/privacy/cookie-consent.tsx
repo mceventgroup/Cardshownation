@@ -38,7 +38,7 @@ export function CookieConsent({ initialConsent, globalPrivacyControl }: { initia
     {globalPrivacyControl && <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium leading-5 text-emerald-800" role="status">Global Privacy Control is active. Optional analytics and advertising are disabled for this browser.</p>}
     <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
       <button type="button" disabled={!hydrated} onClick={() => choose("essential")} className="rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-wait disabled:opacity-60 sm:px-4 sm:text-sm">Essential only</button>
-      <button type="button" disabled={!hydrated || globalPrivacyControl} onClick={() => choose("optional")} className="rounded-full bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-sm">Allow analytics</button>
+      <button type="button" disabled={!hydrated || globalPrivacyControl} onClick={() => choose("optional")} className="rounded-full bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-sm">Allow optional cookies</button>
     </div>
   </div>;
 }

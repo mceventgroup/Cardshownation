@@ -55,7 +55,7 @@ export default function PrivacyPage() {
         <p>We may disclose information when reasonably necessary to comply with law, protect rights or safety, investigate abuse, or complete a merger, financing, acquisition, or transfer of business assets. We do not sell account contact information for money. Some optional advertising or measurement activity may be treated as “sharing,” “targeted advertising,” or a “sale” under certain privacy laws; it remains disabled unless you choose optional cookies.</p>
       </LegalSection>
       <LegalSection id="cookies" title="6. Cookies, analytics, and advertising">
-        <p>Essential cookies support sign-in, security, billing handoffs, and saved privacy choices. If you select “Allow analytics,” Google analytics or advertising tools and the Meta Pixel may also run. See the <Link href="/cookies" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Cookie Policy</Link> for details and how to change your choice.</p>
+        <p>Essential cookies support sign-in, security, billing handoffs, and saved privacy choices. If you select “Allow optional cookies,” Google analytics or advertising tools and the Meta Pixel may also run. See the <Link href="/cookies" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Cookie Policy</Link> for details and how to change your choice.</p>
         <p>When your browser sends a recognized Global Privacy Control signal, Card Show Nation disables optional analytics and advertising for that browser even if an earlier cookie choice allowed them.</p>
       </LegalSection>
       <LegalSection id="retention" title="7. Retention and security">

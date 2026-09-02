@@ -27,11 +27,11 @@ export default function CookiePolicyPage() {
         </LegalList>
       </LegalSection>
       <LegalSection id="optional" title="3. Optional analytics and advertising">
-        <p>If you select “Allow analytics,” the site may load Vercel Web Analytics, Google Analytics, Google advertising tools or AdSense, and the Meta Pixel. These providers may receive identifiers, IP address, device and browser information, page visits, referral information, and interaction data according to their own policies. Vercel Web Analytics is used to report anonymized page, referrer, country, and device metrics without analytics cookies.</p>
+        <p>If you select “Allow optional cookies,” the site may load Vercel Web Analytics, Google Analytics, Google advertising tools or AdSense, and the Meta Pixel. These providers may receive identifiers, IP address, device and browser information, page visits, referral information, and interaction data according to their own policies. Vercel Web Analytics is used to report anonymized page, referrer, country, and device metrics without analytics cookies.</p>
         <p>Optional tools help us understand traffic, improve the directory, measure promotion, and support advertising. They remain off when no choice has been made or when you select “Essential only.”</p>
       </LegalSection>
       <LegalSection id="choices" title="4. Manage your choices">
-        <p>Use the <strong>Cookie settings</strong> button at the lower-left edge of any standard site page to reopen the consent panel. Choosing “Essential only” is presented alongside “Allow analytics” and does not prevent essential account or security functions.</p>
+        <p>Use the <strong>Cookie settings</strong> button at the lower-left edge of any standard site page to reopen the consent panel. Choosing “Essential only” is presented alongside “Allow optional cookies” and does not prevent essential account or security functions.</p>
         <p>If your browser sends Global Privacy Control, optional analytics and advertising remain disabled and the settings panel confirms that the signal was honored. The signal applies to that browser or device.</p>
         <p>You may also block or delete cookies through your browser. Blocking essential cookies can prevent sign-in, billing, saved privacy choices, or other requested features. Browser privacy controls may not remove information already processed.</p>
         <p>For more information about personal information and privacy requests, see the <Link href="/privacy" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Privacy Policy</Link>.</p>
