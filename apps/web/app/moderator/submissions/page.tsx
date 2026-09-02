@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BulkSubmissionForm } from "@/components/moderation/bulk-submission-form";
 import { requireModeratorSession } from "@/lib/moderator-auth";
 import {
   approveShowSubmission,
@@ -17,14 +18,16 @@ async function bulkModerateSubmissions(formData: FormData) {
   const pendingIds = new Set(
     visible.filter((submission) => submission.status === "PENDING").map((submission) => submission.id)
   );
-  const ids = Array.from(
+  const selectedIds = Array.from(
     new Set(
       formData
         .getAll("submissionIds")
         .filter((value): value is string => typeof value === "string" && pendingIds.has(value))
     )
-  ).slice(0, 50);
-  const action = formData.get("bulkAction") === "reject" ? "reject" : "approve";
+  );
+  const requestedAction = formData.get("bulkAction");
+  const action = requestedAction === "reject" ? "reject" : "approve";
+  const ids = requestedAction === "approveAll" ? [...pendingIds] : selectedIds;
   const noteValue = formData.get("bulkNotes");
   const notes = typeof noteValue === "string" ? noteValue.trim().slice(0, 500) || null : null;
   let processed = 0;
@@ -46,7 +49,19 @@ async function bulkModerateSubmissions(formData: FormData) {
       }
       processed += 1;
     } catch (error) {
-      if (!(error instanceof DuplicateSubmissionError)) {
+      if (error instanceof DuplicateSubmissionError && action === "approve") {
+        try {
+          await rejectShowSubmission(
+            id,
+            `Rejected during bulk approval: duplicate of show ${error.duplicateId}.`,
+            { reviewerId: session.user.id, reviewerRole: "MODERATOR" }
+          );
+          processed += 1;
+          continue;
+        } catch (rejectError) {
+          console.error("[moderator moderation] duplicate rejection failed", { submissionId: id, rejectError });
+        }
+      } else {
         console.error("[moderator moderation] bulk action failed", { submissionId: id, error });
       }
       skipped += 1;
@@ -190,14 +205,9 @@ function SubmissionTable({
           {emptyText}
         </div>
       ) : bulkAction ? (
-        <form action={bulkAction} className="space-y-3">
-          <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center">
-            <input name="bulkNotes" placeholder="Optional shared review note" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
-            <button name="bulkAction" value="approve" className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700">Approve selected</button>
-            <button name="bulkAction" value="reject" className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reject selected</button>
-          </div>
+        <BulkSubmissionForm action={bulkAction} rowCount={rows.length}>
           {table}
-        </form>
+        </BulkSubmissionForm>
       ) : table}
     </div>
   );
