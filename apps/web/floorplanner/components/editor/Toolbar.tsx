@@ -13,104 +13,9 @@ import BackgroundImageModal from './BackgroundImageModal'
 const OPEN_HELP_EVENT = 'floorplanner:open-help'
 const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
 
-interface MenuItem {
-  label: string
-  shortcut?: string
-  action?: () => void
-  disabled?: boolean
-}
-
 interface ToolbarProps {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
-}
-
-function useMenuItems(
-  startNewLayout: () => void,
-  openBrowserLayouts: () => void,
-  openCloudLayouts: () => void,
-  openFilePicker: () => void,
-  saveToCloud: () => void,
-  saveToFile: () => void,
-  openFloorPlanImport: () => void,
-  openExport: () => void,
-  openHelp: () => void,
-): Record<string, MenuItem[]> {
-  const setTool = useEditorStore(s => s.setActiveTool)
-  const undo = useEditorStore(s => s.undo)
-  const redo = useEditorStore(s => s.redo)
-  const canUndo = useEditorStore(selectCanUndo)
-  const canRedo = useEditorStore(selectCanRedo)
-
-  const emit = useCallback((key: string) => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
-  }, [])
-
-  const clearLayout = useEditorStore(s => s.clearLayout)
-
-  return {
-    File: [
-      {
-        label: 'New Layout',
-        action: startNewLayout,
-      },
-      {
-        label: 'Open Browser Saves...',
-        action: openBrowserLayouts,
-      },
-      {
-        label: 'Open Cloud Saves...',
-        action: openCloudLayouts,
-      },
-      { label: 'Open File...', action: openFilePicker },
-      {
-        label: 'Save to Cloud',
-        action: saveToCloud,
-      },
-      {
-        label: 'Save to File...',
-        action: saveToFile,
-      },
-      {
-        label: 'Import Floor Plan...',
-        action: openFloorPlanImport,
-      },
-      { label: 'Export...', action: openExport },
-    ],
-    Tools: [
-      { label: 'Select', shortcut: 'S', action: () => setTool('select') },
-      { label: 'Place Table', shortcut: 'T', action: () => setTool('place-table') },
-      { label: 'Place Row', shortcut: 'R', action: () => setTool('place-row') },
-      { label: 'Measure', shortcut: 'M', action: () => setTool('measure') },
-      { label: 'Split Room', shortcut: 'X', action: () => setTool('split-room') },
-    ],
-    Edit: [
-      { label: 'Undo', shortcut: 'Ctrl+Z', action: undo, disabled: !canUndo },
-      { label: 'Redo', shortcut: 'Ctrl+Y', action: redo, disabled: !canRedo },
-      { label: 'Delete Selected', shortcut: 'Del', action: () => emit('Delete') },
-      {
-        label: 'Select All',
-        shortcut: 'Ctrl+A',
-        action: () => {
-          const allIds = Object.keys(useEditorStore.getState().tables)
-          useEditorStore.getState().setSelected(allIds)
-        },
-      },
-      { label: 'Rename Table', shortcut: 'Dbl-click' },
-      { label: 'Renumber Tables', shortcut: 'N', action: () => emit('n') },
-    ],
-    View: [
-      { label: 'Vendor Roster', shortcut: 'V', action: () => emit('v') },
-      { label: 'Warnings', shortcut: 'W', action: () => emit('w') },
-      { label: 'Zoom In', shortcut: '+', action: () => emit('+') },
-      { label: 'Zoom Out', shortcut: '-', action: () => emit('-') },
-      { label: 'Reset Zoom', shortcut: '0', action: () => emit('0') },
-    ],
-    Help: [
-      { label: 'Cheat Sheet', action: openHelp },
-      { label: 'Keyboard Shortcuts', shortcut: '?', action: openHelp },
-    ],
-  }
 }
 
 export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
@@ -137,7 +42,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
   const [showLayouts, setShowLayouts] = useState(false)
   const [layoutView, setLayoutView] = useState<'browser' | 'cloud'>('browser')
   const [showHelp, setShowHelp] = useState(false)
-  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [openMenu, setOpenMenu] = useState<'project' | 'more' | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -210,18 +115,6 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
     }, 0)
   }, [])
 
-  const menus = useMenuItems(
-    handleStartNewLayout,
-    openBrowserLayouts,
-    openCloudLayouts,
-    openFilePicker,
-    saveToCloud,
-    saveToFile,
-    () => { setShowFloorPlanImport(true); setOpenMenu(null) },
-    () => { setShowExport(true); setOpenMenu(null) },
-    openHelp,
-  )
-
   const updateTitle = useCallback((value: string) => {
     dispatch({
       type: 'UPDATE_SETTINGS',
@@ -268,11 +161,10 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
     }
   }, [openHelp])
 
-  function toggleMenu(name: string) {
+  function toggleMenu(name: 'project' | 'more') {
     setOpenMenu(prev => prev === name ? null : name)
   }
 
-  const activeItems = openMenu ? menus[openMenu] ?? [] : []
   const hasPendingChanges = hasPendingEditorChanges({
     saveStatus,
     saveError,
@@ -304,47 +196,68 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
   }, [allSelectedPremium, dispatch, selectedTableIds, tables])
 
   return (
-    <div ref={toolbarRef} className="shrink-0">
-      <div className="border-b border-slate-200 bg-white/92 shadow-sm backdrop-blur">
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2 lg:flex-nowrap">
-          <span className="pr-2 text-sm font-semibold text-slate-800">Workspace</span>
+    <div ref={toolbarRef} className="relative z-30 shrink-0">
+      <div className="border-b border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap">
+          <button
+            onClick={() => toggleMenu('project')}
+            aria-haspopup="menu"
+            aria-expanded={openMenu === 'project'}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+              openMenu === 'project'
+                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            Project
+            <svg className={`h-3.5 w-3.5 transition-transform ${openMenu === 'project' ? 'rotate-180' : ''}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="m4 6 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
 
-          <div className="flex flex-wrap items-center gap-1">
-            {Object.keys(menus).map(name => (
+          <div className="min-w-[210px] flex-1 xl:max-w-xl">
+            <label className="sr-only" htmlFor="floorplanner-title">Floor plan title</label>
+            <input
+              id="floorplanner-title"
+              type="text"
+              value={settings.eventName}
+              onChange={e => updateTitle(e.target.value)}
+              placeholder="Untitled floor plan"
+              className="w-full rounded-xl border border-transparent bg-slate-100 px-3 py-2 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <div className="mr-1 flex items-center rounded-xl border border-slate-200 bg-white p-1">
               <button
-                key={name}
-                onClick={() => toggleMenu(name)}
-                className={[
-                  'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                  openMenu === name
-                    ? 'border-blue-200 bg-blue-50 text-blue-700'
-                    : 'border-transparent text-gray-600 hover:border-slate-200 hover:bg-gray-50',
-                ].join(' ')}
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (Ctrl+Z)"
+                aria-label="Undo"
+                className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
               >
-                {name}
+                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3 7H10a4 4 0 010 8H5" strokeLinecap="round" />
+                  <path d="M3 7L6 4M3 7L6 10" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
-            ))}
-          </div>
-
-          <div className="min-w-[220px] flex-1 lg:min-w-[280px]">
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-              <label className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                Title
-              </label>
-              <input
-                type="text"
-                value={settings.eventName}
-                onChange={e => updateTitle(e.target.value)}
-                placeholder="Floor Plan"
-                className="w-full bg-transparent text-sm text-slate-800 focus:outline-none"
-              />
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (Ctrl+Y)"
+                aria-label="Redo"
+                className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M13 7H6a4 4 0 000 8H11" strokeLinecap="round" />
+                  <path d="M13 7L10 4M13 7L10 10" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
             </div>
-          </div>
 
-          <div className="ml-auto flex flex-wrap items-center gap-2 lg:flex-nowrap">
             {hasPendingChanges && (
-              <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-                Unsynced changes
+              <span className="hidden rounded-lg bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-700 2xl:inline-flex">
+                Not synced
               </span>
             )}
 
@@ -352,7 +265,7 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
               <button
                 onClick={toggleSelectedPremium}
                 title={`Toggle premium for selected tables (P)`}
-                className={`rounded-full px-3 py-2 text-sm font-medium sm:px-4 ${
+                className={`hidden rounded-xl px-3 py-2 text-sm font-medium lg:inline-flex ${
                   allSelectedPremium
                     ? 'border border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200'
                     : 'border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
@@ -363,76 +276,80 @@ export default function Toolbar({ theme, onToggleTheme }: ToolbarProps) {
             )}
 
             <button
+              onClick={saveToCloud}
+              className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              Save
+            </button>
+
+            <button
+              onClick={() => { setShowExport(true); setOpenMenu(null) }}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Export
+            </button>
+
+            <button
               onClick={() => setShowMode(true)}
-              className="rounded-full border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:px-4"
+              className="hidden rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex"
             >
               Print
             </button>
 
             <button
-              onClick={onToggleTheme}
-              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              aria-pressed={theme === 'dark'}
-              className="rounded-full border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:px-4"
+              onClick={() => toggleMenu('more')}
+              aria-label="More floor planner options"
+              aria-haspopup="menu"
+              aria-expanded={openMenu === 'more'}
+              className={`rounded-xl border p-2 transition-colors ${openMenu === 'more' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
             >
-              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <circle cx="4" cy="10" r="1.5" /><circle cx="10" cy="10" r="1.5" /><circle cx="16" cy="10" r="1.5" />
+              </svg>
             </button>
-
-            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1 py-1">
-              <button
-                onClick={undo}
-                disabled={!canUndo}
-                title="Undo (Ctrl+Z)"
-                aria-label="Undo"
-                className="rounded p-1.5 text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M3 7H10a4 4 0 010 8H5" strokeLinecap="round" />
-                  <path d="M3 7L6 4M3 7L6 10" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <button
-                onClick={redo}
-                disabled={!canRedo}
-                title="Redo (Ctrl+Y)"
-                aria-label="Redo"
-                className="rounded p-1.5 text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M13 7H6a4 4 0 000 8H11" strokeLinecap="round" />
-                  <path d="M13 7L10 4M13 7L10 10" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
           </div>
         </div>
       </div>
 
-      {openMenu && activeItems.length > 0 && (
-        <div className="flex h-9 items-center gap-1 overflow-x-auto border-b border-gray-200 bg-gray-50 px-4">
-          {activeItems.map(item => (
-            <div key={item.label} className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  if (!item.disabled && item.action) item.action()
-                }}
-                disabled={item.disabled}
-                className={[
-                  'flex items-center gap-2 px-3 py-1 rounded text-sm whitespace-nowrap transition-colors',
-                  item.disabled
-                    ? 'text-gray-400 cursor-default'
-                    : 'text-gray-700 hover:bg-white hover:shadow-sm active:bg-gray-100',
-                ].join(' ')}
-              >
-                <span>{item.label}</span>
-                {item.shortcut && (
-                  <kbd className="text-xs font-mono text-gray-400 bg-white border border-gray-200 rounded px-1 py-0.5">
-                    {item.shortcut}
-                  </kbd>
-                )}
-              </button>
-            </div>
+      {openMenu === 'project' && (
+        <div role="menu" className="absolute left-3 top-full mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Start or open</div>
+          {[
+            ['New floor plan', 'Start with an empty canvas', handleStartNewLayout],
+            ['Browser saves', 'Layouts saved on this device', openBrowserLayouts],
+            ['Cloud saves', 'Open or manage synced layouts', openCloudLayouts],
+            ['Open backup file', 'Load a .json floor plan', openFilePicker],
+          ].map(([label, description, action]) => (
+            <button key={label as string} role="menuitem" onClick={action as () => void} className="w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50">
+              <span className="block text-sm font-medium text-slate-800">{label as string}</span>
+              <span className="block text-xs text-slate-500">{description as string}</span>
+            </button>
           ))}
+          <div className="my-2 border-t border-slate-100" />
+          <button role="menuitem" onClick={saveToFile} className="w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50">
+            <span className="block text-sm font-medium text-slate-800">Download backup</span>
+            <span className="block text-xs text-slate-500">Save an editable copy to your computer</span>
+          </button>
+          <button role="menuitem" onClick={() => { setShowFloorPlanImport(true); setOpenMenu(null) }} className="w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50">
+            <span className="block text-sm font-medium text-slate-800">Import floor plan image</span>
+            <span className="block text-xs text-slate-500">Trace over an existing map</span>
+          </button>
+        </div>
+      )}
+
+      {openMenu === 'more' && (
+        <div role="menu" className="absolute right-3 top-full mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+          <button role="menuitem" onClick={() => { setShowMode(true); setOpenMenu(null) }} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:hidden">
+            Print view
+          </button>
+          <button role="menuitem" onClick={() => { onToggleTheme(); setOpenMenu(null) }} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Appearance
+            <span className="text-xs font-normal text-slate-400">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          </button>
+          <button role="menuitem" onClick={openHelp} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Help & shortcuts
+            <kbd className="rounded border border-slate-200 px-1.5 py-0.5 text-xs font-normal text-slate-400">?</kbd>
+          </button>
         </div>
       )}
 

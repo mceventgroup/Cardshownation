@@ -17,7 +17,7 @@ import { configureFloorplannerRuntime } from '@floorplanner/lib/runtime'
 import { buildShowInventoryOptions } from '@floorplanner/lib/show-inventory'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
-import LeftSidebar from './LeftSidebar'
+import LeftSidebar, { type FloorplannerSidebarTab } from './LeftSidebar'
 import ShowModeSidebar from './ShowModeSidebar'
 import VendorDrawer from './VendorDrawer'
 import ShowModeVendorList from './ShowModeVendorList'
@@ -124,7 +124,7 @@ export default function EditorShell({
   )
   const [showHelp, setShowHelp] = useState(false)
   const [showFirstRun, setShowFirstRun] = useState(false)
-  const [activeTab, setActiveTab] = useState<'layout' | 'vendors' | 'settings'>('layout')
+  const [activeTab, setActiveTab] = useState<FloorplannerSidebarTab>('tables')
   const [theme, setTheme] = useState<EditorTheme>('light')
 
   useEffect(() => {
@@ -220,7 +220,7 @@ export default function EditorShell({
     setShowHelp(true)
   }, [persistBypass])
 
-  const handleTabChange = useCallback((nextTab: 'layout' | 'vendors' | 'settings') => {
+  const handleTabChange = useCallback((nextTab: FloorplannerSidebarTab) => {
     setActiveTab(nextTab)
   }, [])
 

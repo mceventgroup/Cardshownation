@@ -8,11 +8,11 @@ interface Props {
 }
 
 const STEPS = [
-  'Build the floor outline first in `Layout -> Room Builder`, using `Add Room` for separate spaces and `Add Attached Area` for connected expansions.',
-  'Set grid size and wall setback in `Settings -> Spacing`.',
-  'Add tables with `Place Table` or `Place Row`.',
-  'Use `Ctrl+A` to select all tables and bulk-resize them from the sidebar.',
-  'Import vendors after table labels are in place and match the floor.',
+  { title: 'Shape the room', detail: 'Open Space, set the room size, then add doors and zones.' },
+  { title: 'Set your defaults', detail: 'Open Setup to choose grid spacing, wall setback, and default table size.' },
+  { title: 'Place tables', detail: 'Open Tables and choose Table or Row. Select anything on the canvas to edit it.' },
+  { title: 'Add vendors', detail: 'Open Vendors after table labels are in place, then assign booths from the roster.' },
+  { title: 'Save or print', detail: 'Use Save for cloud layouts, Export for finished files, or Print for show day.' },
 ]
 
 export default function FirstRunModal({ onStart, onOpenHelp }: Props) {
@@ -31,9 +31,15 @@ export default function FirstRunModal({ onStart, onOpenHelp }: Props) {
         <div className="space-y-4 px-6 py-5">
           <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
             <div className="text-sm font-semibold uppercase tracking-wide text-slate-700">Recommended First-Time Flow</div>
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
-              {STEPS.map(step => (
-                <p key={step}>{step}</p>
+            <div className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+              {STEPS.map((step, index) => (
+                <div key={step.title} className="flex gap-3 rounded-xl bg-white px-3 py-2.5 ring-1 ring-slate-200">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{index + 1}</span>
+                  <span>
+                    <span className="block font-semibold text-slate-800">{step.title}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">{step.detail}</span>
+                  </span>
+                </div>
               ))}
             </div>
           </div>
