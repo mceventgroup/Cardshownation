@@ -15,6 +15,7 @@ type GeoipLocation = {
 
 type NearMeButtonProps = {
   isActive: boolean;
+  approximateResultsShown?: boolean;
   radiusMiles?: number;
   align?: "start" | "end";
   label?: string;
@@ -103,6 +104,7 @@ function buildNearbyHref({
 
 export function NearMeButton({
   isActive,
+  approximateResultsShown = false,
   align = "end",
   label = "Near me",
   radiusMiles = DEFAULT_NEARBY_RADIUS,
@@ -238,7 +240,14 @@ export function NearMeButton({
       </button>
       {!isActive && (
         <p className={cn("max-w-xs text-xs", helperTone)}>
-          {locationLabel ? (
+          {approximateResultsShown && locationLabel ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              Showing approximate results near {locationLabel}. Use GPS to refine them.
+            </span>
+          ) : approximateResultsShown ? (
+            "Showing results for your approximate area. Use GPS to refine them."
+          ) : locationLabel ? (
             <span className="inline-flex items-center gap-1">
               <MapPin className="h-3.5 w-3.5 shrink-0" />
               Falls back to approximate results near {locationLabel} if GPS is unavailable.

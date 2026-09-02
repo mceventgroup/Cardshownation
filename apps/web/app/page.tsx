@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ArrowRight, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
 import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { isPurchasingEnabled } from "@/lib/purchasing";
-import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
+import { DEFAULT_NEARBY_RADIUS } from "@/lib/nearby-radius";
+import {
+  formatApproximateLocation,
+  getApproximateRequestLocation,
+} from "@/lib/request-location";
+import { getHomepageDirectoryStats, getNearbyShows, getUpcomingShows } from "@/lib/shows";
 import { US_STATES } from "@/lib/states";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
 import { absoluteSiteUrl } from "@/lib/site-url";
@@ -31,17 +37,42 @@ const HOME_INLINE_AD_SLOT = process.env.NEXT_PUBLIC_AD_SLOT_HOME_INLINE?.trim() 
 
 export default async function HomePage() {
   const floorPlannerAvailable = isPurchasingEnabled();
-  const [portalLink, upcomingShows, stats] = await Promise.all([
+  const approximateLocation = getApproximateRequestLocation(await headers());
+  const showFeedPromise = approximateLocation
+    ? getNearbyShows({
+        lat: approximateLocation.lat,
+        lng: approximateLocation.lng,
+        radiusMiles: DEFAULT_NEARBY_RADIUS,
+        limit: 8,
+      })
+        .then(async (shows) =>
+          shows.length > 0
+            ? { shows, isApproximateNearby: true }
+            : {
+                ...(await getUpcomingShows({ limit: 8 })),
+                isApproximateNearby: false,
+              }
+        )
+    : getUpcomingShows({ limit: 8 }).then((result) => ({
+        ...result,
+        isApproximateNearby: false,
+      }));
+
+  const [portalLink, showFeed, stats] = await Promise.all([
     getPublicPortalLink(),
-    getUpcomingShows({ limit: 8 }).catch((err) => {
-      console.error("[HomePage] getUpcomingShows failed, rendering empty list:", err);
-      return { shows: [], total: 0 };
+    showFeedPromise.catch((err) => {
+      console.error("[HomePage] show feed failed, rendering empty list:", err);
+      return { shows: [], isApproximateNearby: false };
     }),
     getHomepageDirectoryStats().catch((err) => {
       console.error("[HomePage] getHomepageDirectoryStats failed, rendering zeros:", err);
       return { upcomingShows: 0, activeStates: 0, activeOrganizers: 0 };
     }),
   ]);
+  const approximateLocationLabel =
+    showFeed.isApproximateNearby && approximateLocation
+      ? formatApproximateLocation(approximateLocation)
+      : null;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -118,6 +149,7 @@ export default async function HomePage() {
           <div className="mt-4">
             <NearMeButton
               isActive={false}
+              approximateResultsShown={showFeed.isApproximateNearby}
               label="Use my location"
               tone="dark"
               align="start"
@@ -168,7 +200,20 @@ export default async function HomePage() {
       {/* Upcoming shows */}
       <section className="container-wide py-10">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold text-slate-950">Upcoming shows</h2>
+          <div>
+            <h2 className="text-xl font-semibold text-slate-950">
+              {showFeed.isApproximateNearby
+                ? approximateLocationLabel
+                  ? `Upcoming shows near ${approximateLocationLabel}`
+                  : "Upcoming shows near you"
+                : "Upcoming shows"}
+            </h2>
+            {showFeed.isApproximateNearby && (
+              <p className="mt-1 text-xs text-slate-500">
+                Based on your approximate network location within {DEFAULT_NEARBY_RADIUS} miles.
+              </p>
+            )}
+          </div>
           <Link
             href="/card-shows"
             className="text-sm font-semibold text-brand-700 hover:text-brand-800"
@@ -177,7 +222,7 @@ export default async function HomePage() {
           </Link>
         </div>
         <div className="mt-4 flex flex-col gap-2">
-          {upcomingShows.shows.map((show) => (
+          {showFeed.shows.map((show) => (
             <ShowListItem key={show.id} show={show} />
           ))}
         </div>

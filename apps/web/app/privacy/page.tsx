@@ -51,7 +51,7 @@ export default function PrivacyPage() {
       </LegalSection>
       <LegalSection id="sharing" title="5. How information is shared">
         <p>We may share information with providers that help us operate the service, including Vercel for hosting, public flyer storage, and host-provided approximate location; Neon for database hosting; Resend for email delivery and suppression handling; Stripe for payments; Google for optional sign-in and analytics or advertising; and Meta for optional measurement. Providers process information under their own contracts and privacy terms.</p>
-        <p>If browser geolocation is unavailable and you use nearby-show search, we may use approximate city and coordinate headers supplied by our hosting provider. Precise browser location is used only after your browser grants permission.</p>
+        <p>We may use approximate city and coordinate headers supplied by our hosting provider to tailor the initial show list to your general area and as a fallback for nearby-show search. Precise browser location is used only after your browser grants permission.</p>
         <p>We may disclose information when reasonably necessary to comply with law, protect rights or safety, investigate abuse, or complete a merger, financing, acquisition, or transfer of business assets. We do not sell account contact information for money. Some optional advertising or measurement activity may be treated as “sharing,” “targeted advertising,” or a “sale” under certain privacy laws; it remains disabled unless you choose optional cookies.</p>
       </LegalSection>
       <LegalSection id="cookies" title="6. Cookies, analytics, and advertising">
