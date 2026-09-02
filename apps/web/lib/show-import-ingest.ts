@@ -77,6 +77,7 @@ export async function ingestImportedShows(input: {
   submitterEmail: string;
   shows: ImportedShow[];
 }) {
+  const suppressSourceLinks = input.source.toLowerCase() === "tcdb";
   let imported = 0;
   let skipped = 0;
   const errors: string[] = [];
@@ -172,12 +173,12 @@ export async function ingestImportedShows(input: {
             isFree: show.isFree,
             admissionPrice: show.admissionPrice ?? "",
             admissionNotes: show.admissionNotes ?? "",
-            websiteUrl: normalizeExternalUrl(show.websiteUrl),
+            websiteUrl: suppressSourceLinks ? null : normalizeExternalUrl(show.websiteUrl),
             facebookUrl: normalizeExternalUrl(show.facebookUrl),
             organizerName: show.organizerName ?? "",
             organizerEmail: "",
             source: input.source,
-            sourceUrl: normalizeExternalUrl(show.sourceUrl) ?? "",
+            sourceUrl: suppressSourceLinks ? "" : normalizeExternalUrl(show.sourceUrl) ?? "",
             venueId,
             slug,
           },

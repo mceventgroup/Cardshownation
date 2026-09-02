@@ -28,7 +28,8 @@ test("parseTcdbCalendarHtml extracts shows from TCDB list markup", () => {
   assert.equal(shows[0]?.city, "Tulsa");
   assert.equal(shows[0]?.state, "OK");
   assert.equal(shows[0]?.startDate.toISOString().slice(0, 10), "2026-06-19");
-  assert.equal(shows[0]?.websiteUrl, "https://www.tcdb.com/CardShows.cfm?MODE=VIEW&ID=26940");
+  assert.equal(shows[0]?.websiteUrl, null);
+  assert.equal(shows[0]?.sourceUrl, null);
   assert.deepEqual(shows[1]?.categories, ["Pokemon"]);
   assert.deepEqual(shows[2]?.categories, ["Sports Cards"]);
 });

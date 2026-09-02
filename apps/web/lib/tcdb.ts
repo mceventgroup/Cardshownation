@@ -195,7 +195,7 @@ export function parseTcdbCalendarHtml(html: string, fallbackState: string): Pars
       continue;
     }
 
-    const [, externalId, href, title] = markerMatch;
+    const [, externalId, , title] = markerMatch;
     const contextLines = [
       line.replace(markerMatch[0], title).trim(),
       lines[index + 1] ?? "",
@@ -209,7 +209,6 @@ export function parseTcdbCalendarHtml(html: string, fallbackState: string): Pars
     }
 
     const { startTimeLabel, endTimeLabel } = extractTimeLabels(contextText);
-    const sourceUrl = href.startsWith("http") ? href : `${TCDB_BASE_URL}/${href.replace(/^\/+/, "")}`;
     const descriptionParts = [...contextLines];
     if (startTimeLabel && endTimeLabel) {
       descriptionParts.push(`Hours: ${startTimeLabel} - ${endTimeLabel}`);
@@ -230,11 +229,11 @@ export function parseTcdbCalendarHtml(html: string, fallbackState: string): Pars
       isFree: false,
       admissionPrice: null,
       admissionNotes: null,
-      websiteUrl: sourceUrl,
+      websiteUrl: null,
       facebookUrl: null,
       categories: inferCategories(title),
       organizerName: null,
-      sourceUrl,
+      sourceUrl: null,
     });
   }
 
