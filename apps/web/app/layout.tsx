@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 import { cookies, headers } from "next/headers";
@@ -170,6 +171,7 @@ export default async function RootLayout({
           {children}
         </AppChrome>
         <CookieConsent initialConsent={consent} globalPrivacyControl={globalPrivacyControl} />
+        {allowOptional && <Analytics />}
       </body>
     </html>
   );

@@ -27,7 +27,7 @@ export default function CookiePolicyPage() {
         </LegalList>
       </LegalSection>
       <LegalSection id="optional" title="3. Optional analytics and advertising">
-        <p>If you select “Allow analytics,” the site may load Google Analytics, Google advertising tools or AdSense, and the Meta Pixel. These providers may receive identifiers, IP address, device and browser information, page visits, referral information, and interaction data according to their own policies.</p>
+        <p>If you select “Allow analytics,” the site may load Vercel Web Analytics, Google Analytics, Google advertising tools or AdSense, and the Meta Pixel. These providers may receive identifiers, IP address, device and browser information, page visits, referral information, and interaction data according to their own policies. Vercel Web Analytics is used to report anonymized page, referrer, country, and device metrics without analytics cookies.</p>
         <p>Optional tools help us understand traffic, improve the directory, measure promotion, and support advertising. They remain off when no choice has been made or when you select “Essential only.”</p>
       </LegalSection>
       <LegalSection id="choices" title="4. Manage your choices">
