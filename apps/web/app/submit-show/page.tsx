@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Check } from "lucide-react";
+import { SubmitShowForm, type SubmitShowFormState } from "@/components/submit/submit-show-form";
 import { SubmitShowFormSteps } from "@/components/submit/submit-show-form-steps";
-import { rethrowIfRedirectError } from "@/lib/next-control-flow";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getRequestIp } from "@/lib/request-ip";
 import { isValidDateInput, listDateRange } from "@/lib/daily-schedule";
@@ -96,7 +95,10 @@ function readOptionalString(formData: FormData, key: string, maxLength: number) 
   return trimmed;
 }
 
-async function handleSubmission(formData: FormData) {
+async function handleSubmission(
+  _state: SubmitShowFormState,
+  formData: FormData
+): Promise<SubmitShowFormState> {
   "use server";
   const honeypot = formData.get("companyWebsite");
   if (typeof honeypot === "string" && honeypot.trim()) {
@@ -112,7 +114,10 @@ async function handleSubmission(formData: FormData) {
   });
 
   if (!rateLimit.allowed) {
-    redirect("/submit-show?error=rate");
+    return {
+      code: "rate",
+      message: "Too many submissions from this connection. Please wait an hour and try again.",
+    };
   }
   const submittedEmail = readRequiredString(formData, "submitterEmail", 320).toLowerCase();
   const emailRateLimit = await consumeRateLimit("submit-show-email", hashOpaqueToken(submittedEmail), {
@@ -120,7 +125,12 @@ async function handleSubmission(formData: FormData) {
     maxAttempts: 3,
     windowMs: 24 * 60 * 60 * 1000,
   });
-  if (!emailRateLimit.allowed) redirect("/submit-show?error=rate");
+  if (!emailRateLimit.allowed) {
+    return {
+      code: "rate",
+      message: "This email has reached today’s submission limit. Please try again tomorrow.",
+    };
+  }
 
   try {
     const submitterEmail = submittedEmail;
@@ -156,7 +166,10 @@ async function handleSubmission(formData: FormData) {
       (facebookUrlInput && !facebookUrl) ||
       (publicPromoterEmailInput && (!publicPromoterEmailConsent || !isValidEmail(publicPromoterEmailInput)))
     ) {
-      redirect("/submit-show?error=validation");
+      return {
+        code: "validation",
+        message: "Please check the required fields and use valid email, date, and website values. Your entries are still here.",
+      };
     }
 
     const submitterName = submitterNameInput ?? deriveSubmitterName(submitterEmail);
@@ -196,14 +209,22 @@ async function handleSubmission(formData: FormData) {
     });
 
     if (result.status === "BLOCKED") {
-      redirect("/submit-show?error=blocked");
+      return {
+        code: "blocked",
+        message: "We cannot accept submissions from this organizer. Contact Card Show Nation if you believe this is an error.",
+      };
     }
     if (result.status === "DUPLICATE") {
-      redirect("/submit-show?error=duplicate");
+      return {
+        code: "duplicate",
+        message: "This show appears to be listed already, so you do not need to enter it again.",
+      };
     }
   } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect("/submit-show?error=validation");
+    return {
+      code: "validation",
+      message: "We couldn’t submit the show. Please check the details and try again—your entries are still here.",
+    };
   }
 
   redirect("/submit-show/thank-you");
@@ -261,6 +282,9 @@ export default async function SubmitShowPage({
           : sp.error === "blocked"
             ? "We cannot accept submissions from this organizer. Contact Card Show Nation if you believe this is an error."
         : null;
+  const initialState: SubmitShowFormState = sp.error && errorMessage
+    ? { code: sp.error as SubmitShowFormState["code"], message: errorMessage }
+    : {};
 
   return (
     <div className="container-narrow py-6 sm:py-10">
@@ -289,14 +313,9 @@ export default async function SubmitShowPage({
             No account needed
           </li>
         </ul>
-        {errorMessage && (
-          <p role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        )}
       </div>
 
-      <form action={handleSubmission} data-analytics-event="submit_show_attempt" className="mt-8 space-y-8">
+      <SubmitShowForm action={handleSubmission} initialState={initialState}>
         <SubmitShowFormSteps
           categories={SHOW_CATEGORIES}
           inputClass={inputClass}
@@ -304,18 +323,7 @@ export default async function SubmitShowPage({
           timeOptions={timeOptions}
         />
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm leading-6 text-slate-500">
-            By submitting, you confirm you are authorized to publish these details and agree to our <Link href="/terms" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Terms</Link>. See how we use submission information in our <Link href="/privacy" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Privacy Policy</Link>.
-          </p>
-          <button
-            type="submit"
-            className="inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
-          >
-            Submit show &middot; Free
-          </button>
-        </div>
-      </form>
+      </SubmitShowForm>
     </div>
   );
 }
