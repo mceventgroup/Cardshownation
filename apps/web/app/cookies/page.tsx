@@ -12,27 +12,29 @@ const sections = [
 
 export default function CookiePolicyPage() {
   return (
-    <LegalPage title="Cookie Policy" summary="This policy describes cookies and similar technologies used by Card Show Nation and explains how to control optional use." updated="September 1, 2026" currentPath="/cookies" sections={sections}>
+    <LegalPage title="Cookie Policy" summary="This policy describes cookies and similar technologies used by Card Show Nation and explains how to control optional use." updated="September 2, 2026" currentPath="/cookies" sections={sections}>
       <LegalSection id="about" title="1. About cookies">
         <p>Cookies are small text files a website stores in your browser. Similar technologies, such as pixels and browser storage, can remember settings, secure sessions, measure visits, or support advertising. Some are necessary for requested features; others are optional.</p>
       </LegalSection>
       <LegalSection id="essential" title="2. Essential technologies">
         <p>Essential technologies operate without optional consent because they support core features you request or protect the service. They may include:</p>
         <LegalList>
-          <li>Account, admin, moderator, promoter, and Floor Planner session cookies.</li>
+          <li>Member sessions last up to 30 days; promoter and moderator sessions up to 14 days; and admin and Floor Planner administrative sessions up to 12 hours.</li>
           <li>Security, rate-limiting, email-verification, password-reset, and Google sign-in handoff data.</li>
           <li>Stripe checkout or billing-portal handoffs.</li>
-          <li>The <code className="rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-800">csn_cookie_consent</code> cookie, which remembers your privacy choice for up to one year.</li>
+          <li>The <code className="rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-800">csn_cookie_consent</code> cookie remembers your privacy choice for up to six months.</li>
+          <li>The <code className="rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-800">csn_preferred_state</code> cookie remembers only a two-letter state preference for up to six months. For signed-in members, the same selection also updates the home state in the account profile.</li>
+          <li>Nearby search temporarily keeps a rounded device location in the current browser tab for no more than 15 minutes. It is not a cookie, is not saved to an account, and is cleared when the nearby search is cleared or the tab session ends.</li>
           <li>Device-local Floor Planner layouts and preferences in local storage, plus uploaded background images stored in the browser&apos;s IndexedDB database.</li>
         </LegalList>
       </LegalSection>
       <LegalSection id="optional" title="3. Optional analytics and advertising">
         <p>If you select “Allow optional cookies,” the site may load Vercel Web Analytics, Google Analytics, Google advertising tools or AdSense, and the Meta Pixel. These providers may receive identifiers, IP address, device and browser information, page visits, referral information, and interaction data according to their own policies. Vercel Web Analytics is used to report anonymized page, referrer, country, and device metrics without analytics cookies.</p>
-        <p>Optional tools help us understand traffic, improve the directory, measure promotion, and support advertising. They remain off when no choice has been made or when you select “Essential only.”</p>
+        <p>Google Analytics cookies are configured to expire no later than six months after they are first set and not to renew on each visit. Google advertising and Meta may use additional optional cookies under their current provider settings. Optional tools remain off when no choice has been made, after the six-month choice expires, or when you select “Essential only.” Card Show Nation does not send state-directory search text, nearby coordinates, or URL query details to these tools.</p>
       </LegalSection>
       <LegalSection id="choices" title="4. Manage your choices">
-        <p>Use the <strong>Cookie settings</strong> button at the lower-left edge of any standard site page to reopen the consent panel. Choosing “Essential only” is presented alongside “Allow optional cookies” and does not prevent essential account or security functions.</p>
-        <p>If your browser sends Global Privacy Control, optional analytics and advertising remain disabled and the settings panel confirms that the signal was honored. The signal applies to that browser or device.</p>
+        <p>Use the <strong>Cookie settings</strong> button at the lower-left edge of any standard site page to reopen the consent panel. Choosing “Essential only” disables optional tools and removes known optional Google and Meta cookies accessible from this site. It does not prevent essential account or security functions.</p>
+        <p>If your browser sends Global Privacy Control, optional analytics and advertising remain disabled, a previous optional choice is changed to essential-only, and known optional cookies accessible from this site are removed. The signal applies to that browser or device.</p>
         <p>You may also block or delete cookies through your browser. Blocking essential cookies can prevent sign-in, billing, saved privacy choices, or other requested features. Browser privacy controls may not remove information already processed.</p>
         <p>For more information about personal information and privacy requests, see the <Link href="/privacy" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Privacy Policy</Link>.</p>
       </LegalSection>

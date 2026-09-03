@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, LocateFixed, X } from "lucide-react";
 import { DEFAULT_NEARBY_RADIUS, NEARBY_RADIUS_OPTIONS, normalizeNearbyRadius } from "@/lib/nearby-radius";
+import { NEARBY_LOCATION_STORAGE_KEY } from "@/lib/nearby-location";
 import { cn } from "@/lib/utils";
 
 type NearMeButtonProps = {
@@ -15,24 +16,16 @@ type NearMeButtonProps = {
 };
 
 function buildNearbyHref({
-  lat,
-  lng,
   radiusMiles,
-  source,
   view,
 }: {
-  lat: number;
-  lng: number;
   radiusMiles: number;
-  source: "gps";
   view?: string | null;
 }) {
   const params = new URLSearchParams();
 
-  params.set("lat", lat.toFixed(5));
-  params.set("lng", lng.toFixed(5));
+  params.set("nearby", "1");
   params.set("radius", String(radiusMiles));
-  params.set("source", source);
 
   if (view === "grid") {
     params.set("view", "grid");
@@ -58,10 +51,17 @@ export function NearMeButton({
     tone === "dark" ? "text-slate-400" : "text-slate-500";
   const errorTone =
     tone === "dark" ? "text-rose-300" : "text-red-500";
-  const selectedRadiusMiles = normalizeNearbyRadius(radiusMiles);
+  const [selectedRadiusMiles, setSelectedRadiusMiles] = useState(() =>
+    normalizeNearbyRadius(radiusMiles),
+  );
 
   function handleClick() {
     if (isActive) {
+      try {
+        window.sessionStorage.removeItem(NEARBY_LOCATION_STORAGE_KEY);
+      } catch {
+        // The location will still expire automatically if storage access is blocked.
+      }
       router.push(view === "grid" ? "/card-shows?view=grid" : "/card-shows");
       return;
     }
@@ -77,15 +77,22 @@ export function NearMeButton({
 
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        router.push(
-          buildNearbyHref({
-            lat: coords.latitude,
-            lng: coords.longitude,
-            radiusMiles,
-            source: "gps",
-            view,
-          })
-        );
+        try {
+          window.sessionStorage.setItem(
+            NEARBY_LOCATION_STORAGE_KEY,
+            JSON.stringify({
+              lat: Math.round(coords.latitude * 100) / 100,
+              lng: Math.round(coords.longitude * 100) / 100,
+              createdAt: Date.now(),
+            }),
+          );
+        } catch {
+          setError("Your browser blocked temporary location use. Choose your state instead.");
+          setLoading(false);
+          return;
+        }
+
+        router.push(buildNearbyHref({ radiusMiles: selectedRadiusMiles, view }));
         setLoading(false);
       },
       (positionError) => {
@@ -137,7 +144,7 @@ export function NearMeButton({
       </button>
       {!isActive && (
         <p className={cn("max-w-xs text-xs", helperTone)}>
-          Uses precise device GPS, not your internet provider’s location. Your browser may ask permission.
+          Uses device GPS, rounds it before sending, and keeps it only in this tab for up to 15 minutes.
         </p>
       )}
       {error && <p className={cn("max-w-xs text-xs", errorTone)}>{error}</p>}
@@ -148,14 +155,13 @@ export function NearMeButton({
           disabled={loading}
           onChange={(event) => {
             const nextRadius = normalizeNearbyRadius(event.target.value);
-            const params = new URLSearchParams(searchParams.toString());
+            setSelectedRadiusMiles(nextRadius);
 
             if (!isActive) {
-              params.set("radius", String(nextRadius));
-              router.replace(`/card-shows?${params.toString()}`);
               return;
             }
 
+            const params = new URLSearchParams(searchParams.toString());
             params.set("radius", String(nextRadius));
             router.push(`/card-shows?${params.toString()}`);
           }}

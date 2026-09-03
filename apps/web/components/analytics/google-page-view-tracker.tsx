@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 declare global {
   interface Window {
@@ -11,11 +11,9 @@ declare global {
 
 export function GooglePageViewTracker() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    const query = searchParams.toString();
-    const pagePath = query ? `${pathname}?${query}` : pathname;
+    const pageLocation = `${window.location.origin}${pathname}`;
     let sent = false;
 
     const sendPageView = () => {
@@ -23,8 +21,8 @@ export function GooglePageViewTracker() {
 
       sent = true;
       window.gtag("event", "page_view", {
-        page_path: pagePath,
-        page_location: window.location.href,
+        page_path: pathname,
+        page_location: pageLocation,
         page_title: document.title,
       });
     };
@@ -37,7 +35,7 @@ export function GooglePageViewTracker() {
       window.clearInterval(retry);
       window.clearTimeout(stopRetry);
     };
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   return null;
 }

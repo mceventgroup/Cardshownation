@@ -110,17 +110,17 @@ export function SiteEventTracker({
       const action = form.getAttribute("action") ?? "";
       if (action === "/card-shows") {
         const formData = new FormData(form);
-        const searchTerm = String(formData.get("q") ?? "").trim();
+        const hasTextQuery = Boolean(String(formData.get("q") ?? "").trim());
         const state = String(formData.get("state") ?? "").trim();
         const category = String(formData.get("category") ?? "").trim();
         googleEvent("search", {
-          search_term: searchTerm || state || category || "all shows",
+          search_term: hasTextQuery ? "directory text search" : state || category || "all shows",
           state: state || undefined,
           category: category || undefined,
           free_only: formData.get("free") === "1",
         });
         window.fbq?.("track", "Search", {
-          search_string: searchTerm || state || category || "all shows",
+          search_string: hasTextQuery ? "directory text search" : state || category || "all shows",
         });
       }
 

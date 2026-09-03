@@ -4,6 +4,32 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 type Consent = "essential" | "optional";
+const CONSENT_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
+const OPTIONAL_COOKIE_PATTERN = /^(?:_ga(?:_|$)|_gid$|_gat(?:_|$)|_gcl_|_fbp$|_fbc$)/;
+
+function cookieSecuritySuffix() {
+  return window.location.protocol === "https:" ? "; Secure" : "";
+}
+
+function writeConsent(value: Consent) {
+  document.cookie = `csn_cookie_consent=${value}; Path=/; Max-Age=${CONSENT_MAX_AGE_SECONDS}; SameSite=Lax${cookieSecuritySuffix()}`;
+}
+
+function clearKnownOptionalCookies() {
+  const names = document.cookie
+    .split(";")
+    .map((cookie) => cookie.split("=")[0]?.trim())
+    .filter((name): name is string => Boolean(name && OPTIONAL_COOKIE_PATTERN.test(name)));
+  const hostname = window.location.hostname;
+  const registrableDomain = hostname.split(".").slice(-2).join(".");
+  const domains = hostname === "localhost" ? [null] : [null, hostname, `.${registrableDomain}`];
+
+  for (const name of names) {
+    for (const domain of domains) {
+      document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${domain ? `; Domain=${domain}` : ""}${cookieSecuritySuffix()}`;
+    }
+  }
+}
 
 export function CookieConsent({ initialConsent, globalPrivacyControl }: { initialConsent: Consent | null; globalPrivacyControl: boolean }) {
   const [visible, setVisible] = useState(initialConsent === null);
@@ -13,7 +39,11 @@ export function CookieConsent({ initialConsent, globalPrivacyControl }: { initia
 
   useEffect(() => {
     setHydrated(true);
-  }, []);
+    if (initialConsent !== "optional" || globalPrivacyControl) {
+      clearKnownOptionalCookies();
+      if (initialConsent === "optional") writeConsent("essential");
+    }
+  }, [globalPrivacyControl, initialConsent]);
 
   if (!visible) {
     return <button ref={settingsButtonRef} type="button" aria-haspopup="dialog" aria-controls="cookie-preferences-dialog" onClick={() => { setVisible(true); window.requestAnimationFrame(() => dialogRef.current?.focus()); }} className="fixed bottom-3 left-3 z-[90] rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow hover:bg-slate-50">Cookie settings</button>;
@@ -24,8 +54,8 @@ export function CookieConsent({ initialConsent, globalPrivacyControl }: { initia
   }
   function choose(value: Consent) {
     if (value === "optional" && globalPrivacyControl) return;
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    document.cookie = `csn_cookie_consent=${value}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+    if (value === "essential") clearKnownOptionalCookies();
+    writeConsent(value);
     closePanel();
     if (initialConsent !== null || value === "optional") window.location.reload();
   }

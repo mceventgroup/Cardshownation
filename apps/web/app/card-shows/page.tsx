@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LocateFixed, Search } from "lucide-react";
+import { redirect } from "next/navigation";
+import { Search } from "lucide-react";
 import { ShowCard } from "@/components/shows/show-card";
 import { ShowListItem } from "@/components/shows/show-list-item";
 import { NearMeButton } from "@/components/shows/near-me-button";
+import { NearbyShowResults } from "@/components/shows/nearby-show-results";
 import { ViewToggle } from "@/components/shows/view-toggle";
 import { DEFAULT_NEARBY_RADIUS, normalizeNearbyRadius } from "@/lib/nearby-radius";
-import { SHOW_CATEGORIES, getUpcomingShows, getNearbyShows } from "@/lib/shows";
+import { SHOW_CATEGORIES, getUpcomingShows } from "@/lib/shows";
 import { US_STATES, getStateByCode } from "@/lib/states";
 import { StateDirectory } from "@/components/shows/state-directory";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
@@ -22,11 +24,10 @@ type SearchParams = {
   free?: string;
   q?: string;
   page?: string;
+  nearby?: string;
   lat?: string;
   lng?: string;
   radius?: string;
-  source?: string;
-  near?: string;
   view?: string;
 };
 
@@ -73,23 +74,23 @@ export default async function CardShowsPage({
 }) {
   const sp = await searchParams;
 
-  const isNearMe = Boolean(sp.lat && sp.lng);
-  const lat = parseFloat(sp.lat ?? "");
-  const lng = parseFloat(sp.lng ?? "");
+  if (sp.lat || sp.lng) {
+    redirect("/card-shows");
+  }
+
+  const isNearMe = sp.nearby === "1";
   const radiusMiles = normalizeNearbyRadius(sp.radius ?? String(DEFAULT_NEARBY_RADIUS));
-  const locationSource = sp.source === "gps" || sp.source === "ip" ? sp.source : null;
-  const nearLabel = sp.near?.trim() ? sp.near.trim().slice(0, 80) : null;
 
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
   const limit = 18;
   const offset = (page - 1) * limit;
 
-  let shows: Awaited<ReturnType<typeof getNearbyShows>>;
+  let shows: Awaited<ReturnType<typeof getUpcomingShows>>["shows"];
   let total: number;
 
-  if (isNearMe && !isNaN(lat) && !isNaN(lng)) {
-    shows = await getNearbyShows({ lat, lng, radiusMiles });
-    total = shows.length;
+  if (isNearMe) {
+    shows = [];
+    total = 0;
   } else {
     const result = await getUpcomingShows({
       state: sp.state,
@@ -108,20 +109,6 @@ export default async function CardShowsPage({
   const hasFilters = Boolean(sp.state || sp.city || sp.category || sp.free || sp.q || isNearMe);
   const stateName = getStateByCode(sp.state)?.name;
   const view = sp.view === "grid" ? "grid" : "list";
-  const nearMeDescription =
-    locationSource === "gps"
-      ? "Using your device location, sorted by upcoming date."
-      : locationSource === "ip" && nearLabel
-        ? `Using an approximate location near ${nearLabel}, sorted by upcoming date.`
-        : locationSource === "ip"
-          ? "Using an approximate network location, sorted by upcoming date."
-          : "Using your selected location, sorted by upcoming date.";
-  const locationSourceLabel =
-    locationSource === "gps"
-      ? "Precise GPS"
-      : nearLabel
-        ? `Approx near ${nearLabel}`
-        : "Approximate location";
 
   const collectionJsonLd = !hasFilters
     ? {
@@ -162,8 +149,8 @@ export default async function CardShowsPage({
           {stateName ? `${stateName} card shows` : "Browse upcoming card shows"}
         </h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
-          Search by show name, city, promoter, or venue. Use Near me to sort by
-          distance with GPS first and approximate IP lookup as the fallback.
+          Search by show name, city, promoter, or venue. Nearby search uses a rounded
+          device location only after you choose it.
         </p>
 
         <form action="/card-shows" method="GET" className="mt-6 space-y-3">
@@ -259,28 +246,19 @@ export default async function CardShowsPage({
 
       {!hasFilters && <StateDirectory states={US_STATES} />}
 
+      {isNearMe ? (
+        <NearbyShowResults radiusMiles={radiusMiles} view={view} />
+      ) : (
       <section className="mt-10">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-slate-950 sm:text-2xl">
-              {isNearMe
-                ? `${total} show${total === 1 ? "" : "s"} within ${radiusMiles} mi`
-                : `${total.toLocaleString()} upcoming show${total === 1 ? "" : "s"}`}
+              {`${total.toLocaleString()} upcoming show${total === 1 ? "" : "s"}`}
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 sm:mt-2">
               <p className="text-xs text-slate-500 sm:text-sm">
-                {isNearMe
-                  ? nearMeDescription
-                  : stateName
-                    ? `Results for ${stateName}.`
-                    : "Card Show Nation directory."}
+                {stateName ? `Results for ${stateName}.` : "Card Show Nation directory."}
               </p>
-              {isNearMe && locationSource && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700">
-                  <LocateFixed className="h-3 w-3" />
-                  {locationSourceLabel}
-                </span>
-              )}
             </div>
           </div>
           <ViewToggle current={view} />
@@ -289,12 +267,10 @@ export default async function CardShowsPage({
         {shows.length === 0 ? (
           <div className="mt-6 rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center">
             <p className="text-lg font-semibold text-slate-900">
-              {isNearMe ? `No shows found within ${radiusMiles} miles.` : "No shows match those filters."}
+              No shows match those filters.
             </p>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              {isNearMe
-                ? "Try a larger radius or browse shows by state."
-                : "Try broadening the search, removing a category, or browsing a state page."}
+              Try broadening the search, removing a category, or browsing a state page.
             </p>
           </div>
         ) : view === "list" ? (
@@ -311,6 +287,7 @@ export default async function CardShowsPage({
           </div>
         )}
       </section>
+      )}
 
       {!isNearMe && totalPages > 1 && (
         <div className="mt-10 flex items-center justify-center gap-3">

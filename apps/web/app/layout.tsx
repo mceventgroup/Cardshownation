@@ -107,8 +107,14 @@ export default async function RootLayout({
                 function gtag(){dataLayer.push(arguments);}
                 window.gtag = gtag;
                 gtag('js', new Date());
+                gtag('set', {
+                  cookie_expires: 15552000,
+                  cookie_update: false,
+                  allow_google_signals: false,
+                  allow_ad_personalization_signals: false
+                });
                 ${GA_MEASUREMENT_ID ? `gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: false });` : ""}
-                ${GOOGLE_ADS_ID ? `gtag('config', '${GOOGLE_ADS_ID}');` : ""}
+                ${GOOGLE_ADS_ID ? `gtag('config', '${GOOGLE_ADS_ID}', { allow_ad_personalization_signals: false });` : ""}
               `}
             </Script>
           </>

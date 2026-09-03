@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { ArrowRight, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
@@ -8,8 +9,10 @@ import { HomeStatePicker } from "@/components/shows/home-state-picker";
 import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { isPurchasingEnabled } from "@/lib/purchasing";
+import { PREFERRED_STATE_COOKIE_NAME } from "@/lib/preferred-state";
 import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
-import { US_STATES } from "@/lib/states";
+import { getStateByCode, US_STATES } from "@/lib/states";
+import { getUserSession } from "@/lib/user-auth";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
 import { absoluteSiteUrl } from "@/lib/site-url";
 
@@ -33,7 +36,7 @@ const HOME_INLINE_AD_SLOT = process.env.NEXT_PUBLIC_AD_SLOT_HOME_INLINE?.trim() 
 export default async function HomePage() {
   const floorPlannerAvailable = isPurchasingEnabled();
 
-  const [portalLink, showFeed, stats] = await Promise.all([
+  const [portalLink, showFeed, stats, cookieStore, userSession] = await Promise.all([
     getPublicPortalLink(),
     getUpcomingShows({ limit: 8 }).catch((err) => {
       console.error("[HomePage] show feed failed, rendering empty list:", err);
@@ -43,7 +46,12 @@ export default async function HomePage() {
       console.error("[HomePage] getHomepageDirectoryStats failed, rendering zeros:", err);
       return { upcomingShows: 0, activeStates: 0, activeOrganizers: 0 };
     }),
+    cookies(),
+    getUserSession().catch(() => null),
   ]);
+  const accountState = getStateByCode(userSession?.user.state);
+  const browserState = getStateByCode(cookieStore.get(PREFERRED_STATE_COOKIE_NAME)?.value);
+  const preferredState = accountState ?? browserState;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -266,7 +274,11 @@ export default async function HomePage() {
             Full directory
           </Link>
         </div>
-        <HomeStatePicker states={US_STATES} />
+        <HomeStatePicker
+          states={US_STATES}
+          preferredState={preferredState}
+          savedToAccount={Boolean(accountState)}
+        />
 
         <details className="group mt-3 rounded-2xl border border-slate-200 bg-white">
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700 marker:hidden hover:text-brand-700">
