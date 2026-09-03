@@ -1,87 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, LocateFixed, MapPin, X } from "lucide-react";
+import { Loader2, LocateFixed, X } from "lucide-react";
 import { DEFAULT_NEARBY_RADIUS, NEARBY_RADIUS_OPTIONS, normalizeNearbyRadius } from "@/lib/nearby-radius";
 import { cn } from "@/lib/utils";
 
-type GeoipLocation = {
-  lat: number;
-  lng: number;
-  city: string | null;
-  region: string | null;
-};
-
 type NearMeButtonProps = {
   isActive: boolean;
-  approximateResultsShown?: boolean;
   radiusMiles?: number;
   align?: "start" | "end";
   label?: string;
   tone?: "light" | "dark";
 };
 
-function toFiniteNumber(value: unknown) {
-  const number = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function parseGeoipLocation(value: unknown): GeoipLocation | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  const lat = toFiniteNumber(candidate.lat);
-  const lng = toFiniteNumber(candidate.lng);
-
-  if (lat === null || lng === null) {
-    return null;
-  }
-
-  return {
-    lat,
-    lng,
-    city: typeof candidate.city === "string" ? candidate.city : null,
-    region: typeof candidate.region === "string" ? candidate.region : null,
-  };
-}
-
-async function fetchIpLocation(signal?: AbortSignal): Promise<GeoipLocation | null> {
-  const response = await fetch("/api/geoip", {
-    headers: { accept: "application/json" },
-    signal,
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  return parseGeoipLocation(await response.json());
-}
-
-function formatLocationLabel(location: GeoipLocation | null) {
-  if (!location) {
-    return null;
-  }
-
-  return [location.city, location.region].filter(Boolean).join(", ") || null;
-}
-
 function buildNearbyHref({
   lat,
   lng,
-  near,
   radiusMiles,
   source,
   view,
 }: {
   lat: number;
   lng: number;
-  near?: string | null;
   radiusMiles: number;
-  source: "gps" | "ip";
+  source: "gps";
   view?: string | null;
 }) {
   const params = new URLSearchParams();
@@ -90,10 +33,6 @@ function buildNearbyHref({
   params.set("lng", lng.toFixed(5));
   params.set("radius", String(radiusMiles));
   params.set("source", source);
-
-  if (near) {
-    params.set("near", near);
-  }
 
   if (view === "grid") {
     params.set("view", "grid");
@@ -104,7 +43,6 @@ function buildNearbyHref({
 
 export function NearMeButton({
   isActive,
-  approximateResultsShown = false,
   align = "end",
   label = "Near me",
   radiusMiles = DEFAULT_NEARBY_RADIUS,
@@ -114,64 +52,13 @@ export function NearMeButton({
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ipLocation, setIpLocation] = useState<GeoipLocation | null>(null);
 
-  const locationLabel = formatLocationLabel(ipLocation);
   const view = searchParams.get("view");
   const helperTone =
     tone === "dark" ? "text-slate-400" : "text-slate-500";
   const errorTone =
     tone === "dark" ? "text-rose-300" : "text-red-500";
   const selectedRadiusMiles = normalizeNearbyRadius(radiusMiles);
-
-  useEffect(() => {
-    if (isActive || ipLocation) {
-      return;
-    }
-
-    const controller = new AbortController();
-
-    void fetchIpLocation(controller.signal)
-      .then((location) => {
-        if (location) {
-          setIpLocation(location);
-        }
-      })
-      .catch((err) => {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          return;
-        }
-      });
-
-    return () => controller.abort();
-  }, [ipLocation, isActive]);
-
-  async function navigateWithIp() {
-    try {
-      const location = ipLocation ?? (await fetchIpLocation());
-
-      if (!location) {
-        setError("Could not determine your location. Search by city or state instead.");
-        setLoading(false);
-        return;
-      }
-
-      setIpLocation(location);
-      router.push(
-        buildNearbyHref({
-          lat: location.lat,
-          lng: location.lng,
-          near: formatLocationLabel(location),
-          radiusMiles,
-          source: "ip",
-          view,
-        })
-      );
-    } catch {
-      setError("Could not determine your location. Search by city or state instead.");
-      setLoading(false);
-    }
-  }
 
   function handleClick() {
     if (isActive) {
@@ -183,7 +70,8 @@ export function NearMeButton({
     setError(null);
 
     if (!navigator?.geolocation) {
-      void navigateWithIp();
+      setError("Precise location is not supported on this device. Choose your state instead.");
+      setLoading(false);
       return;
     }
 
@@ -200,8 +88,17 @@ export function NearMeButton({
         );
         setLoading(false);
       },
-      () => void navigateWithIp(),
-      { timeout: 8000 }
+      (positionError) => {
+        setError(
+          positionError.code === positionError.PERMISSION_DENIED
+            ? "Location access was denied. Allow location access or choose your state instead."
+            : positionError.code === positionError.TIMEOUT
+              ? "Precise location timed out. Try again or choose your state instead."
+              : "Precise location is unavailable. Try again or choose your state instead."
+        );
+        setLoading(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 300_000, timeout: 12_000 }
     );
   }
 
@@ -240,21 +137,7 @@ export function NearMeButton({
       </button>
       {!isActive && (
         <p className={cn("max-w-xs text-xs", helperTone)}>
-          {approximateResultsShown && locationLabel ? (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
-              Showing approximate results near {locationLabel}. Use GPS to refine them.
-            </span>
-          ) : approximateResultsShown ? (
-            "Showing results for your approximate area. Use GPS to refine them."
-          ) : locationLabel ? (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
-              Falls back to approximate results near {locationLabel} if GPS is unavailable.
-            </span>
-          ) : (
-            "Uses GPS first. Falls back to an approximate network location if needed."
-          )}
+          Uses precise device GPS, not your internet provider’s location. Your browser may ask permission.
         </p>
       )}
       {error && <p className={cn("max-w-xs text-xs", errorTone)}>{error}</p>}

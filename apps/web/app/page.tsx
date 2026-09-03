@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { ArrowRight, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
@@ -9,13 +8,8 @@ import { HomeStatePicker } from "@/components/shows/home-state-picker";
 import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { isPurchasingEnabled } from "@/lib/purchasing";
-import { DEFAULT_NEARBY_RADIUS } from "@/lib/nearby-radius";
-import {
-  formatApproximateLocation,
-  getApproximateRequestLocation,
-} from "@/lib/request-location";
-import { getHomepageDirectoryStats, getNearbyShows, getUpcomingShows } from "@/lib/shows";
-import { getStateByCode, US_STATES } from "@/lib/states";
+import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
+import { US_STATES } from "@/lib/states";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
 import { absoluteSiteUrl } from "@/lib/site-url";
 
@@ -38,43 +32,18 @@ const HOME_INLINE_AD_SLOT = process.env.NEXT_PUBLIC_AD_SLOT_HOME_INLINE?.trim() 
 
 export default async function HomePage() {
   const floorPlannerAvailable = isPurchasingEnabled();
-  const approximateLocation = getApproximateRequestLocation(await headers());
-  const showFeedPromise = approximateLocation
-    ? getNearbyShows({
-        lat: approximateLocation.lat,
-        lng: approximateLocation.lng,
-        radiusMiles: DEFAULT_NEARBY_RADIUS,
-        limit: 8,
-      })
-        .then(async (shows) =>
-          shows.length > 0
-            ? { shows, isApproximateNearby: true }
-            : {
-                ...(await getUpcomingShows({ limit: 8 })),
-                isApproximateNearby: false,
-              }
-        )
-    : getUpcomingShows({ limit: 8 }).then((result) => ({
-        ...result,
-        isApproximateNearby: false,
-      }));
 
   const [portalLink, showFeed, stats] = await Promise.all([
     getPublicPortalLink(),
-    showFeedPromise.catch((err) => {
+    getUpcomingShows({ limit: 8 }).catch((err) => {
       console.error("[HomePage] show feed failed, rendering empty list:", err);
-      return { shows: [], isApproximateNearby: false };
+      return { shows: [], total: 0 };
     }),
     getHomepageDirectoryStats().catch((err) => {
       console.error("[HomePage] getHomepageDirectoryStats failed, rendering zeros:", err);
       return { upcomingShows: 0, activeStates: 0, activeOrganizers: 0 };
     }),
   ]);
-  const approximateLocationLabel =
-    showFeed.isApproximateNearby && approximateLocation
-      ? formatApproximateLocation(approximateLocation)
-      : null;
-  const suggestedState = getStateByCode(approximateLocation?.region);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -151,8 +120,7 @@ export default async function HomePage() {
           <div className="mt-4">
             <NearMeButton
               isActive={false}
-              approximateResultsShown={showFeed.isApproximateNearby}
-              label="Use my location"
+              label="Use precise location"
               tone="dark"
               align="start"
             />
@@ -203,18 +171,7 @@ export default async function HomePage() {
       <section className="container-wide py-10">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-slate-950">
-              {showFeed.isApproximateNearby
-                ? approximateLocationLabel
-                  ? `Upcoming shows near ${approximateLocationLabel}`
-                  : "Upcoming shows near you"
-                : "Upcoming shows"}
-            </h2>
-            {showFeed.isApproximateNearby && (
-              <p className="mt-1 text-xs text-slate-500">
-                Based on your approximate network location within {DEFAULT_NEARBY_RADIUS} miles.
-              </p>
-            )}
+            <h2 className="text-xl font-semibold text-slate-950">Upcoming shows</h2>
           </div>
           <Link
             href="/card-shows"
@@ -309,7 +266,7 @@ export default async function HomePage() {
             Full directory
           </Link>
         </div>
-        <HomeStatePicker states={US_STATES} suggestedState={suggestedState} />
+        <HomeStatePicker states={US_STATES} />
 
         <details className="group mt-3 rounded-2xl border border-slate-200 bg-white">
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700 marker:hidden hover:text-brand-700">
