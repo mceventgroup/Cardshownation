@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { ArrowRight, Search } from "lucide-react";
+import { ArrowRight, ChevronDown, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
 import { HomeStatePicker } from "@/components/shows/home-state-picker";
@@ -206,6 +206,56 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* State directory */}
+      <section className="container-wide pb-10">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-950">Browse by state</h2>
+            <p className="mt-1 text-sm text-slate-500">Pick a state and jump directly to its upcoming shows.</p>
+          </div>
+          <Link
+            href="/card-shows"
+            className="text-sm font-semibold text-brand-700 hover:text-brand-800"
+          >
+            Full directory
+          </Link>
+        </div>
+        <HomeStatePicker
+          states={US_STATES}
+          preferredState={preferredState}
+          savedToAccount={Boolean(accountState)}
+        />
+
+        <details className="group mt-3 overflow-hidden rounded-2xl border border-brand-200 bg-brand-50 shadow-sm transition-colors open:bg-white">
+          <summary className="cursor-pointer list-none px-5 py-4 marker:hidden hover:bg-brand-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500">
+            <span className="flex items-center justify-between gap-4">
+              <span>
+                <span className="block text-base font-semibold text-brand-800">View all states A–Z</span>
+                <span className="mt-0.5 block text-xs font-medium text-slate-500">Open the complete alphabetical list</span>
+              </span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
+                <ChevronDown aria-hidden="true" className="h-5 w-5 transition-transform duration-200 group-open:rotate-180" />
+              </span>
+            </span>
+          </summary>
+          <nav
+            aria-label="Browse all states alphabetically"
+            className="columns-2 gap-2 border-t border-brand-100 p-3 sm:columns-3 lg:columns-5"
+          >
+            {US_STATES.map((state) => (
+              <Link
+                key={state.code}
+                href={`/card-shows/${state.slug}`}
+                className="mb-1 flex break-inside-avoid items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-brand-50 hover:text-brand-700"
+              >
+                <span>{state.name}</span>
+                <span className="font-mono text-[11px] text-slate-400">{state.code}</span>
+              </Link>
+            ))}
+          </nav>
+        </details>
+      </section>
+
       {/* Floor Planner */}
       <section className="container-wide pb-10">
         <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 shadow-xl shadow-slate-200/60">
@@ -258,51 +308,6 @@ export default async function HomePage() {
             </Link>
           </div>
         </div>
-      </section>
-
-      {/* State directory */}
-      <section className="container-wide pb-10">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-950">Browse by state</h2>
-            <p className="mt-1 text-sm text-slate-500">Pick a state and jump directly to its upcoming shows.</p>
-          </div>
-          <Link
-            href="/card-shows"
-            className="text-sm font-semibold text-brand-700 hover:text-brand-800"
-          >
-            Full directory
-          </Link>
-        </div>
-        <HomeStatePicker
-          states={US_STATES}
-          preferredState={preferredState}
-          savedToAccount={Boolean(accountState)}
-        />
-
-        <details className="group mt-3 rounded-2xl border border-slate-200 bg-white">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700 marker:hidden hover:text-brand-700">
-            <span className="flex items-center justify-between gap-3">
-              View all states A–Z
-              <span aria-hidden="true" className="text-lg leading-none transition-transform group-open:rotate-45">+</span>
-            </span>
-          </summary>
-          <nav
-            aria-label="Browse all states alphabetically"
-            className="columns-2 gap-2 border-t border-slate-100 p-3 sm:columns-3 lg:columns-5"
-          >
-            {US_STATES.map((state) => (
-              <Link
-                key={state.code}
-                href={`/card-shows/${state.slug}`}
-                className="mb-1 flex break-inside-avoid items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-brand-50 hover:text-brand-700"
-              >
-                <span>{state.name}</span>
-                <span className="font-mono text-[11px] text-slate-400">{state.code}</span>
-              </Link>
-            ))}
-          </nav>
-        </details>
       </section>
 
       {/* Promoter CTA */}
