@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { ArrowRight, ChevronDown, Search } from "lucide-react";
+import { ArrowRight, ChevronDown, ExternalLink, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
 import { HomeStatePicker } from "@/components/shows/home-state-picker";
@@ -96,6 +96,16 @@ export default async function HomePage() {
         <div aria-hidden className="absolute inset-0 bg-black/65" />
 
         <div className="container-wide relative z-10 py-16 sm:py-20">
+          <a
+            href="https://kansascardshow.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-5 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-white/20 bg-slate-950/65 px-4 py-2 text-xs text-slate-200 shadow-lg backdrop-blur transition-colors hover:border-cyan-300/60 hover:bg-slate-900 sm:rounded-full sm:text-sm"
+          >
+            <span>From the team behind</span>
+            <span className="font-semibold text-cyan-300">Kansas Card Show</span>
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          </a>
           <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white drop-shadow-md sm:text-5xl">
             Find card shows near you.
           </h1>
