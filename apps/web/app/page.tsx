@@ -296,7 +296,10 @@ export default async function HomePage() {
       {/* State directory */}
       <section className="container-wide pb-10">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold text-slate-950">Browse by state</h2>
+          <div>
+            <h2 className="text-xl font-semibold text-slate-950">Browse by state</h2>
+            <p className="mt-1 text-sm text-slate-500">States are listed A–Z down each column.</p>
+          </div>
           <Link
             href="/card-shows"
             className="text-sm font-semibold text-brand-700 hover:text-brand-800"
@@ -304,17 +307,21 @@ export default async function HomePage() {
             Full directory
           </Link>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <nav
+          aria-label="Browse card shows by state"
+          className="mt-4 columns-2 gap-2 sm:columns-3 lg:columns-5"
+        >
           {US_STATES.map((state) => (
             <Link
               key={state.code}
               href={`/card-shows/${state.slug}`}
-              className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-xs font-medium text-slate-800 transition-all hover:border-brand-200 hover:bg-brand-50"
+              className="mb-2 flex break-inside-avoid items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-800 transition-all hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
             >
-              {state.name}
+              <span>{state.name}</span>
+              <span className="font-mono text-[11px] text-slate-400">{state.code}</span>
             </Link>
           ))}
-        </div>
+        </nav>
       </section>
 
       {/* Promoter CTA */}
