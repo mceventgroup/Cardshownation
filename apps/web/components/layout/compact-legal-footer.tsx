@@ -14,7 +14,7 @@ export function CompactLegalFooter() {
     <footer className="border-t border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
       <div className="flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-4">
         <p>
-          Card Show Nation — from the team behind{" "}
+          From the team behind{" "}
           <a
             href="https://kansascardshow.com"
             target="_blank"
