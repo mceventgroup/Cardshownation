@@ -25,6 +25,28 @@ export function SiteEventTracker({
   const pathname = usePathname();
 
   useEffect(() => {
+    const formStartKey = "csn_submit_show_started_at";
+    const formCompleteKey = "csn_submit_show_completed";
+
+    function handleInput(event: Event) {
+      if (!(event.target instanceof Element)) return;
+      const form = event.target.closest<HTMLFormElement>('[data-analytics-form="submit-show"]');
+      if (!form || sessionStorage.getItem(formStartKey)) return;
+      sessionStorage.setItem(formStartKey, String(Date.now()));
+      sessionStorage.removeItem(formCompleteKey);
+      googleEvent("submit_show_started", { source: pathname });
+      metaCustomEvent("SubmitShowStarted", { source: pathname });
+    }
+
+    function handlePageHide() {
+      const startedAt = Number(sessionStorage.getItem(formStartKey));
+      if (!startedAt || sessionStorage.getItem(formCompleteKey)) return;
+      const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+      googleEvent("submit_show_abandoned", { source: pathname, seconds_in_form: seconds });
+      metaCustomEvent("SubmitShowAbandoned", { source: pathname, seconds_in_form: seconds });
+      sessionStorage.removeItem(formStartKey);
+    }
+
     function handleClick(event: MouseEvent) {
       if (!(event.target instanceof Element)) return;
 
@@ -114,16 +136,24 @@ export function SiteEventTracker({
     }
 
     document.addEventListener("click", handleClick);
+    document.addEventListener("input", handleInput);
     document.addEventListener("submit", handleSubmit);
+    window.addEventListener("pagehide", handlePageHide);
     return () => {
       document.removeEventListener("click", handleClick);
+      document.removeEventListener("input", handleInput);
       document.removeEventListener("submit", handleSubmit);
+      window.removeEventListener("pagehide", handlePageHide);
     };
   }, [pathname]);
 
   useEffect(() => {
     const showMatch = pathname.match(/^\/shows\/([^/]+)$/);
     const isLead = pathname === "/submit-show/thank-you";
+    if (isLead) {
+      sessionStorage.setItem("csn_submit_show_completed", "1");
+      sessionStorage.removeItem("csn_submit_show_started_at");
+    }
     let googleSent = !googleEnabled;
     let metaSent = !metaEnabled;
 
@@ -136,6 +166,7 @@ export function SiteEventTracker({
           });
         }
         if (isLead && !sessionStorage.getItem("csn_submit_show_lead_ga")) {
+          window.gtag("event", "submit_show_completed", { source: "public_submission" });
           window.gtag("event", "generate_lead", { lead_source: "public_submission" });
           if (googleAdsConversionId) {
             window.gtag("event", "conversion", { send_to: googleAdsConversionId });
@@ -153,6 +184,7 @@ export function SiteEventTracker({
           });
         }
         if (isLead && !sessionStorage.getItem("csn_submit_show_lead_meta")) {
+          window.fbq("trackCustom", "SubmitShowCompleted", { source: "public_submission" });
           window.fbq("track", "Lead", { content_name: "Public show submission" });
           sessionStorage.setItem("csn_submit_show_lead_meta", "1");
         }

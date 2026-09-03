@@ -17,6 +17,17 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [sameTimesEachDay, setSameTimesEachDay] = useState(true);
+  const [showName, setShowName] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [venueName, setVenueName] = useState("");
+  const [venueAddress, setVenueAddress] = useState("");
+  const [flyerStatus, setFlyerStatus] = useState("");
+  const [startTimeLabel, setStartTimeLabel] = useState("");
+  const [endTimeLabel, setEndTimeLabel] = useState("");
+  const [admissionPrice, setAdmissionPrice] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [venueSuggestions, setVenueSuggestions] = useState<Array<{ id: string; name: string; address1: string; city: string; state: string }>>([]);
   const dailyDates = useMemo(() => {
     if (!isMultiDay || !startDate || !endDate) return [];
     return listDateRange(startDate, endDate);
@@ -35,7 +46,7 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
             <label htmlFor="showName" className="mb-2 block text-sm font-medium text-slate-700">
               Show name <span className="text-red-600">*</span>
             </label>
-            <input id="showName" name="showName" type="text" required autoFocus autoComplete="off" className={inputClass} placeholder="Example: Wichita Sports Card Show" />
+            <input id="showName" name="showName" type="text" required autoFocus autoComplete="off" className={inputClass} placeholder="Example: Wichita Sports Card Show" value={showName} onChange={(event) => setShowName(event.target.value)} />
           </div>
 
           <div className="rounded-3xl bg-slate-50 p-4">
@@ -78,11 +89,11 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label htmlFor="city" className="mb-2 block text-sm font-medium text-slate-700">City <span className="text-red-600">*</span></label>
-              <input id="city" name="city" type="text" required autoCapitalize="words" autoComplete="address-level2" className={inputClass} placeholder="Wichita" />
+              <input id="city" name="city" type="text" required autoCapitalize="words" autoComplete="address-level2" className={inputClass} placeholder="Wichita" value={city} onChange={(event) => setCity(event.target.value)} />
             </div>
             <div>
               <label htmlFor="state" className="mb-2 block text-sm font-medium text-slate-700">State <span className="text-red-600">*</span></label>
-              <select id="state" name="state" required defaultValue="" autoComplete="address-level1" className={inputClass}>
+              <select id="state" name="state" required value={state} onChange={(event) => setState(event.target.value)} autoComplete="address-level1" className={inputClass}>
                 <option value="">Choose a state</option>
                 {states.map((state) => <option key={state.code} value={state.code}>{state.name}</option>)}
               </select>
@@ -92,12 +103,20 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label htmlFor="venueName" className="mb-2 block text-sm font-medium text-slate-700">Venue name <span className="text-red-600">*</span></label>
-              <input id="venueName" name="venueName" type="text" required autoComplete="organization" className={inputClass} placeholder="Hotel, convention center, card shop…" />
+              <input id="venueName" name="venueName" type="text" required autoComplete="organization" className={inputClass} placeholder="Hotel, convention center, card shop…" value={venueName} onChange={async (event) => { const value = event.target.value; setVenueName(value); if (value.trim().length < 2) return setVenueSuggestions([]); const response = await fetch(`/api/venues/suggestions?q=${encodeURIComponent(value)}&state=${encodeURIComponent(state)}`); if (response.ok) setVenueSuggestions((await response.json()).venues ?? []); }} />
+              {venueSuggestions.length > 0 && <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">{venueSuggestions.map((venue) => <button key={venue.id} type="button" className="block w-full px-3 py-2 text-left text-sm hover:bg-brand-50" onClick={() => { setVenueName(venue.name); setVenueAddress(venue.address1); setCity(venue.city); setState(venue.state); setVenueSuggestions([]); }}><span className="font-semibold text-slate-800">{venue.name}</span><span className="block text-xs text-slate-500">{venue.address1} · {venue.city}, {venue.state}</span></button>)}</div>}
             </div>
             <div>
               <label htmlFor="venueAddress" className="mb-2 block text-sm font-medium text-slate-700">Street address <span className="font-normal text-slate-400">(optional)</span></label>
-              <input id="venueAddress" name="venueAddress" type="text" autoComplete="street-address" className={inputClass} placeholder="123 Main St — leave blank if unknown" />
+              <input id="venueAddress" name="venueAddress" type="text" autoComplete="street-address" className={inputClass} placeholder="123 Main St — leave blank if unknown" value={venueAddress} onChange={(event) => setVenueAddress(event.target.value)} />
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-dashed border-brand-200 bg-brand-50/50 p-5">
+            <label htmlFor="flyerFile" className="block text-sm font-semibold text-slate-800">Upload a flyer <span className="font-normal text-slate-500">(optional)</span></label>
+            <p className="mt-1 text-xs leading-5 text-slate-500">JPG, PNG, or WebP under 2 MB. We’ll use AI to try to fill the form from it automatically.</p>
+            <input id="flyerFile" name="flyerFile" type="file" accept="image/jpeg,image/png,image/webp" className="mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:font-semibold file:text-white" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setFlyerStatus("Reading flyer…"); const body = new FormData(); body.set("flyer", file); try { const response = await fetch("/api/flyer-extract", { method: "POST", body }); const result = await response.json(); if (!response.ok || !result.details) { setFlyerStatus(result.error ?? "Flyer added. Enter any missing details below."); return; } const d = result.details as Record<string, string>; if (d.showName) setShowName(d.showName); if (d.startDate) setStartDate(d.startDate); if (d.endDate) { setEndDate(d.endDate); setIsMultiDay(d.endDate !== d.startDate); } if (d.city) setCity(d.city); if (d.state) setState(d.state); if (d.venueName) setVenueName(d.venueName); if (d.venueAddress) setVenueAddress(d.venueAddress); if (d.startTimeLabel) setStartTimeLabel(d.startTimeLabel); if (d.endTimeLabel) setEndTimeLabel(d.endTimeLabel); if (d.admissionPrice) setAdmissionPrice(d.admissionPrice); if (d.websiteUrl) setWebsiteUrl(d.websiteUrl); setFlyerStatus("Flyer read. Please check the filled details before submitting."); } catch { setFlyerStatus("Flyer added. Automatic reading was unavailable; enter the details below."); } }} />
+            {flyerStatus && <p aria-live="polite" className="mt-3 text-sm font-medium text-brand-800">{flyerStatus}</p>}
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
@@ -146,14 +165,14 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label htmlFor="startTimeLabel" className="mb-2 block text-sm font-medium text-slate-700">Start time</label>
-                  <select id="startTimeLabel" name="startTimeLabel" defaultValue="" className={inputClass}>
+                  <select id="startTimeLabel" name="startTimeLabel" value={startTimeLabel} onChange={(event) => setStartTimeLabel(event.target.value)} className={inputClass}>
                     <option value="">Not sure yet</option>
                     {timeOptions.map((timeOption) => <option key={timeOption} value={timeOption}>{timeOption}</option>)}
                   </select>
                 </div>
                 <div>
                   <label htmlFor="endTimeLabel" className="mb-2 block text-sm font-medium text-slate-700">End time</label>
-                  <select id="endTimeLabel" name="endTimeLabel" defaultValue="" className={inputClass}>
+                  <select id="endTimeLabel" name="endTimeLabel" value={endTimeLabel} onChange={(event) => setEndTimeLabel(event.target.value)} className={inputClass}>
                     <option value="">Not sure yet</option>
                     {timeOptions.map((timeOption) => <option key={timeOption} value={timeOption}>{timeOption}</option>)}
                   </select>
@@ -212,7 +231,7 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label htmlFor="websiteUrl" className="mb-2 block text-sm font-medium text-slate-700">Official website</label>
-              <input id="websiteUrl" name="websiteUrl" type="url" inputMode="url" autoCapitalize="off" autoComplete="url" className={inputClass} placeholder="https://…" />
+              <input id="websiteUrl" name="websiteUrl" type="url" inputMode="url" autoCapitalize="off" autoComplete="url" className={inputClass} placeholder="https://…" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} />
             </div>
             <div>
               <label htmlFor="facebookUrl" className="mb-2 block text-sm font-medium text-slate-700">Facebook event or social link</label>
@@ -239,7 +258,7 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label htmlFor="admissionPrice" className="mb-2 block text-sm font-medium text-slate-700">Admission price</label>
-                  <input id="admissionPrice" name="admissionPrice" type="text" className={inputClass} placeholder="$5 adults, kids free" />
+                  <input id="admissionPrice" name="admissionPrice" type="text" className={inputClass} placeholder="$5 adults, kids free" value={admissionPrice} onChange={(event) => setAdmissionPrice(event.target.value)} />
                 </div>
                 <div>
                   <label htmlFor="admissionNotes" className="mb-2 block text-sm font-medium text-slate-700">Admission notes</label>

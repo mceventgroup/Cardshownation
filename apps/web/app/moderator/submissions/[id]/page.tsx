@@ -2,12 +2,15 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireModeratorSession } from "@/lib/moderator-auth";
 import { SubmissionEditForm } from "@/components/moderation/submission-edit-form";
+import { DuplicateReviewCard } from "@/components/moderation/duplicate-review-card";
 import { readSubmissionPayloadEdits } from "@/lib/submission-edit";
 import {
   approveShowSubmission,
   DuplicateSubmissionError,
   getModeratorVisibleSubmissionById,
+  getDuplicateReview,
   rejectShowSubmission,
+  requestSubmissionCorrections,
   updatePendingSubmissionPayload,
 } from "@/lib/submissions";
 
@@ -106,6 +109,15 @@ async function rejectSubmission(submissionId: string, formData: FormData) {
   redirect("/moderator/submissions");
 }
 
+async function requestCorrections(submissionId: string, formData: FormData) {
+  "use server";
+  const session = await requireModeratorSession(`/moderator/submissions/${submissionId}`);
+  const notes = String(formData.get("notes") ?? "").trim();
+  if (!notes) redirect(`/moderator/submissions/${submissionId}?error=corrections-note`);
+  await requestSubmissionCorrections(submissionId, notes, { reviewerId: session.user.id, reviewerRole: "MODERATOR" });
+  redirect(`/moderator/submissions/${submissionId}?saved=corrections`);
+}
+
 export default async function ModeratorSubmissionDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   const sp = await searchParams;
@@ -122,6 +134,8 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
   const approveWithId = approveSubmission.bind(null, submission.id);
   const rejectWithId = rejectSubmission.bind(null, submission.id);
   const editWithId = saveSubmissionEdits.bind(null, submission.id);
+  const correctionsWithId = requestCorrections.bind(null, submission.id);
+  const duplicateReview = await getDuplicateReview(payload, submission.id);
   const submittedFields: [string, unknown][] = [
     ["Show Name", payload.showName],
     ["Start Date", payload.startDate],
@@ -176,12 +190,13 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
         <p role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {sp.error === "duplicate"
             ? "A matching show or pending submission already exists."
+            : sp.error === "corrections-note" ? "Add a note explaining what needs to be corrected."
             : "Check the edited fields and try again."}
         </p>
       )}
-      {sp.saved === "1" && (
+      {sp.saved && (
         <p className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          Submission details saved.
+          {sp.saved === "corrections" ? "Correction request emailed to the submitter." : "Submission details saved."}
         </p>
       )}
 
@@ -213,6 +228,8 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
             ))}
         </div>
       </div>
+
+      <DuplicateReviewCard submitted={payload} review={duplicateReview} area="moderator" />
 
       {isPending && <SubmissionEditForm payload={payload} action={editWithId} />}
 
@@ -258,6 +275,10 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
             >
               Reject Submission
             </button>
+          </form>
+          <form action={correctionsWithId} className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <textarea name="notes" required rows={3} placeholder="What should the submitter correct?" className="w-full resize-none rounded-lg border border-amber-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            <button type="submit" className="w-full rounded-lg bg-amber-600 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-700">Request Corrections</button>
           </form>
         </div>
       ) : (

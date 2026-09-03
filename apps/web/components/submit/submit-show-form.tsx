@@ -27,6 +27,7 @@ export function SubmitShowForm({ action, initialState, children }: {
     <form
       action={formAction}
       data-analytics-event="submit_show_attempt"
+      data-analytics-form="submit-show"
       className="mt-8 space-y-6"
       onSubmit={(event) => {
         event.preventDefault();

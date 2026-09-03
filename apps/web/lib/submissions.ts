@@ -14,6 +14,8 @@ import {
 import { slugify } from "@/lib/utils";
 import { normalizeExternalUrl } from "@/lib/url";
 import type { UserRole } from "@csn/db";
+import { informationScore, isLikelyDuplicate, showMatchScore, type DedupeRecord } from "@/lib/show-dedupe";
+import { sendSubmissionDecisionEmail } from "@/lib/email";
 
 const reviewerInclude = {
   reviewer: {
@@ -72,6 +74,7 @@ export function buildShowDedupeKey(payload: Record<string, unknown>) {
   const startDate = readString(payload, "startDate");
   const city = readString(payload, "city");
   const state = readString(payload, "state");
+  const venueName = readString(payload, "venueName");
 
   if (!title || !startDate || !city || !state) {
     return null;
@@ -82,10 +85,11 @@ export function buildShowDedupeKey(payload: Record<string, unknown>) {
     startDate,
     normalizeDedupePart(city),
     state.trim().toUpperCase(),
+    venueName ? normalizeDedupePart(venueName) : "",
   ].join("|");
 }
 
-async function findDuplicateForPayload(
+export async function findDuplicateForPayload(
   payload: Record<string, unknown>,
   options?: { excludeSubmissionId?: string; includePending?: boolean }
 ) {
@@ -112,18 +116,20 @@ async function findDuplicateForPayload(
         state,
         startDate: { gte: dayStart, lt: dayEnd },
       },
-      select: { id: true, title: true, city: true, state: true, startDate: true },
+      select: { id: true, title: true, city: true, state: true, startDate: true, description: true, websiteUrl: true, facebookUrl: true, tableCount: true, startTimeLabel: true, endTimeLabel: true, venue: { select: { name: true, address1: true } } },
     });
 
-    const legacyMatch = candidates.find(
-      (show) =>
-        buildShowDedupeKey({
+    const legacyMatch = candidates
+      .map((show) => ({ show, score: showMatchScore(payload, {
           showName: show.title,
           startDate: show.startDate.toISOString().slice(0, 10),
           city: show.city,
           state: show.state,
-        }) === dedupeKey
-    );
+          venueName: show.venue?.name,
+          venueAddress: show.venue?.address1,
+        }) }))
+      .filter(({ score }) => score >= 72)
+      .sort((a, b) => b.score - a.score)[0]?.show;
     if (legacyMatch) {
       return { kind: "show" as const, id: legacyMatch.id, title: legacyMatch.title };
     }
@@ -155,18 +161,20 @@ async function findDuplicateForPayload(
   const legacyPending = await db.showSubmission.findMany({
     where: {
       status: "PENDING",
-      dedupeKey: null,
+      ...(startDateValue && state ? { AND: [
+        { payloadJson: { path: ["startDate"], equals: startDateValue } },
+        { payloadJson: { path: ["state"], equals: state } },
+      ] } : {}),
       ...(options?.excludeSubmissionId
         ? { id: { not: options.excludeSubmissionId } }
         : {}),
     },
     select: { id: true, payloadJson: true },
-    take: 200,
+    take: 500,
     orderBy: { createdAt: "desc" },
   });
-  const legacyPendingMatch = legacyPending.find(
-    (submission) =>
-      buildShowDedupeKey(submission.payloadJson as Record<string, unknown>) === dedupeKey
+  const legacyPendingMatch = legacyPending.find((submission) =>
+    isLikelyDuplicate(payload, submission.payloadJson as DedupeRecord)
   );
 
   return legacyPendingMatch
@@ -178,6 +186,57 @@ async function findDuplicateForPayload(
           "Pending show",
       }
     : null;
+}
+
+export async function getDuplicateReview(payload: Record<string, unknown>, excludeSubmissionId?: string) {
+  if (isFixtureMode()) return null;
+  const startDate = readString(payload, "startDate");
+  const state = readString(payload, "state")?.toUpperCase();
+  if (!startDate || !state) return null;
+  const dayStart = new Date(`${startDate}T00:00:00.000Z`);
+  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+  const [shows, submissions] = await Promise.all([
+    db.show.findMany({
+      where: { state, startDate: { gte: dayStart, lt: dayEnd } },
+      include: { venue: true }, take: 40,
+    }),
+    db.showSubmission.findMany({
+      where: { status: "PENDING", AND: [
+        { payloadJson: { path: ["startDate"], equals: startDate } },
+        { payloadJson: { path: ["state"], equals: state } },
+      ], ...(excludeSubmissionId ? { id: { not: excludeSubmissionId } } : {}) },
+      select: { id: true, payloadJson: true }, orderBy: { createdAt: "desc" }, take: 500,
+    }),
+  ]);
+  const candidates = [
+    ...shows.map((show) => ({ kind: "show" as const, id: show.id, record: { slug: show.slug, showName: show.title, startDate: show.startDate.toISOString().slice(0, 10), city: show.city, state: show.state, venueName: show.venue?.name, venueAddress: show.venue?.address1, description: show.description, websiteUrl: show.websiteUrl, facebookUrl: show.facebookUrl, tableCount: show.tableCount, startTimeLabel: show.startTimeLabel, endTimeLabel: show.endTimeLabel } })),
+    ...submissions.map((submission) => ({ kind: "submission" as const, id: submission.id, record: submission.payloadJson as DedupeRecord })),
+  ].map((candidate) => ({ ...candidate, score: showMatchScore(payload, candidate.record) }))
+    .filter((candidate) => candidate.score >= 55)
+    .sort((a, b) => b.score - a.score);
+  const best = candidates[0];
+  if (!best) return null;
+  const submittedInfo = informationScore(payload);
+  const existingInfo = informationScore(best.record);
+  return { ...best, submittedInfo, existingInfo, recommendation: submittedInfo > existingInfo ? "submission" as const : "existing" as const };
+}
+
+function shouldNotifySubmitter(payload: Record<string, unknown> | null | undefined) {
+  return Boolean(payload) && !readString(payload!, "source");
+}
+
+async function notifyDecision(input: { email: string; payload?: Record<string, unknown> | null; decision: "approved" | "rejected" | "corrections"; notes?: string | null; showSlug?: string | null }) {
+  if (!shouldNotifySubmitter(input.payload)) return;
+  try {
+    await sendSubmissionDecisionEmail(input.email, {
+      decision: input.decision,
+      showName: readString(input.payload!, "showName") ?? "Your card show",
+      notes: input.notes ?? null,
+      showUrl: input.showSlug ? `${(process.env.NEXT_PUBLIC_APP_URL ?? "https://cardshownation.com").replace(/\/$/, "")}/shows/${input.showSlug}` : null,
+    });
+  } catch (error) {
+    console.error("[submission email] delivery failed", error);
+  }
 }
 
 async function resolveOrganizerForSubmission(input: {
@@ -654,6 +713,8 @@ export async function approveShowSubmission(
     },
   });
 
+  await notifyDecision({ email: submission.submitterEmail, payload, decision: "approved", notes: options?.notes, showSlug: show.slug });
+
   return show;
 }
 
@@ -865,5 +926,17 @@ export async function rejectShowSubmission(
     },
   });
 
+  await notifyDecision({ email: submission.submitterEmail, payload: existing.payloadJson as Record<string, unknown> | undefined, decision: "rejected", notes });
+
+  return submission;
+}
+
+export async function requestSubmissionCorrections(submissionId: string, notes: string, options: { reviewerId?: string | null; reviewerRole?: UserRole | null }) {
+  if (options.reviewerRole !== "ADMIN" && options.reviewerRole !== "MODERATOR") throw new Error("Only reviewers can request corrections.");
+  const existing = await db.showSubmission.findUnique({ where: { id: submissionId } });
+  if (!existing || existing.status !== "PENDING") return existing;
+  const submission = await db.showSubmission.update({ where: { id: submissionId }, data: { notes, reviewerId: options.reviewerId ?? null, reviewerRole: options.reviewerRole ?? null } });
+  await writeAuditLog({ actorId: options.reviewerId ?? null, actorRole: options.reviewerRole, action: "submission.corrections_requested", targetType: "ShowSubmission", targetId: submissionId, details: { notes } });
+  await notifyDecision({ email: submission.submitterEmail, payload: existing.payloadJson as Record<string, unknown>, decision: "corrections", notes });
   return submission;
 }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCityCoords } from "@/lib/city-coords";
 import { slugify } from "@/lib/utils";
 import { normalizeExternalUrl } from "@/lib/url";
+import { buildShowDedupeKey, findDuplicateForPayload } from "@/lib/submissions";
 
 export type ImportedShow = {
   externalId: string;
@@ -105,14 +106,12 @@ export async function ingestImportedShows(input: {
         continue;
       }
 
-      const duplicate = await db.show.findFirst({
-        where: {
-          title: { equals: show.title, mode: "insensitive" },
-          city: { equals: show.city, mode: "insensitive" },
-          state: show.state,
-          startDate: show.startDate,
-        },
-      });
+      const candidatePayload = {
+        showName: show.title, startDate: show.startDate.toISOString().split("T")[0],
+        endDate: show.endDate.toISOString().split("T")[0], city: show.city,
+        state: show.state, venueName: show.venueName ?? "", venueAddress: show.venueAddress ?? "",
+      };
+      const duplicate = await findDuplicateForPayload(candidatePayload, { includePending: true });
       if (duplicate) {
         skipped++;
         continue;
@@ -159,6 +158,7 @@ export async function ingestImportedShows(input: {
           submitterName: input.submitterName,
           submitterEmail: input.submitterEmail,
           status: "PENDING",
+          dedupeKey: buildShowDedupeKey(candidatePayload),
           payloadJson: {
             externalId: show.externalId,
             showName: show.title,

@@ -377,7 +377,7 @@ test("buildShowDedupeKey normalizes punctuation, case, city, and state", () => {
   });
 
   assert.equal(first, second);
-  assert.equal(first, "kccardshow|2026-10-17|kansascity|MO");
+  assert.equal(first, "kccardshow|2026-10-17|kansascity|MO|");
 });
 
 test("submitShowForModeration prevents blocked organizers", async () => {

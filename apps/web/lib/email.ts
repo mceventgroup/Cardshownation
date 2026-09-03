@@ -408,3 +408,13 @@ export async function sendModerationDigestEmail(
     `,
   });
 }
+
+export async function sendSubmissionDecisionEmail(to: string, input: { decision: "approved" | "rejected" | "corrections"; showName: string; notes?: string | null; showUrl?: string | null }) {
+  const approved = input.decision === "approved";
+  const corrections = input.decision === "corrections";
+  const heading = approved ? "Your show is live" : corrections ? "A few details need updating" : "Your show submission was not approved";
+  const subject = approved ? `${input.showName} is live on Card Show Nation` : corrections ? `Updates requested for ${input.showName}` : `Update on ${input.showName}`;
+  const notes = input.notes ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:20px 0;color:#334155"><strong>Reviewer note:</strong><br>${escapeHtml(input.notes)}</div>` : "";
+  const button = approved && input.showUrl ? `<a href="${escapeHtml(input.showUrl)}" style="display:inline-block;background:#0284c7;color:#fff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:9999px;text-decoration:none">View your listing</a>` : "";
+  await sendEmail({ from: getFromAddress(), to, subject, html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px"><h1 style="font-size:22px;color:#020617">${escapeHtml(heading)}</h1><p style="color:#475569;line-height:1.6">${approved ? "Thanks for helping collectors find your show." : corrections ? "Please resubmit the corrected details and our team will review them." : "Thank you for taking the time to submit it."}</p>${notes}${button}</div>` });
+}

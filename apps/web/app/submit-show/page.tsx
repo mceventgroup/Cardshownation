@@ -12,6 +12,7 @@ import { US_STATES } from "@/lib/states";
 import { submitShowForModeration } from "@/lib/submissions";
 import { normalizeExternalUrl } from "@/lib/url";
 import { hashOpaqueToken } from "@/lib/token-hash";
+import { saveFlyerImage } from "@/lib/flyers";
 
 export const metadata: Metadata = {
   title: "Submit a Card Show",
@@ -146,6 +147,7 @@ async function handleSubmission(
     const facebookUrlInput = readOptionalString(formData, "facebookUrl", 2048);
     const publicPromoterEmailInput = readOptionalString(formData, "publicPromoterEmail", 320);
     const publicPromoterEmailConsent = formData.get("publicPromoterEmailConsent") === "on";
+    const flyerFile = formData.get("flyerFile");
     const websiteUrl = normalizeExternalUrl(websiteUrlInput);
     const facebookUrl = normalizeExternalUrl(facebookUrlInput);
     const dailySchedule = readDailySchedule(formData, startDate, endDate, sameTimesEachDay);
@@ -173,6 +175,9 @@ async function handleSubmission(
     }
 
     const submitterName = submitterNameInput ?? deriveSubmitterName(submitterEmail);
+    const flyerImageUrl = flyerFile instanceof File && flyerFile.size > 0
+      ? await saveFlyerImage(showName, flyerFile)
+      : null;
     const payload = {
       showName,
       startDate,
@@ -200,6 +205,7 @@ async function handleSubmission(
       admissionPrice: readOptionalString(formData, "admissionPrice", 120),
       admissionNotes: readOptionalString(formData, "admissionNotes", 200),
       parkingInfo: readOptionalString(formData, "parkingInfo", 200),
+      flyerImageUrl,
     };
 
     const result = await submitShowForModeration({

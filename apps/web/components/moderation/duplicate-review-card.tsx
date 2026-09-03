@@ -1,0 +1,25 @@
+type Review = {
+  kind: "show" | "submission";
+  id: string;
+  score: number;
+  record: Record<string, unknown>;
+  submittedInfo: number;
+  existingInfo: number;
+  recommendation: "submission" | "existing";
+};
+
+function text(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" && value.trim() ? value : "—";
+}
+
+export function DuplicateReviewCard({ submitted, review, area }: { submitted: Record<string, unknown>; review: Review | null; area: "admin" | "moderator" }) {
+  if (!review) return <div className="mb-8 rounded-xl border border-green-200 bg-green-50 p-5 text-sm text-green-800"><strong>No close match found.</strong> Date, city, state, title, and venue checks passed.</div>;
+  const likely = review.score >= 72;
+  const href = review.kind === "show" ? `/shows/${String(review.record.slug ?? review.id)}` : `/${area}/submissions/${review.id}`;
+  const rows = [["Name", "showName"], ["Date", "startDate"], ["Venue", "venueName"], ["Address", "venueAddress"], ["Description", "description"], ["Website", "websiteUrl"]] as const;
+  return <section className={`mb-8 rounded-xl border p-5 ${likely ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold text-slate-900">{likely ? "Likely duplicate" : "Possible match"} · {review.score}%</h2><p className="mt-1 text-sm text-slate-600">Recommendation: keep the <strong>{review.recommendation === "submission" ? "new submission" : "existing listing"}</strong>; it has {Math.max(review.submittedInfo, review.existingInfo)} of 8 useful detail fields.</p></div><a href={href} target="_blank" rel="noreferrer" className="text-sm font-semibold text-brand-700 underline">Open match</a></div>
+    <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr><th className="p-2 text-slate-500">Field</th><th className="p-2 text-slate-800">New submission</th><th className="p-2 text-slate-800">Existing match</th></tr></thead><tbody>{rows.map(([label, key]) => <tr key={key} className="border-t border-slate-200"><th className="p-2 text-xs font-medium text-slate-500">{label}</th><td className="p-2 align-top text-slate-800">{text(submitted, key)}</td><td className="p-2 align-top text-slate-800">{text(review.record, key)}</td></tr>)}</tbody></table></div>
+  </section>;
+}
