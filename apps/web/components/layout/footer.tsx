@@ -24,6 +24,18 @@ export function Footer() {
               </div>
             </Link>
 
+            <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs text-slate-600">
+              <span>Powered by</span>
+              <a
+                href="https://kansascardshow.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-brand-700 transition-colors hover:text-brand-800 hover:underline"
+              >
+                Kansas Card Show
+              </a>
+            </p>
+
             <p className="mt-4 max-w-md text-sm leading-6 text-slate-600">
               Card Show Nation helps collectors find upcoming sports card,
               Pokemon, and TCG shows by state, city, and date while giving
