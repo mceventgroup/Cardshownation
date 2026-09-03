@@ -24,8 +24,8 @@ export function Footer() {
               </div>
             </Link>
 
-            <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs text-slate-600">
-              <span>Powered by</span>
+            <p className="mt-4 inline-flex flex-wrap items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs text-slate-600">
+              <span>Card Show Nation — from the team behind</span>
               <a
                 href="https://kansascardshow.com"
                 target="_blank"
