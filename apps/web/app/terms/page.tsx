@@ -19,7 +19,7 @@ const sections = [
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of Use" summary="These terms govern access to Card Show Nation's directory, accounts, promoter tools, submissions, and Floor Planner." updated="September 1, 2026" currentPath="/terms" sections={sections}>
+    <LegalPage title="Terms of Use" summary="These terms govern access to Card Show Nation's directory, accounts, promoter tools, submissions, and Floor Planner." updated="September 3, 2026" currentPath="/terms" sections={sections}>
       <LegalSection id="agreement" title="1. Agreement to these terms">
         <p>Card Show Nation is operated by MC Event Group LLC, a Kansas limited liability company. By accessing or using Card Show Nation, you agree to these Terms of Use and our <Link href="/privacy" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Privacy Policy</Link>. If you do not agree, do not use the service. If you use the service for a business or organization, you represent that you can accept these terms for it.</p>
       </LegalSection>
@@ -34,7 +34,7 @@ export default function TermsPage() {
       </LegalSection>
       <LegalSection id="listings" title="3. Listings and user content">
         <p>You remain responsible for listings, flyers, floor plans, vendor information, links, and other material you submit. You represent that the information is accurate to the best of your knowledge and that you have the rights and permissions needed to submit and publish it.</p>
-        <p>You retain ownership of your content. You grant Card Show Nation a worldwide, non-exclusive, royalty-free license to host, store, reproduce, format, display, and distribute it as needed to operate, promote, secure, and improve the service. This license ends when the content is deleted from active systems, except for public event, venue, or organizer records retained for directory or recordkeeping purposes, information copied by others, legal records, and temporary backups.</p>
+        <p>You retain ownership of your content. You grant Card Show Nation a worldwide, non-exclusive, royalty-free license to host, store, reproduce, format, display, and distribute it as needed to operate, promote, secure, and improve the service. This license ends when the content is deleted from active service records, except for public event, venue, or organizer records retained for directory or recordkeeping purposes, information copied by others, legal records, and temporary backups.</p>
         <p>We may edit listing formatting, correct apparent errors, merge duplicates, request verification, decline publication, or remove content. Submission does not guarantee publication or ranking.</p>
       </LegalSection>
       <LegalSection id="acceptable-use" title="4. Acceptable use">
@@ -57,7 +57,7 @@ export default function TermsPage() {
         <p>Keep independent backups of important layouts and exports. Features, compatibility, storage limits, and availability may change.</p>
       </LegalSection>
       <LegalSection id="billing" title="7. Subscriptions and billing">
-        <p>Paid Floor Planner access renews automatically at the displayed interval until canceled. Prices, taxes, trial or complimentary access, and plan details are shown before purchase. Stripe processes payments and provides the billing portal.</p>
+        <p>Paid Floor Planner access renews automatically at the displayed interval until canceled. Prices, taxes, trial or complimentary access, and plan details are shown before purchase. A third-party payment processor handles payments and provides the secure billing portal.</p>
         <p>See the <Link href="/billing-terms" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Billing Terms</Link> for renewal, cancellation, refund, and plan-change details.</p>
       </LegalSection>
       <LegalSection id="intellectual-property" title="8. Intellectual property and reports">
