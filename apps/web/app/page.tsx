@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { ArrowRight, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
+import { HomeStatePicker } from "@/components/shows/home-state-picker";
 import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { isPurchasingEnabled } from "@/lib/purchasing";
@@ -14,7 +15,7 @@ import {
   getApproximateRequestLocation,
 } from "@/lib/request-location";
 import { getHomepageDirectoryStats, getNearbyShows, getUpcomingShows } from "@/lib/shows";
-import { US_STATES } from "@/lib/states";
+import { getStateByCode, US_STATES } from "@/lib/states";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
 import { absoluteSiteUrl } from "@/lib/site-url";
 
@@ -73,6 +74,7 @@ export default async function HomePage() {
     showFeed.isApproximateNearby && approximateLocation
       ? formatApproximateLocation(approximateLocation)
       : null;
+  const suggestedState = getStateByCode(approximateLocation?.region);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -298,7 +300,7 @@ export default async function HomePage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-slate-950">Browse by state</h2>
-            <p className="mt-1 text-sm text-slate-500">States are listed A–Z down each column.</p>
+            <p className="mt-1 text-sm text-slate-500">Pick a state and jump directly to its upcoming shows.</p>
           </div>
           <Link
             href="/card-shows"
@@ -307,21 +309,31 @@ export default async function HomePage() {
             Full directory
           </Link>
         </div>
-        <nav
-          aria-label="Browse card shows by state"
-          className="mt-4 columns-2 gap-2 sm:columns-3 lg:columns-5"
-        >
-          {US_STATES.map((state) => (
-            <Link
-              key={state.code}
-              href={`/card-shows/${state.slug}`}
-              className="mb-2 flex break-inside-avoid items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-800 transition-all hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-            >
-              <span>{state.name}</span>
-              <span className="font-mono text-[11px] text-slate-400">{state.code}</span>
-            </Link>
-          ))}
-        </nav>
+        <HomeStatePicker states={US_STATES} suggestedState={suggestedState} />
+
+        <details className="group mt-3 rounded-2xl border border-slate-200 bg-white">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700 marker:hidden hover:text-brand-700">
+            <span className="flex items-center justify-between gap-3">
+              View all states A–Z
+              <span aria-hidden="true" className="text-lg leading-none transition-transform group-open:rotate-45">+</span>
+            </span>
+          </summary>
+          <nav
+            aria-label="Browse all states alphabetically"
+            className="columns-2 gap-2 border-t border-slate-100 p-3 sm:columns-3 lg:columns-5"
+          >
+            {US_STATES.map((state) => (
+              <Link
+                key={state.code}
+                href={`/card-shows/${state.slug}`}
+                className="mb-1 flex break-inside-avoid items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-brand-50 hover:text-brand-700"
+              >
+                <span>{state.name}</span>
+                <span className="font-mono text-[11px] text-slate-400">{state.code}</span>
+              </Link>
+            ))}
+          </nav>
+        </details>
       </section>
 
       {/* Promoter CTA */}
