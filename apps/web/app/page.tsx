@@ -44,7 +44,7 @@ export default async function HomePage() {
     }),
     getHomepageDirectoryStats().catch((err) => {
       console.error("[HomePage] getHomepageDirectoryStats failed, rendering zeros:", err);
-      return { upcomingShows: 0, activeStates: 0, activeOrganizers: 0 };
+      return { upcomingShows: 0, activeStates: 0 };
     }),
     cookies(),
     getUserSession().catch(() => null),
@@ -160,7 +160,7 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          <div className="mt-10 grid max-w-xl gap-6 text-slate-200 sm:grid-cols-3">
+          <div className="mt-10 grid max-w-sm gap-6 text-slate-200 sm:grid-cols-2">
             <div>
               <p className="text-2xl font-semibold text-white drop-shadow">
                 {stats.upcomingShows.toLocaleString()}
@@ -173,12 +173,6 @@ export default async function HomePage() {
               <p className="text-2xl font-semibold text-white drop-shadow">{stats.activeStates}</p>
               <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">
                 States
-              </p>
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-white drop-shadow">{stats.activeOrganizers}</p>
-              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">
-                Promoters
               </p>
             </div>
           </div>

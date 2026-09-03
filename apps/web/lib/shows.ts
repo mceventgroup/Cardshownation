@@ -621,20 +621,14 @@ export async function getHomepageDirectoryStats() {
   if (isFixtureMode()) {
     const shows = await filterFixtureShows({});
     const states = new Set(shows.map((show) => show.state));
-    const organizers = new Set(
-      shows
-        .map((show) => show.organizer?.name ?? null)
-        .filter((organizer): organizer is string => Boolean(organizer))
-    );
 
     return {
       upcomingShows: shows.length,
       activeStates: states.size,
-      activeOrganizers: organizers.size,
     };
   }
 
-  const [upcomingShows, activeStates, activeOrganizers] = await Promise.all([
+  const [upcomingShows, activeStates] = await Promise.all([
     db.show.count({ where: upcomingWhere() }),
     db.show
       .groupBy({
@@ -642,19 +636,11 @@ export async function getHomepageDirectoryStats() {
         where: upcomingWhere(),
       })
       .then((states) => states.length),
-    db.organizer.count({
-      where: {
-        shows: {
-          some: upcomingWhere(),
-        },
-      },
-    }),
   ]);
 
   return {
     upcomingShows,
     activeStates,
-    activeOrganizers,
   };
 }
 
