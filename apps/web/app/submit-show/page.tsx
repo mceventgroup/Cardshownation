@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Check } from "lucide-react";
+import Link from "next/link";
+import { CalendarDays, Check, Upload } from "lucide-react";
 import { SubmitShowForm, type SubmitShowFormState } from "@/components/submit/submit-show-form";
 import { SubmitShowFormSteps } from "@/components/submit/submit-show-form-steps";
 import { consumeRateLimit } from "@/lib/rate-limit";
@@ -319,6 +320,21 @@ export default async function SubmitShowPage({
             No account needed
           </li>
         </ul>
+      </div>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border-2 border-brand-500 bg-brand-50 p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white"><CalendarDays className="h-5 w-5" aria-hidden /></span>
+            <div><p className="font-semibold text-slate-950">Submit one show</p><p className="text-sm text-slate-600">Use the quick form below</p></div>
+          </div>
+        </div>
+        <Link href="/submit-shows" className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-brand-700 transition-colors group-hover:bg-brand-100"><Upload className="h-5 w-5" aria-hidden /></span>
+            <div><p className="font-semibold text-slate-950">Upload multiple shows</p><p className="text-sm text-slate-600">Add a full schedule from a spreadsheet</p></div>
+          </div>
+        </Link>
       </div>
 
       <SubmitShowForm action={handleSubmission} initialState={initialState}>

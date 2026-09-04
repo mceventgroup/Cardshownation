@@ -52,6 +52,9 @@ export function Footer() {
               <Link href="/submit-show" className="transition-colors hover:text-brand-700">
                 Submit a show
               </Link>
+              <Link href="/submit-shows" className="transition-colors hover:text-brand-700">
+                Upload multiple shows
+              </Link>
               <Link href="/card-shows/kansas" className="transition-colors hover:text-brand-700">
                 Kansas card shows
               </Link>
