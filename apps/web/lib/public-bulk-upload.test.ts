@@ -4,6 +4,7 @@ import { getMissingBulkHeaders, validatePublicBulkRows } from "./public-bulk-upl
 
 test("bulk upload identifies missing required columns", () => {
   assert.deepEqual(getMissingBulkHeaders(["title", "startDate", "city", "state"]), ["venueName"]);
+  assert.deepEqual(getMissingBulkHeaders(["Show Name", "Start Date", "City", "State", "Venue Name"]), []);
 });
 
 test("bulk upload validates rows and normalizes optional values", () => {

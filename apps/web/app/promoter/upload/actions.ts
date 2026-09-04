@@ -3,6 +3,7 @@
 import Papa from "papaparse";
 import { requirePromoterSession } from "@/lib/promoter-auth";
 import { bulkCreatePromoterShows, type PromoterBulkCsvRow } from "@/lib/promoters";
+import { normalizeBulkHeader } from "@/lib/public-bulk-upload";
 
 export type PromoterUploadState = {
   approved: number;
@@ -50,7 +51,7 @@ export async function uploadPromoterShowsCsvAction(
   const parsed = Papa.parse<CsvRow>(csvText, {
     header: true,
     skipEmptyLines: true,
-    transformHeader: (header) => header.trim(),
+    transformHeader: normalizeBulkHeader,
   });
 
   if (parsed.errors.length > 0) {

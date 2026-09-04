@@ -1,2 +1,2 @@
-title,startDate,endDate,startTimeLabel,endTimeLabel,city,state,venueName,venueAddress,categories,description,tableCount,vendorDetails,websiteUrl,facebookUrl,isFree,admissionPrice,admissionNotes,parkingInfo
+Show Name,Start Date,End Date,Start Time,End Time,City,State,Venue Name,Street Address,Categories,Description,Table Count,Vendor Details,Website,Facebook,Free Admission,Admission Price,Admission Notes,Parking Info
 EXAMPLE Olathe Sports Collectibles Show,2027-04-18,2027-04-18,9:00 AM,5:00 PM,Olathe,KS,Hampton Inn Olathe,125 W 151st St,Sports Cards|Pokemon,Season opener with vintage and modern dealers,75,Dealer tables available,https://example.com/shows/olathe,https://facebook.com/example-show,no,$5,Kids 12 and under free,Free parking in north lot

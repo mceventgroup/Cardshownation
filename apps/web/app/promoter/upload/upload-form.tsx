@@ -67,10 +67,10 @@ export function PromoterUploadForm() {
 
         <div className="mt-6 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 sm:grid-cols-2">
           <p>
-            Required columns: <span className="font-medium">title, startDate, endDate, city, state, venueName</span>
+            Required columns: <span className="font-medium">Show Name, Start Date, End Date, City, State, Venue Name</span>
           </p>
           <p>
-            Optional columns: <span className="font-medium">startTimeLabel, endTimeLabel, venueAddress, categories, description, tableCount, vendorDetails, websiteUrl, facebookUrl, isFree, admissionPrice, admissionNotes, parkingInfo</span>
+            Optional columns: <span className="font-medium">Times, address, categories, description, table count, links, admission, and parking</span>
           </p>
         </div>
 

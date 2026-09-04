@@ -58,11 +58,15 @@ const HEADER_ALIASES: Record<string, (typeof PUBLIC_BULK_UPLOAD_HEADERS)[number]
   showname: "title",
   name: "title",
   date: "startDate",
+  starttime: "startTimeLabel",
+  endtime: "endTimeLabel",
   address: "venueAddress",
+  streetaddress: "venueAddress",
   venue: "venueName",
   website: "websiteUrl",
   facebook: "facebookUrl",
   free: "isFree",
+  freeadmission: "isFree",
 };
 
 export function normalizeBulkHeader(header: string) {
