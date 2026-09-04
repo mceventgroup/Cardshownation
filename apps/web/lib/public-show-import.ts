@@ -4,7 +4,8 @@ import {
   type PublicImportSource,
 } from "@/lib/auto-import-sources";
 import { getPublicImportSourceKey } from "@/lib/import-source-keys";
-import { ingestImportedShows, type ImportSourceSummary, type ImportedShow } from "@/lib/show-import-ingest";
+import { extractDedicatedSourceShows } from "@/lib/public-source-adapters";
+import { ingestImportedShows, recordImportFailure, type ImportSourceSummary, type ImportedShow } from "@/lib/show-import-ingest";
 import { getStateByCode, US_STATES } from "@/lib/states";
 import { normalizeExternalUrl } from "@/lib/url";
 import { fetchPublicUrl, readResponseTextLimited } from "@/lib/safe-remote-fetch";
@@ -20,6 +21,7 @@ const DATE_RANGE_WITH_OPTIONAL_YEAR_PATTERN =
 type JsonLdNode = Record<string, unknown>;
 type SourceAdapter = {
   extractShows: (html: string, source: PublicImportSource) => ImportedShow[];
+  crawlLinks?: boolean;
 };
 
 function decodeHtmlEntities(value: string) {
@@ -426,10 +428,18 @@ function extractBeckettShowsFromHtml(html: string, source: PublicImportSource) {
 }
 
 function resolveSourceAdapter(source: PublicImportSource): SourceAdapter | null {
+  if (source.adapter && source.adapter !== "beckett") {
+    return {
+      extractShows: (content, adapterSource) => extractDedicatedSourceShows(content, adapterSource) ?? [],
+      crawlLinks: false,
+    };
+  }
+
   const text = `${source.name} ${source.url}`.toLowerCase();
-  if (text.includes("beckett")) {
+  if (source.adapter === "beckett" || text.includes("beckett")) {
     return {
       extractShows: extractBeckettShowsFromHtml,
+      crawlLinks: true,
     };
   }
 
@@ -546,7 +556,7 @@ export function extractShowsFromHtml(html: string, source: PublicImportSource): 
 }
 
 async function fetchSourceHtml(source: PublicImportSource) {
-  const response = await fetchPublicUrl(source.url, {
+  const response = await fetchPublicUrl(source.fetchUrl ?? source.url, {
     headers: {
       "user-agent": "Card Show Nation Import Bot/1.0 (+https://cardshownation.com)",
       accept: "text/html,application/xhtml+xml",
@@ -590,12 +600,23 @@ export async function runPublicSourceImports(selectedSource: string = "all") {
     try {
       const html = await fetchSourceHtml(source);
       const directShows = extractShowsFromHtml(html, source);
-      const linkedShows = await crawlLinkedEventPages(source, html);
+      const linkedShows = resolveSourceAdapter(source)?.crawlLinks === false
+        ? []
+        : await crawlLinkedEventPages(source, html);
       const showMap = new Map<string, ImportedShow>();
       for (const show of [...directShows, ...linkedShows]) {
         showMap.set(show.externalId, show);
       }
       const shows = [...showMap.values()];
+      if (shows.length === 0) {
+        const message = "No card-show listings were found. The source layout or feed may have changed.";
+        results.push(await recordImportFailure({
+          source: getPublicImportSourceKey(source.name),
+          label: source.name,
+          error: message,
+        }));
+        continue;
+      }
       const result = await ingestImportedShows({
         source: getPublicImportSourceKey(source.name),
         label: source.name,
@@ -605,13 +626,11 @@ export async function runPublicSourceImports(selectedSource: string = "all") {
       });
       results.push(result);
     } catch (err) {
-      results.push({
+      results.push(await recordImportFailure({
         source: getPublicImportSourceKey(source.name),
         label: source.name,
-        imported: 0,
-        skipped: 0,
-        errors: [err instanceof Error ? err.message : String(err)],
-      });
+        error: err instanceof Error ? err.message : String(err),
+      }));
     }
   }
 

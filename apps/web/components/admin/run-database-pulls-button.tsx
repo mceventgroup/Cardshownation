@@ -8,10 +8,12 @@ type RunResult = {
     source: string;
     label: string;
     imported: number;
+    enriched: number;
     skipped: number;
     errors: string[];
   }>;
   imported: number;
+  enriched: number;
   skipped: number;
   errors: string[];
 };
@@ -93,7 +95,7 @@ export function RunDatabasePullsButton({
       )}
       {showSummary && result && (
         <p className="text-xs text-slate-500">
-          Imported {result.imported}, skipped {result.skipped}, errors {result.errors.length}.
+          Imported {result.imported}, enriched {result.enriched}, skipped {result.skipped}, errors {result.errors.length}.
         </p>
       )}
       {error && <p className="text-xs text-red-600">{error}</p>}

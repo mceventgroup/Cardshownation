@@ -12,6 +12,8 @@ export type PublicImportSource = {
   facebookUrl?: string;
   active?: boolean;
   origin?: "database" | "environment";
+  adapter?: "beckett" | "comc" | "premier" | "gas" | "scd";
+  fetchUrl?: string;
 };
 
 export type AutoImportSourceInput = {
@@ -33,6 +35,44 @@ const BUILT_IN_PUBLIC_IMPORT_SOURCES: PublicImportSource[] = [
     categories: ["Sports Cards", "Pokemon", "TCG"],
     active: true,
     origin: "environment",
+    adapter: "beckett",
+  },
+  {
+    name: "COMC Calendar",
+    url: "https://calendar.comc.com/",
+    fetchUrl: "https://blog.comc.com/calendar/comc-events.ics",
+    organizerName: "COMC Calendar",
+    categories: ["Sports Cards", "Pokemon", "TCG"],
+    active: true,
+    origin: "environment",
+    adapter: "comc",
+  },
+  {
+    name: "Premier Card Shows",
+    url: "https://www.premiercardshows.com/",
+    organizerName: "Premier Card Shows",
+    categories: ["Sports Cards", "Pokemon", "TCG"],
+    active: true,
+    origin: "environment",
+    adapter: "premier",
+  },
+  {
+    name: "G.A.S. Card Shows",
+    url: "https://www.gas-shows.com/",
+    organizerName: "G.A.S. Card Shows",
+    categories: ["Sports Cards", "Pokemon", "TCG"],
+    active: true,
+    origin: "environment",
+    adapter: "gas",
+  },
+  {
+    name: "Sports Collectors Digest",
+    url: "https://sportscollectorsdigest.com/collecting-101/show-calendar",
+    organizerName: "Sports Collectors Digest",
+    categories: ["Sports Cards", "Memorabilia"],
+    active: true,
+    origin: "environment",
+    adapter: "scd",
   },
 ];
 
@@ -217,11 +257,13 @@ export async function getAllPublicImportSources() {
   }
 
   for (const source of environmentSources) {
-    merged.set(source.url.toLowerCase(), source);
+    const existing = merged.get(source.url.toLowerCase());
+    merged.set(source.url.toLowerCase(), { ...existing, ...source, adapter: existing?.adapter, fetchUrl: existing?.fetchUrl });
   }
 
   for (const source of databaseSources) {
-    merged.set(source.url.toLowerCase(), source);
+    const existing = merged.get(source.url.toLowerCase());
+    merged.set(source.url.toLowerCase(), { ...existing, ...source, adapter: existing?.adapter, fetchUrl: existing?.fetchUrl });
   }
 
   return [...merged.values()].filter((source) => source.active !== false);

@@ -62,13 +62,14 @@ export function showMatchScore(left: DedupeRecord, right: DedupeRecord) {
   const hasDistinctiveTitle = words(left.showName).some((word) => !GENERIC_TITLE_WORDS.has(word));
   const leftVenue = normalized(left.venueName);
   const rightVenue = normalized(right.venueName);
+  const addressMatch = Boolean(normalized(left.venueAddress)) && normalized(left.venueAddress) === normalized(right.venueAddress);
   const venueConflict = leftVenue && rightVenue && similarity(left.venueName, right.venueName) < 0.65;
-  if (venueConflict && (!exactTitle || !hasDistinctiveTitle)) return 0;
+  if (venueConflict && !addressMatch && (!exactTitle || !hasDistinctiveTitle)) return 0;
 
-  const addressMatch = normalized(left.venueAddress) && normalized(left.venueAddress) === normalized(right.venueAddress);
   const venueScore = leftVenue && rightVenue ? similarity(left.venueName, right.venueName) : 0;
   let score = exactTitle ? 100 : Math.round(titleScore * 86);
-  if (addressMatch) score += 10;
+  if (addressMatch) score = Math.max(score + 10, 92);
+  else if (venueScore >= 0.85) score = Math.max(score + 7, 82);
   else if (venueScore >= 0.65) score += 7;
   return Math.min(score, 100);
 }

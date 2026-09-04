@@ -25,15 +25,64 @@ export type ImportedShow = {
   organizerName: string | null;
   admissionNotes?: string | null;
   sourceUrl?: string | null;
+  startTimeLabel?: string | null;
+  endTimeLabel?: string | null;
+  tableCount?: number | null;
 };
 
 export type ImportSourceSummary = {
   source: string;
   label: string;
   imported: number;
+  enriched: number;
   skipped: number;
   errors: string[];
 };
+
+const ENRICHABLE_PAYLOAD_FIELDS = [
+  "description", "venueName", "venueAddress", "startTimeLabel", "endTimeLabel",
+  "admissionPrice", "admissionNotes", "tableCount", "websiteUrl", "facebookUrl",
+] as const;
+
+function hasUsefulValue(value: unknown) {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return value !== null && value !== undefined;
+}
+
+export function mergeMissingImportedDetails(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>
+) {
+  const merged = { ...existing };
+  const changedFields: string[] = [];
+
+  for (const field of ENRICHABLE_PAYLOAD_FIELDS) {
+    if (!hasUsefulValue(merged[field]) && hasUsefulValue(incoming[field])) {
+      merged[field] = incoming[field];
+      changedFields.push(field);
+    }
+  }
+
+  const existingCategories = Array.isArray(existing.categories)
+    ? existing.categories.filter((value): value is string => typeof value === "string")
+    : [];
+  const incomingCategories = Array.isArray(incoming.categories)
+    ? incoming.categories.filter((value): value is string => typeof value === "string")
+    : [];
+  const mergedCategories = [...new Set([...existingCategories, ...incomingCategories])];
+  if (mergedCategories.length > existingCategories.length) {
+    merged.categories = mergedCategories;
+    changedFields.push("categories");
+  }
+
+  if (existing.isFree !== true && incoming.isFree === true && !hasUsefulValue(existing.admissionPrice)) {
+    merged.isFree = true;
+    changedFields.push("isFree");
+  }
+
+  return { merged, changedFields };
+}
 
 function chunkValues<T>(values: T[], size: number) {
   const chunks: T[][] = [];
@@ -43,18 +92,18 @@ function chunkValues<T>(values: T[], size: number) {
   return chunks;
 }
 
-async function getExistingImportedExternalIds(source: string, externalIds: string[]) {
+async function getExistingImportedRecords(source: string, externalIds: string[]) {
   const uniqueExternalIds = [...new Set(externalIds.filter(Boolean))];
   if (uniqueExternalIds.length === 0) {
-    return new Set<string>();
+    return new Map<string, { submissionId: string; reviewedShowId: string | null }>();
   }
 
-  const existing = new Set<string>();
+  const existing = new Map<string, { submissionId: string; reviewedShowId: string | null }>();
 
   for (const batch of chunkValues(uniqueExternalIds, 250)) {
-    const batchRows = await db.$queryRaw<Array<{ externalId: string | null }>>(
+    const batchRows = await db.$queryRaw<Array<{ externalId: string | null; submissionId: string; reviewedShowId: string | null }>>(
       Prisma.sql`
-        SELECT "payloadJson"->>'externalId' AS "externalId"
+        SELECT "payloadJson"->>'externalId' AS "externalId", "id" AS "submissionId", "reviewedShowId"
         FROM "ShowSubmission"
         WHERE "payloadJson"->>'source' = ${source}
           AND "payloadJson"->>'externalId' IN (${Prisma.join(batch.map((value) => Prisma.sql`${value}`))})
@@ -63,12 +112,141 @@ async function getExistingImportedExternalIds(source: string, externalIds: strin
 
     for (const row of batchRows) {
       if (row.externalId) {
-        existing.add(row.externalId);
+        existing.set(row.externalId, { submissionId: row.submissionId, reviewedShowId: row.reviewedShowId });
       }
     }
   }
 
   return existing;
+}
+
+function importedPayload(show: ImportedShow, source: string, suppressSourceLinks: boolean, venueId: string | null = null) {
+  return {
+    externalId: show.externalId,
+    showName: show.title,
+    description: show.description,
+    startDate: show.startDate.toISOString().split("T")[0],
+    endDate: show.endDate.toISOString().split("T")[0],
+    startTimeLabel: show.startTimeLabel ?? "",
+    endTimeLabel: show.endTimeLabel ?? "",
+    city: show.city,
+    state: show.state,
+    venueName: show.venueName ?? "",
+    venueAddress: show.venueAddress ?? "",
+    categories: show.categories,
+    isFree: show.isFree,
+    admissionPrice: show.admissionPrice ?? "",
+    admissionNotes: show.admissionNotes ?? "",
+    tableCount: show.tableCount ? String(show.tableCount) : "",
+    websiteUrl: suppressSourceLinks ? null : normalizeExternalUrl(show.websiteUrl),
+    facebookUrl: normalizeExternalUrl(show.facebookUrl),
+    organizerName: show.organizerName ?? "",
+    organizerEmail: "",
+    source,
+    sourceUrl: suppressSourceLinks ? "" : normalizeExternalUrl(show.sourceUrl) ?? "",
+    venueId,
+  } satisfies Record<string, unknown>;
+}
+
+function readPayloadText(payload: Record<string, unknown>, field: string) {
+  const value = payload[field];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function ensureImportedVenue(payload: Record<string, unknown>) {
+  const name = readPayloadText(payload, "venueName");
+  const address = readPayloadText(payload, "venueAddress");
+  const city = readPayloadText(payload, "city");
+  const state = readPayloadText(payload, "state");
+  if (!name || !address || !city || !state) return null;
+  const coords = getCityCoords(city, state);
+  return db.venue.upsert({
+    where: { name_city_state: { name, city, state } },
+    create: {
+      name,
+      address1: address,
+      city,
+      state,
+      latitude: coords?.lat ?? null,
+      longitude: coords?.lng ?? null,
+    },
+    update: {},
+  });
+}
+
+async function enrichPublishedShow(showId: string, incoming: Record<string, unknown>) {
+  const show = await db.show.findUnique({ where: { id: showId }, include: { venue: true } });
+  if (!show) return false;
+  const current = {
+    description: show.description,
+    venueName: show.venue?.name,
+    venueAddress: show.venue?.address1,
+    startTimeLabel: show.startTimeLabel,
+    endTimeLabel: show.endTimeLabel,
+    admissionPrice: show.admissionPrice,
+    admissionNotes: show.admissionNotes,
+    tableCount: show.tableCount,
+    websiteUrl: show.websiteUrl,
+    facebookUrl: show.facebookUrl,
+    categories: show.categories,
+    isFree: show.isFree,
+  } satisfies Record<string, unknown>;
+  const { merged, changedFields } = mergeMissingImportedDetails(current, incoming);
+  if (changedFields.length === 0) return false;
+
+  let venueId: string | undefined;
+  if (!show.venueId && changedFields.some((field) => field === "venueName" || field === "venueAddress")) {
+    venueId = (await ensureImportedVenue({ ...incoming, ...merged }))?.id;
+  }
+  const tableCount = Number.parseInt(String(merged.tableCount ?? ""), 10);
+  await db.show.update({
+    where: { id: showId },
+    data: {
+      description: readPayloadText(merged, "description"),
+      startTimeLabel: readPayloadText(merged, "startTimeLabel"),
+      endTimeLabel: readPayloadText(merged, "endTimeLabel"),
+      admissionPrice: readPayloadText(merged, "admissionPrice"),
+      admissionNotes: readPayloadText(merged, "admissionNotes"),
+      tableCount: Number.isFinite(tableCount) && tableCount > 0 ? tableCount : null,
+      websiteUrl: normalizeExternalUrl(readPayloadText(merged, "websiteUrl")),
+      facebookUrl: normalizeExternalUrl(readPayloadText(merged, "facebookUrl")),
+      categories: Array.isArray(merged.categories) ? merged.categories.filter((value): value is string => typeof value === "string") : show.categories,
+      isFree: merged.isFree === true,
+      ...(venueId ? { venueId } : {}),
+    },
+  });
+  return true;
+}
+
+async function enrichSubmission(submissionId: string, incoming: Record<string, unknown>) {
+  const submission = await db.showSubmission.findUnique({ where: { id: submissionId } });
+  if (!submission) return false;
+  if (submission.reviewedShowId) return enrichPublishedShow(submission.reviewedShowId, incoming);
+  const current = submission.payloadJson as Record<string, unknown>;
+  const { merged, changedFields } = mergeMissingImportedDetails(current, incoming);
+  if (changedFields.length === 0) return false;
+  await db.showSubmission.update({ where: { id: submissionId }, data: { payloadJson: merged as object } });
+  return true;
+}
+
+async function enrichDuplicate(
+  duplicate: { kind: "show" | "submission"; id: string },
+  incoming: Record<string, unknown>
+) {
+  return duplicate.kind === "show"
+    ? enrichPublishedShow(duplicate.id, incoming)
+    : enrichSubmission(duplicate.id, incoming);
+}
+
+export async function recordImportFailure(input: { source: string; label: string; error: string }) {
+  try {
+    await db.importLog.create({
+      data: { source: input.source, imported: 0, skipped: 0, errors: 1, errorDetails: input.error },
+    });
+  } catch (logError) {
+    console.error("[auto-import] unable to record source failure", { source: input.source, logError });
+  }
+  return { source: input.source, label: input.label, imported: 0, enriched: 0, skipped: 0, errors: [input.error] } satisfies ImportSourceSummary;
 }
 
 export async function ingestImportedShows(input: {
@@ -80,6 +258,7 @@ export async function ingestImportedShows(input: {
 }) {
   const suppressSourceLinks = input.source.toLowerCase() === "tcdb";
   let imported = 0;
+  let enriched = 0;
   let skipped = 0;
   const errors: string[] = [];
   const uniqueShows = new Map<string, ImportedShow>();
@@ -97,22 +276,24 @@ export async function ingestImportedShows(input: {
     uniqueShows.set(show.externalId, show);
   }
 
-  const existingExternalIds = await getExistingImportedExternalIds(input.source, [...uniqueShows.keys()]);
+  const existingRecords = await getExistingImportedRecords(input.source, [...uniqueShows.keys()]);
 
   for (const show of uniqueShows.values()) {
     try {
-      if (existingExternalIds.has(show.externalId)) {
+      const candidatePayload = importedPayload(show, input.source, suppressSourceLinks);
+      const existingRecord = existingRecords.get(show.externalId);
+      if (existingRecord) {
+        const didEnrich = existingRecord.reviewedShowId
+          ? await enrichPublishedShow(existingRecord.reviewedShowId, candidatePayload)
+          : await enrichSubmission(existingRecord.submissionId, candidatePayload);
+        if (didEnrich) enriched++;
         skipped++;
         continue;
       }
 
-      const candidatePayload = {
-        showName: show.title, startDate: show.startDate.toISOString().split("T")[0],
-        endDate: show.endDate.toISOString().split("T")[0], city: show.city,
-        state: show.state, venueName: show.venueName ?? "", venueAddress: show.venueAddress ?? "",
-      };
       const duplicate = await findDuplicateForPayload(candidatePayload, { includePending: true });
       if (duplicate) {
+        if (await enrichDuplicate(duplicate, candidatePayload)) enriched++;
         skipped++;
         continue;
       }
@@ -159,29 +340,7 @@ export async function ingestImportedShows(input: {
           submitterEmail: input.submitterEmail,
           status: "PENDING",
           dedupeKey: buildShowDedupeKey(candidatePayload),
-          payloadJson: {
-            externalId: show.externalId,
-            showName: show.title,
-            description: show.description,
-            startDate: show.startDate.toISOString().split("T")[0],
-            endDate: show.endDate.toISOString().split("T")[0],
-            city: show.city,
-            state: show.state,
-            venueName: show.venueName ?? "",
-            venueAddress: show.venueAddress ?? "",
-            categories: show.categories,
-            isFree: show.isFree,
-            admissionPrice: show.admissionPrice ?? "",
-            admissionNotes: show.admissionNotes ?? "",
-            websiteUrl: suppressSourceLinks ? null : normalizeExternalUrl(show.websiteUrl),
-            facebookUrl: normalizeExternalUrl(show.facebookUrl),
-            organizerName: show.organizerName ?? "",
-            organizerEmail: "",
-            source: input.source,
-            sourceUrl: suppressSourceLinks ? "" : normalizeExternalUrl(show.sourceUrl) ?? "",
-            venueId,
-            slug,
-          },
+          payloadJson: { ...candidatePayload, venueId, slug },
         },
       });
 
@@ -205,6 +364,7 @@ export async function ingestImportedShows(input: {
     source: input.source,
     label: input.label,
     imported,
+    enriched,
     skipped,
     errors,
   } satisfies ImportSourceSummary;

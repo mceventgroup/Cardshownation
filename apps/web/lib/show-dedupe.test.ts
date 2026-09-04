@@ -9,6 +9,17 @@ test("matches title aliases on the same date and market", () => {
   assert.equal(isLikelyDuplicate({ ...base, showName: "McPherson Sports Card and Memorabilia Show", city: "McPherson" }, { ...base, showName: "McPherson Sportscards & Memorabilia Show", city: "McPherson" }), true);
 });
 
+test("matches differently named listings at the same exact venue", () => {
+  assert.equal(isLikelyDuplicate(
+    { ...base, showName: "Premier Card Show - Manhattan", venueAddress: "101 S 4th St" },
+    { ...base, showName: "Flint Hills Collectors Expo", venueAddress: "101 S. 4th Street" }
+  ), true);
+  assert.equal(isLikelyDuplicate(
+    { ...base, showName: "Premier Card Show - Manhattan", venueName: "Peace Memorial Auditorium" },
+    { ...base, showName: "Flint Hills Collectors Expo", venueName: "Peace Memorial Auditorium" }
+  ), true);
+});
+
 test("does not merge different dates, cities, or conflicting venues", () => {
   assert.equal(showMatchScore(base, { ...base, startDate: "2026-09-06" }), 0);
   assert.equal(showMatchScore(base, { ...base, city: "Wichita" }), 0);

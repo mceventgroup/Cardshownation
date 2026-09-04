@@ -4,14 +4,64 @@ import { getAllTcdbImportStateCodes, getTcdbImportStateLabels } from "@/lib/tcdb
 import { getAllPublicImportSources, getBuiltInPublicImportSources, getDatabaseAutoImportSources, parsePublicImportSources } from "@/lib/auto-import-sources";
 import { getPublicImportSourceKey } from "@/lib/import-source-keys";
 import { runPublicSourceImports } from "@/lib/public-show-import";
-import type { ImportSourceSummary } from "@/lib/show-import-ingest";
+import { recordImportFailure, type ImportSourceSummary } from "@/lib/show-import-ingest";
+import { db } from "@/lib/db";
 
 export type ScheduledImportRunResult = {
   sources: ImportSourceSummary[];
   imported: number;
+  enriched: number;
   skipped: number;
   errors: string[];
 };
+
+export type ImportSourceHealth = {
+  status: "healthy" | "attention" | "never";
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  imported: number;
+  skipped: number;
+  errors: number;
+  message: string | null;
+};
+
+async function getImportHealth(sourceKeys: string[]) {
+  try {
+    const normalizedKeys = [...new Set(sourceKeys.map((key) => key.startsWith("tcdb:") ? "tcdb" : key))];
+    const logs = await db.importLog.findMany({
+      where: { source: { in: normalizedKeys } },
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+    });
+    const result = new Map<string, ImportSourceHealth>();
+    for (const source of normalizedKeys) {
+      const sourceLogs = logs.filter((log) => log.source === source);
+      const latest = sourceLogs[0];
+      const lastSuccess = sourceLogs.find((log) => log.errors === 0);
+      result.set(source, latest ? {
+        status: latest.errors > 0 ? "attention" : "healthy",
+        lastRunAt: latest.createdAt.toISOString(),
+        lastSuccessAt: lastSuccess?.createdAt.toISOString() ?? null,
+        imported: latest.imported,
+        skipped: latest.skipped,
+        errors: latest.errors,
+        message: latest.errorDetails,
+      } : {
+        status: "never",
+        lastRunAt: null,
+        lastSuccessAt: null,
+        imported: 0,
+        skipped: 0,
+        errors: 0,
+        message: null,
+      });
+    }
+    return result;
+  } catch (error) {
+    console.error("[auto-import] unable to load source health", error);
+    return new Map<string, ImportSourceHealth>();
+  }
+}
 
 export async function getAutoImportSourceSummaries() {
   const tcdbStateCodes = getAllTcdbImportStateCodes();
@@ -42,8 +92,7 @@ export async function getAutoImportSourceSummaries() {
     active: source.active !== false,
   }));
 
-  return {
-    activeSources: [
+  const listedSources = [
       {
         key: "tcdb",
         label: "Trading Card Database",
@@ -64,7 +113,14 @@ export async function getAutoImportSourceSummaries() {
         active: true,
       },
       ...publicSources,
-    ],
+    ];
+  const health = await getImportHealth(listedSources.map((source) => source.key));
+
+  return {
+    activeSources: listedSources.map((source) => ({
+      ...source,
+      health: health.get(source.key.startsWith("tcdb:") ? "tcdb" : source.key) ?? null,
+    })),
     managedSources: databaseSources,
     environmentSources,
   };
@@ -74,6 +130,7 @@ function combineResults(results: ImportSourceSummary[]): ScheduledImportRunResul
   return {
     sources: results,
     imported: results.reduce((sum, result) => sum + result.imported, 0),
+    enriched: results.reduce((sum, result) => sum + result.enriched, 0),
     skipped: results.reduce((sum, result) => sum + result.skipped, 0),
     errors: results.flatMap((result) => result.errors.map((error) => `${result.label}: ${error}`)),
   };
@@ -92,13 +149,11 @@ export async function runScheduledImportsForSource(selectedSource: string) {
       const tcdbResult = await runTcdbImport(requestedState ? [requestedState] : undefined);
       results.push(tcdbResult);
     } catch (error) {
-      results.push({
+      results.push(await recordImportFailure({
         source: selectedSource.startsWith("tcdb:") ? selectedSource : "tcdb",
         label: requestedState ? `Trading Card Database (${requestedState})` : "Trading Card Database",
-        imported: 0,
-        skipped: 0,
-        errors: [error instanceof Error ? error.message : String(error)],
-      });
+        error: error instanceof Error ? error.message : String(error),
+      }));
     }
   }
 
@@ -107,13 +162,11 @@ export async function runScheduledImportsForSource(selectedSource: string) {
     if (!("error" in eventbriteResult)) {
       results.push(eventbriteResult);
     } else {
-      results.push({
+      results.push(await recordImportFailure({
         source: "eventbrite",
         label: "Eventbrite",
-        imported: 0,
-        skipped: 0,
-        errors: [eventbriteResult.error],
-      });
+        error: eventbriteResult.error,
+      }));
     }
   }
 

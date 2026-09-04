@@ -15,12 +15,22 @@ type SourceSummary = {
   url: string;
   origin: "database" | "environment";
   active: boolean;
+  health: {
+    status: "healthy" | "attention" | "never";
+    lastRunAt: string | null;
+    lastSuccessAt: string | null;
+    imported: number;
+    skipped: number;
+    errors: number;
+    message: string | null;
+  } | null;
 };
 
 type RunSourceResult = {
   source: string;
   label: string;
   imported: number;
+  enriched: number;
   skipped: number;
   errors: string[];
 };
@@ -28,6 +38,7 @@ type RunSourceResult = {
 type RunResult = {
   sources: RunSourceResult[];
   imported: number;
+  enriched: number;
   skipped: number;
   errors: string[];
 };
@@ -60,6 +71,13 @@ function toEditableSource(source?: PublicImportSource): EditableSource {
     facebookUrl: source?.facebookUrl ?? "",
     active: source?.active !== false,
   };
+}
+
+function formatRunDate(value: string | null) {
+  if (!value) return "Not yet";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function Field({
@@ -108,6 +126,7 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
         .map((source) => [source.id as string, toEditableSource(source)])
     )
   );
+  const scheduledSources = sources.activeSources.filter((source) => source.scheduleLabel !== "Manual only");
 
   async function handleCreateSource() {
     setSavingId("new");
@@ -188,6 +207,47 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
           />
         </div>
       </div>
+
+      <section className="mb-8">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Source health</h2>
+            <p className="mt-1 text-sm text-slate-500">The latest scan and most recent successful scan for every weekly source.</p>
+          </div>
+          <span className="text-xs text-slate-400">Updates after every automatic or manual run</span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {scheduledSources.map((source) => {
+            const health = source.health;
+            const status = health?.status ?? "never";
+            const statusClass = status === "healthy"
+              ? "bg-emerald-50 text-emerald-700"
+              : status === "attention"
+                ? "bg-red-50 text-red-700"
+                : "bg-slate-100 text-slate-600";
+            return (
+              <article key={source.key} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{source.label}</h3>
+                    <p className="mt-1 text-xs text-slate-500">{source.type}</p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass}`}>
+                    {status === "healthy" ? "Healthy" : status === "attention" ? "Needs attention" : "Never run"}
+                  </span>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                  <div><dt className="text-slate-400">Last run</dt><dd className="mt-1 font-medium text-slate-700">{formatRunDate(health?.lastRunAt ?? null)}</dd></div>
+                  <div><dt className="text-slate-400">Last success</dt><dd className="mt-1 font-medium text-slate-700">{formatRunDate(health?.lastSuccessAt ?? null)}</dd></div>
+                  <div><dt className="text-slate-400">Imported</dt><dd className="mt-1 text-base font-semibold text-emerald-700">{health?.imported ?? 0}</dd></div>
+                  <div><dt className="text-slate-400">Skipped</dt><dd className="mt-1 text-base font-semibold text-slate-700">{health?.skipped ?? 0}</dd></div>
+                </dl>
+                {health?.message && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{health.message}</p>}
+              </article>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="mb-8 overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
@@ -505,10 +565,14 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
       {result && (
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="mb-4 text-sm font-semibold text-slate-700">Last run result</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="rounded-lg bg-green-50 p-4 text-center">
               <p className="text-2xl font-bold text-green-700">{result.imported}</p>
               <p className="mt-1 text-xs text-green-600">New pending submissions</p>
+            </div>
+            <div className="rounded-lg bg-blue-50 p-4 text-center">
+              <p className="text-2xl font-bold text-blue-700">{result.enriched}</p>
+              <p className="mt-1 text-xs text-blue-600">Existing listings enriched</p>
             </div>
             <div className="rounded-lg bg-slate-50 p-4 text-center">
               <p className="text-2xl font-bold text-slate-700">{result.skipped}</p>
@@ -520,9 +584,10 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
             </div>
           </div>
           <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
-            <div className="grid grid-cols-[minmax(0,1fr)_100px_100px_100px] bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="grid grid-cols-[minmax(0,1fr)_90px_90px_90px_90px] bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <span>Source</span>
               <span className="text-center">Imported</span>
+              <span className="text-center">Enriched</span>
               <span className="text-center">Skipped</span>
               <span className="text-center">Errors</span>
             </div>
@@ -530,10 +595,11 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
               {result.sources.map((source) => (
                 <div
                   key={source.source}
-                  className="grid grid-cols-[minmax(0,1fr)_100px_100px_100px] items-center px-4 py-3 text-sm text-slate-700"
+                  className="grid grid-cols-[minmax(0,1fr)_90px_90px_90px_90px] items-center px-4 py-3 text-sm text-slate-700"
                 >
                   <span>{source.label}</span>
                   <span className="text-center font-medium text-green-700">{source.imported}</span>
+                  <span className="text-center font-medium text-blue-700">{source.enriched}</span>
                   <span className="text-center">{source.skipped}</span>
                   <span className="text-center text-red-600">{source.errors.length}</span>
                 </div>
