@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function PromoterPortalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ created?: string; status?: string }>;
+  searchParams: Promise<{ created?: string; status?: string; claim?: string }>;
 }) {
   const [session, secret, sp] = await Promise.all([
     getPromoterSession(),
@@ -45,8 +45,9 @@ export default async function PromoterPortalPage({
     redirect("/promoter/login");
   }
 
-  const notice =
-    sp.created === "1"
+  const notice = sp.claim === "sent"
+    ? "Claim and corrected show details sent for review. The live listing will not change until approved."
+    : sp.created === "1"
       ? sp.status === "approved"
         ? "Show published."
         : "Show submitted for admin review."
@@ -161,6 +162,12 @@ export default async function PromoterPortalPage({
                             Open floor plan
                           </Link>
                         ) : null}
+                        <Link
+                          href={`/promoter/claim-show/${encodeURIComponent(show.id)}`}
+                          className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-100"
+                        >
+                          Update listing
+                        </Link>
                         <Link
                           href={`/promoter/new-show?copy=${encodeURIComponent(show.id)}`}
                           className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"

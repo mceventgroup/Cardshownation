@@ -6,6 +6,7 @@ import { DuplicateReviewCard } from "@/components/moderation/duplicate-review-ca
 import { readSubmissionPayloadEdits } from "@/lib/submission-edit";
 import {
   approveShowSubmission,
+  approveShowClaimUpdate,
   DuplicateSubmissionError,
   getSubmissionById,
   getDuplicateReview,
@@ -65,6 +66,20 @@ async function mergeSubmission(submissionId: string) {
   redirect(`/admin/submissions/${submissionId}?saved=merged`);
 }
 
+async function approveClaim(submissionId: string, formData: FormData) {
+  "use server";
+  const session = await requireAdminSession(`/admin/submissions/${submissionId}`);
+  if (formData.get("confirmClaim") !== "yes") redirect(`/admin/submissions/${submissionId}?error=claim-confirmation`);
+  const notes = String(formData.get("notes") ?? "").trim().slice(0, 500) || null;
+  try {
+    const show = await approveShowClaimUpdate(submissionId, { reviewerId: session.user.id, reviewerRole: "ADMIN", notes });
+    if (show) redirect(`/admin/shows/${show.id}`);
+  } catch (error) {
+    if (error instanceof DuplicateSubmissionError) redirect(`/admin/submissions/${submissionId}?error=duplicate`);
+    throw error;
+  }
+}
+
 async function saveSubmissionEdits(submissionId: string, formData: FormData) {
   "use server";
   const session = await requireAdminSession(`/admin/submissions/${submissionId}`);
@@ -115,6 +130,7 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
 
   const payload = submission.payloadJson as Record<string, unknown>;
   const isPending = submission.status === "PENDING";
+  const isClaim = payload.submissionIntent === "CLAIM_OR_UPDATE";
   const hasOrganizerApprovalContext = typeof payload.organizerId === "string";
   const moderationStatus =
     "organizer" in submission && submission.organizer
@@ -125,6 +141,7 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
   const editWithId = saveSubmissionEdits.bind(null, submission.id);
   const correctionsWithId = requestCorrections.bind(null, submission.id);
   const mergeWithId = mergeSubmission.bind(null, submission.id);
+  const claimWithId = approveClaim.bind(null, submission.id);
   const duplicateReview = await getDuplicateReview(payload, submission.id);
   const hasLikelyDuplicate = (duplicateReview?.score ?? 0) >= 72;
   const submittedFields: [string, unknown][] = [
@@ -158,6 +175,8 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
     ],
     ["Admission Notes", payload.admissionNotes],
     ["Parking", payload.parkingInfo],
+    ["Claim Relationship", payload.claimRelationship],
+    ["Verification Evidence", payload.claimEvidence],
   ];
   const reviewer = "reviewer" in submission ? submission.reviewer : null;
 
@@ -192,6 +211,7 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
         <p role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {sp.error === "duplicate"
             ? "A matching show or pending submission already exists."
+            : sp.error === "claim-confirmation" ? "Confirm that you verified the promoter relationship before approving the claim."
             : sp.error === "corrections-note" ? "Add a note explaining what needs to be corrected."
             : "Check the edited fields and try again."}
         </p>
@@ -229,9 +249,9 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
         </div>
       </div>
 
-      <DuplicateReviewCard submitted={payload} review={duplicateReview} area="admin" mergeAction={isPending ? mergeWithId : undefined} approveDistinctAction={isPending ? approveWithId : undefined} />
+      <DuplicateReviewCard submitted={payload} review={duplicateReview} area="admin" mergeAction={isPending && !isClaim ? mergeWithId : undefined} approveDistinctAction={isPending && !isClaim ? approveWithId : undefined} claimAction={isPending && isClaim ? claimWithId : undefined} />
 
-      {isPending && <SubmissionEditForm payload={payload} action={editWithId} />}
+      {isPending && !isClaim && <SubmissionEditForm payload={payload} action={editWithId} />}
 
       {hasOrganizerApprovalContext && (
         <div className="mb-8 rounded-xl border border-slate-200 bg-slate-50 p-5">
@@ -248,7 +268,7 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
 
       {isPending ? (
         <div className="space-y-4">
-          {!hasLikelyDuplicate && <form action={approveWithId}>
+          {!isClaim && !hasLikelyDuplicate && <form action={approveWithId}>
             {hasOrganizerApprovalContext && moderationStatus !== "TRUSTED" && (
               <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <label className="flex items-start gap-3 text-sm text-slate-700">

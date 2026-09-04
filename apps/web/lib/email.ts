@@ -418,3 +418,25 @@ export async function sendSubmissionDecisionEmail(to: string, input: { decision:
   const button = approved && input.showUrl ? `<a href="${escapeHtml(input.showUrl)}" style="display:inline-block;background:#0284c7;color:#fff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:9999px;text-decoration:none">View your listing</a>` : "";
   await sendEmail({ from: getFromAddress(), to, subject, html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px"><h1 style="font-size:22px;color:#020617">${escapeHtml(heading)}</h1><p style="color:#475569;line-height:1.6">${approved ? "Thanks for helping collectors find your show." : corrections ? "Please resubmit the corrected details and our team will review them." : "Thank you for taking the time to submit it."}</p>${notes}${button}</div>` });
 }
+
+export async function sendImportHealthAlertEmail(to: string, input: { sourceLabel: string; status: "attention" | "stale" | "empty" | "healthy"; message: string; dashboardUrl: string }) {
+  const recovered = input.status === "healthy";
+  await sendEmail({
+    from: getFromAddress(),
+    to,
+    subject: recovered ? `Recovered: ${input.sourceLabel} show scan` : `Import alert: ${input.sourceLabel} needs attention`,
+    html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 16px"><p style="font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${recovered ? "#047857" : "#b45309"};margin:0 0 10px">${recovered ? "Source recovered" : "Source health alert"}</p><h1 style="font-size:22px;font-weight:600;color:#020617;margin:0 0 10px">${escapeHtml(input.sourceLabel)}</h1><p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(input.message)}</p><a href="${escapeHtml(input.dashboardUrl)}" style="display:inline-block;background:#0284c7;color:#fff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:9999px;text-decoration:none">Open rerun controls</a><p style="color:#94a3b8;font-size:13px;line-height:1.5;margin-top:24px">Card Show Nation sends another alert only if this source changes state.</p></div>`,
+  });
+}
+
+export async function sendImportHealthWeeklySummaryEmail(to: string, input: { dashboardUrl: string; healthyCount: number; problemSources: Array<{ label: string; status: string; message: string }> }) {
+  const problemRows = input.problemSources.length
+    ? input.problemSources.map((source) => `<li style="margin:0 0 10px"><strong>${escapeHtml(source.label)}</strong> · ${escapeHtml(source.status)}<br><span style="color:#64748b">${escapeHtml(source.message)}</span></li>`).join("")
+    : '<li style="color:#047857">Every monitored source is healthy.</li>';
+  await sendEmail({
+    from: getFromAddress(),
+    to,
+    subject: `Weekly import health: ${input.healthyCount} healthy, ${input.problemSources.length} need attention`,
+    html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 16px"><h1 style="font-size:22px;font-weight:600;color:#020617;margin:0 0 10px">Weekly import health</h1><p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 20px">${input.healthyCount} source${input.healthyCount === 1 ? " is" : "s are"} healthy and ${input.problemSources.length} ${input.problemSources.length === 1 ? "needs" : "need"} attention.</p><ul style="padding-left:20px;color:#334155;font-size:14px;line-height:1.5;margin-bottom:24px">${problemRows}</ul><a href="${escapeHtml(input.dashboardUrl)}" style="display:inline-block;background:#0284c7;color:#fff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:9999px;text-decoration:none">View source dashboard</a></div>`,
+  });
+}

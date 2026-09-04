@@ -35,6 +35,12 @@ async function bulkModerateSubmissions(formData: FormData) {
 
   for (const id of ids) {
     try {
+      const pendingSubmission = visible.find((submission) => submission.id === id);
+      const isClaim = (pendingSubmission?.payloadJson as Record<string, unknown> | undefined)?.submissionIntent === "CLAIM_OR_UPDATE";
+      if (action === "approve" && isClaim) {
+        skipped += 1;
+        continue;
+      }
       if (action === "reject") {
         await rejectShowSubmission(id, notes ?? "Rejected during bulk review.", {
           reviewerId: session.user.id,
@@ -140,6 +146,7 @@ function SubmissionTable({
               <div className="min-w-0">
                 <p className="font-semibold text-slate-950">{typeof payload.showName === "string" ? payload.showName : "Unnamed"}</p>
                 <p className="mt-1 text-sm text-slate-500">{String(payload.city ?? "")}{payload.state ? `, ${String(payload.state)}` : ""}</p>
+                {payload.submissionIntent === "CLAIM_OR_UPDATE" && <p className="mt-1 text-xs font-semibold text-amber-700">Claim/update · review individually</p>}
               </div>
               {bulkAction ? (
                 <label className="flex shrink-0 items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
@@ -182,7 +189,7 @@ function SubmissionTable({
             return (
               <tr key={submission.id} className="transition-colors hover:bg-slate-50">
                 {bulkAction && <td className="px-4 py-3"><input type="checkbox" name="submissionIds" value={submission.id} aria-label={`Select ${String(payload.showName ?? "submission")}`} /></td>}
-                <td className="px-4 py-3"><p className="font-medium text-slate-900">{typeof payload.showName === "string" ? payload.showName : "Unnamed"}</p><p className="text-xs text-slate-400">{submission.submitterName}</p></td>
+                <td className="px-4 py-3"><p className="font-medium text-slate-900">{typeof payload.showName === "string" ? payload.showName : "Unnamed"}</p><p className="text-xs text-slate-400">{submission.submitterName}{payload.submissionIntent === "CLAIM_OR_UPDATE" ? " · Claim/update — review individually" : ""}</p></td>
                 <td className="hidden px-4 py-3 text-slate-500 md:table-cell">{String(payload.city ?? "")}, {String(payload.state ?? "")}</td>
                 <td className="hidden px-4 py-3 text-xs text-slate-400 md:table-cell">{new Date(submission.createdAt).toLocaleDateString()}</td>
                 <td className="hidden px-4 py-3 lg:table-cell"><span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${moderationStatus === "TRUSTED" ? "bg-green-50 text-green-700" : moderationStatus === "BLOCKED" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"}`}>{moderationStatus.toLowerCase()}</span></td>

@@ -192,6 +192,15 @@ export async function findDuplicateForPayload(
 
 export async function getDuplicateReview(payload: Record<string, unknown>, excludeSubmissionId?: string) {
   if (isFixtureMode()) return null;
+  const claimTargetShowId = readString(payload, "claimTargetShowId");
+  if (claimTargetShowId) {
+    const show = await db.show.findUnique({ where: { id: claimTargetShowId }, include: { venue: true } });
+    if (!show) return null;
+    const record = { slug: show.slug, showName: show.title, startDate: show.startDate.toISOString().slice(0, 10), city: show.city, state: show.state, venueName: show.venue?.name, venueAddress: show.venue?.address1, description: show.description, websiteUrl: show.websiteUrl, facebookUrl: show.facebookUrl, tableCount: show.tableCount, startTimeLabel: show.startTimeLabel, endTimeLabel: show.endTimeLabel, admissionPrice: show.admissionPrice, admissionNotes: show.admissionNotes, vendorDetails: show.vendorDetails, parkingInfo: show.parkingInfo, categories: show.categories, isFree: show.isFree } satisfies Record<string, unknown>;
+    const submittedInfo = informationScore(payload);
+    const existingInfo = informationScore(record);
+    return { kind: "show" as const, id: show.id, record, score: showMatchScore(payload, record), submittedInfo, existingInfo, recommendation: submittedInfo > existingInfo ? "submission" as const : "existing" as const };
+  }
   const startDate = readString(payload, "startDate");
   const state = readString(payload, "state")?.toUpperCase();
   if (!startDate || !state) return null;
@@ -892,6 +901,101 @@ export async function mergeDuplicateSubmission(
   });
 
   return { kind: review.kind, id: review.id, reviewedShowId, changedFields };
+}
+
+export async function approveShowClaimUpdate(
+  submissionId: string,
+  actor: { reviewerId: string; reviewerRole: UserRole; notes?: string | null }
+) {
+  if (actor.reviewerRole !== "ADMIN" && actor.reviewerRole !== "MODERATOR") {
+    throw new Error("Only admin or moderator reviewers can approve show claims.");
+  }
+  if (isFixtureMode()) return null;
+
+  const submission = await db.showSubmission.findUnique({ where: { id: submissionId } });
+  if (!submission || submission.status !== "PENDING") return null;
+  const payload = submission.payloadJson as Record<string, unknown>;
+  if (readString(payload, "submissionIntent") !== "CLAIM_OR_UPDATE") {
+    throw new Error("This submission is not a show claim.");
+  }
+  const targetShowId = readString(payload, "claimTargetShowId");
+  const organizerId = submission.organizerId ?? readString(payload, "organizerId");
+  if (!targetShowId || !organizerId) throw new Error("The claim is missing its show or organizer.");
+
+  const show = await db.show.findUnique({ where: { id: targetShowId }, include: { venue: true } });
+  if (!show) throw new Error("The claimed show no longer exists.");
+  const title = readString(payload, "showName");
+  const startDateText = readString(payload, "startDate");
+  const endDateText = readString(payload, "endDate") ?? startDateText;
+  const city = readString(payload, "city");
+  const state = readString(payload, "state")?.toUpperCase();
+  if (!title || !startDateText || !endDateText || !city || !state) throw new Error("The claim is missing required show details.");
+  const startDate = new Date(`${startDateText}T00:00:00.000Z`);
+  const endDate = new Date(`${endDateText}T00:00:00.000Z`);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < startDate) throw new Error("The claim has invalid dates.");
+
+  const dedupeKey = buildShowDedupeKey(payload);
+  if (dedupeKey) {
+    const duplicate = await db.show.findFirst({ where: { dedupeKey, id: { not: show.id } }, select: { id: true } });
+    if (duplicate) throw new DuplicateSubmissionError(duplicate.id);
+  }
+
+  let venueId = show.venueId;
+  const venueName = readString(payload, "venueName");
+  const venueAddress = readString(payload, "venueAddress");
+  if (venueName && venueAddress) {
+    const coords = getCityCoords(city, state);
+    const venue = await db.venue.upsert({
+      where: { name_city_state: { name: venueName, city, state } },
+      create: { name: venueName, address1: venueAddress, city, state, parkingInfo: readString(payload, "parkingInfo"), latitude: coords?.lat ?? null, longitude: coords?.lng ?? null },
+      update: { address1: venueAddress, parkingInfo: readString(payload, "parkingInfo") ?? undefined },
+    });
+    venueId = venue.id;
+  } else if (!venueName || venueName !== show.venue?.name || city !== show.city || state !== show.state) {
+    venueId = null;
+  }
+
+  const tableCount = Number.parseInt(readString(payload, "tableCount") ?? "", 10);
+  const reviewerNote = actor.notes?.trim() || "Claim approved and reviewed updates applied.";
+  const updatedShow = await db.$transaction(async (transaction) => {
+    const updated = await transaction.show.update({
+      where: { id: show.id },
+      data: {
+        title,
+        dedupeKey,
+        startDate,
+        endDate,
+        startTimeLabel: readString(payload, "startTimeLabel"),
+        endTimeLabel: readString(payload, "endTimeLabel"),
+        city,
+        state,
+        categories: readStringArray(payload, "categories"),
+        description: mergeDescriptionWithDailySchedule(payload),
+        tableCount: Number.isFinite(tableCount) && tableCount > 0 ? tableCount : null,
+        vendorDetails: readString(payload, "vendorDetails"),
+        websiteUrl: normalizeExternalUrl(readString(payload, "websiteUrl")),
+        facebookUrl: normalizeExternalUrl(readString(payload, "facebookUrl")),
+        isFree: payload.isFree === true,
+        admissionPrice: readString(payload, "admissionPrice"),
+        admissionNotes: readString(payload, "admissionNotes"),
+        parkingInfo: readString(payload, "parkingInfo"),
+        flyerImageUrl: readString(payload, "flyerImageUrl") ?? show.flyerImageUrl,
+        organizerId,
+        venueId,
+        lastVerifiedAt: new Date(),
+        expiresAt: new Date(endDate.getTime() + 24 * 60 * 60 * 1000),
+      },
+    });
+    await transaction.showSubmission.update({
+      where: { id: submission.id },
+      data: { status: "APPROVED", reviewedShowId: show.id, reviewerId: actor.reviewerId, reviewerRole: actor.reviewerRole, notes: reviewerNote },
+    });
+    return updated;
+  });
+
+  await writeAuditLog({ actorId: actor.reviewerId, actorRole: actor.reviewerRole, action: "show_claim.approved", targetType: "Show", targetId: show.id, details: { submissionId, organizerId, relationship: readString(payload, "claimRelationship") } });
+  await notifyDecision({ email: submission.submitterEmail, payload, decision: "approved", notes: reviewerNote, showSlug: show.slug });
+  return updatedShow;
 }
 
 export async function updatePendingSubmissionPayload(

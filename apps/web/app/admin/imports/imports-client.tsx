@@ -116,7 +116,7 @@ function Field({
   );
 }
 
-export function ImportsClient({ sources }: { sources: SourceData }) {
+export function ImportsClient({ sources, initialSource = "all" }: { sources: SourceData; initialSource?: string }) {
   const router = useRouter();
   const [result, setResult] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +209,7 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
           <RunDatabasePullsButton
             label="Run database pulls"
             sources={sources.activeSources.map((source) => ({ key: source.key, label: source.label }))}
+            defaultSource={initialSource}
             onComplete={(data) => {
               setResult(data);
               setError(null);
@@ -221,7 +222,7 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
         </div>
       </div>
 
-      <section className="mb-8">
+      <section id="source-health" className="mb-8 scroll-mt-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Source health</h2>

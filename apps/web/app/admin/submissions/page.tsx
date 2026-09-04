@@ -36,6 +36,12 @@ async function bulkModerateSubmissions(formData: FormData) {
   let skipped = 0;
   for (const submissionId of submissionIds) {
     try {
+      const pendingSubmission = submissions.find((submission) => submission.id === submissionId);
+      const isClaim = (pendingSubmission?.payloadJson as Record<string, unknown> | undefined)?.submissionIntent === "CLAIM_OR_UPDATE";
+      if (action === "approve" && isClaim) {
+        skipped += 1;
+        continue;
+      }
       if (action === "reject") {
         await rejectShowSubmission(submissionId, notes ?? "Rejected during bulk review.", {
           reviewerId: session.user.id,
@@ -172,7 +178,7 @@ function SubmissionTable({
                 )}
                 <td className="px-4 py-3">
                   <p className="font-medium text-slate-900">{typeof payload.showName === "string" ? payload.showName : "Unnamed"}</p>
-                  <p className="text-xs text-slate-400">{submission.submitterName}</p>
+                  <p className="text-xs text-slate-400">{submission.submitterName}{payload.submissionIntent === "CLAIM_OR_UPDATE" ? " · Claim/update — review individually" : ""}</p>
                 </td>
                 <td className="hidden px-4 py-3 text-slate-500 md:table-cell">{String(payload.city ?? "")}, {String(payload.state ?? "")}</td>
                 <td className="hidden px-4 py-3 text-xs text-slate-400 md:table-cell">{new Date(submission.createdAt).toLocaleDateString()}</td>

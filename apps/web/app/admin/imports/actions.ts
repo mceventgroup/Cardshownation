@@ -9,10 +9,17 @@ import {
   type AutoImportSourceInput,
 } from "@/lib/auto-import-sources";
 import { runScheduledImportsForSource } from "@/lib/scheduled-imports";
+import { runImportHealthNotifications } from "@/lib/import-health-alerts";
 
 export async function triggerAutoImports(selectedSource: string = "all") {
   await requireAdminSession("/admin/imports");
-  return runScheduledImportsForSource(selectedSource);
+  const result = await runScheduledImportsForSource(selectedSource);
+  try {
+    await runImportHealthNotifications();
+  } catch (error) {
+    console.error("[import health] notification check failed after manual import", error);
+  }
+  return result;
 }
 
 export async function createAutoImportSource(input: AutoImportSourceInput) {

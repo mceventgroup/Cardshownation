@@ -27,6 +27,7 @@ let getModeratorVisibleSubmissionById: typeof import("./submissions").getModerat
 let buildShowDedupeKey: typeof import("./submissions").buildShowDedupeKey;
 let submitShowForModeration: typeof import("./submissions").submitShowForModeration;
 let mergeDuplicateSubmission: typeof import("./submissions").mergeDuplicateSubmission;
+let approveShowClaimUpdate: typeof import("./submissions").approveShowClaimUpdate;
 const restorers: Array<() => void> = [];
 
 function stubMethod(
@@ -72,6 +73,7 @@ before(async () => {
     buildShowDedupeKey,
     submitShowForModeration,
     mergeDuplicateSubmission,
+    approveShowClaimUpdate,
   } = await import("./submissions"));
 });
 
@@ -638,6 +640,13 @@ test("approveShowSubmission returns the existing reviewed show for already-appro
   assert.equal(findShowMock.mock.calls.length, 1);
   assert.equal(updateSubmissionMock.mock.calls.length, 0);
   assert.equal(auditLogMock.mock.calls.length, 0);
+});
+
+test("approveShowClaimUpdate rejects non-reviewer roles", async () => {
+  await assert.rejects(
+    () => approveShowClaimUpdate("submission-1", { reviewerId: "fan-1", reviewerRole: "FAN" }),
+    /Only admin or moderator reviewers can approve show claims\./
+  );
 });
 
 test("mergeDuplicateSubmission adds missing details without overwriting the published listing", async () => {

@@ -23,6 +23,7 @@ export function RunDatabasePullsButton({
   label = "Run database pulls",
   showSummary = false,
   sources = [],
+  defaultSource = "all",
   onComplete,
   onError,
 }: {
@@ -33,13 +34,18 @@ export function RunDatabasePullsButton({
     key: string;
     label: string;
   }>;
+  defaultSource?: string;
   onComplete?: (result: RunResult) => void;
   onError?: (message: string) => void;
 }) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSource, setSelectedSource] = useState("all");
+  const [selectedSource, setSelectedSource] = useState(
+    defaultSource === "all" || sources.some((source) => source.key === defaultSource)
+      ? defaultSource
+      : "all"
+  );
 
   async function handleClick() {
     setRunning(true);

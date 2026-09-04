@@ -10,6 +10,10 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/cron/import-health",
+      "schedule": "30 12 * * *"
+    },
+    {
       "path": "/api/cron/expire-shows",
       "schedule": "15 7 * * *"
     }

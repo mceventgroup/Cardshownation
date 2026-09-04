@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { isFixtureMode } from "@/lib/data-mode";
 import { saveFlyerImage } from "@/lib/flyers";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
-import { submitShowForModeration } from "@/lib/submissions";
+import { buildShowDedupeKey, createShowSubmission, submitShowForModeration } from "@/lib/submissions";
 import { SHOW_CATEGORIES } from "@/lib/shows";
 import { hasOrganizerFloorplanEnabledColumn } from "@/lib/organizer-schema";
 import { normalizeExternalUrl } from "@/lib/url";
@@ -50,6 +50,12 @@ type PromoterShowInput = {
   admissionNotes?: string | null;
   parkingInfo?: string | null;
   flyerFile?: File | null;
+};
+
+type PromoterShowClaimInput = PromoterShowInput & {
+  claimTargetShowId: string;
+  claimRelationship: "PROMOTER" | "AUTHORIZED_STAFF" | "VENUE_PARTNER";
+  claimEvidence: string;
 };
 
 export type PromoterShowDefaults = {
@@ -456,6 +462,122 @@ export async function getPromoterShowDefaults(userId: string, showId: string) {
     admissionNotes: show.admissionNotes,
     parkingInfo: show.parkingInfo,
   } satisfies PromoterShowDefaults;
+}
+
+export async function getClaimableShow(showId: string) {
+  if (isFixtureMode()) return null;
+  const show = await db.show.findFirst({
+    where: { id: showId, status: "APPROVED" },
+    include: { venue: true, organizer: { select: { id: true, name: true } } },
+  });
+  if (!show) return null;
+
+  return {
+    id: show.id,
+    slug: show.slug,
+    currentOrganizerId: show.organizerId,
+    currentOrganizerName: show.organizer?.name ?? null,
+    defaults: {
+      showName: show.title,
+      startDate: show.startDate.toISOString().slice(0, 10),
+      endDate: show.endDate.toISOString().slice(0, 10),
+      startTimeLabel: show.startTimeLabel,
+      endTimeLabel: show.endTimeLabel,
+      city: show.city,
+      state: show.state,
+      venueName: show.venue?.name ?? "",
+      venueAddress: show.venue?.address1 ?? null,
+      categories: show.categories,
+      description: show.description,
+      tableCount: show.tableCount?.toString() ?? null,
+      vendorDetails: show.vendorDetails,
+      websiteUrl: show.websiteUrl,
+      facebookUrl: show.facebookUrl,
+      isFree: show.isFree,
+      admissionPrice: show.admissionPrice,
+      admissionNotes: show.admissionNotes,
+      parkingInfo: show.parkingInfo,
+    } satisfies PromoterShowDefaults,
+  };
+}
+
+export async function createShowClaimUpdate(userId: string, input: PromoterShowClaimInput) {
+  if (isFixtureMode()) return { status: "PENDING" as const };
+  const [user, targetShow] = await Promise.all([
+    db.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        organizer: { select: { id: true, name: true, email: true, publicEmail: true, publicEmailConsentAt: true, websiteUrl: true, facebookUrl: true, moderationStatus: true } },
+      },
+    }),
+    db.show.findFirst({ where: { id: input.claimTargetShowId, status: "APPROVED" }, select: { id: true, title: true } }),
+  ]);
+  if (!user?.organizer) throw new Error("Organizer account not found.");
+  if (!targetShow) return { status: "NOT_FOUND" as const };
+  if (user.organizer.moderationStatus === "BLOCKED") return { status: "BLOCKED" as const };
+
+  const pendingClaim = await db.showSubmission.findFirst({
+    where: {
+      status: "PENDING",
+      organizerId: user.organizer.id,
+      AND: [{ payloadJson: { path: ["claimTargetShowId"], equals: targetShow.id } }],
+    },
+    select: { id: true },
+  });
+  if (pendingClaim) return { status: "DUPLICATE" as const, submissionId: pendingClaim.id };
+
+  const city = normalizeLocationValue(input.city);
+  const state = normalizeLocationValue(input.state).toUpperCase();
+  const flyerImageUrl = input.flyerFile && input.flyerFile.size > 0 ? await saveFlyerImage(input.showName, input.flyerFile) : null;
+  const organizer = user.organizer;
+  const payload: Record<string, unknown> = {
+    showName: input.showName,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    sameTimesEachDay: input.sameTimesEachDay !== false,
+    dailySchedule: input.dailySchedule ?? null,
+    startTimeLabel: input.startTimeLabel ?? null,
+    endTimeLabel: input.endTimeLabel ?? null,
+    city,
+    state,
+    venueName: input.venueName,
+    venueAddress: input.venueAddress ?? null,
+    categories: input.categories,
+    organizerId: organizer.id,
+    organizerName: organizer.name,
+    organizerEmail: organizer.email,
+    publicPromoterEmail: organizer.publicEmailConsentAt ? organizer.publicEmail : null,
+    publicPromoterEmailConsent: Boolean(organizer.publicEmail && organizer.publicEmailConsentAt),
+    description: input.description ?? null,
+    tableCount: input.tableCount ?? null,
+    vendorDetails: input.vendorDetails ?? null,
+    websiteUrl: normalizeExternalUrl(input.websiteUrl) ?? organizer.websiteUrl,
+    facebookUrl: normalizeExternalUrl(input.facebookUrl) ?? organizer.facebookUrl,
+    isFree: input.isFree,
+    admissionPrice: input.admissionPrice ?? null,
+    admissionNotes: input.admissionNotes ?? null,
+    parkingInfo: input.parkingInfo ?? null,
+    flyerImageUrl,
+    submittedViaPortal: true,
+    submissionIntent: "CLAIM_OR_UPDATE",
+    claimTargetShowId: targetShow.id,
+    possibleDuplicateKind: "show",
+    possibleDuplicateId: targetShow.id,
+    possibleDuplicateTitle: targetShow.title,
+    claimRelationship: input.claimRelationship,
+    claimEvidence: input.claimEvidence.trim(),
+  };
+  const submission = await createShowSubmission({
+    submitterName: user.name ?? organizer.name,
+    submitterEmail: user.email,
+    payloadJson: payload,
+    organizerId: organizer.id,
+    dedupeKey: buildShowDedupeKey(payload),
+  });
+  return { status: "PENDING" as const, submission };
 }
 
 export async function createPromoterShow(userId: string, input: PromoterShowInput) {

@@ -582,6 +582,18 @@ export default async function ShowDetailPage({ params }: Props) {
           </div>
 
           <aside className="space-y-6">
+            <section className="rounded-[2rem] border border-brand-200 bg-brand-50 p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-slate-950">Promote this show?</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Claim this listing or send corrected details without creating a duplicate.
+              </p>
+              <Link
+                href={`/promoter/claim-show/${encodeURIComponent(show.id)}`}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-brand-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-800"
+              >
+                Claim or update this show
+              </Link>
+            </section>
             <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-semibold text-slate-950">More shows</h2>
               <div className="mt-4 grid gap-3 text-sm">

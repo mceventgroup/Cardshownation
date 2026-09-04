@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { summarizeImportHealth } from "./scheduled-imports";
+import { getImportHealthNotificationType } from "./import-health-alerts";
 
 const now = new Date("2026-09-03T12:00:00.000Z");
 
@@ -28,4 +29,12 @@ test("source health distinguishes failed and overdue scans", () => {
 
 test("TCDB is not treated as broken when its incremental scan has no new records", () => {
   assert.equal(summarizeImportHealth("tcdb", [log(1, 0, 0), log(8, 0, 0)], now).status, "healthy");
+});
+
+test("source health notifications fire only for state changes and recovery", () => {
+  assert.equal(getImportHealthNotificationType(null, "healthy"), null);
+  assert.equal(getImportHealthNotificationType(null, "attention"), "problem");
+  assert.equal(getImportHealthNotificationType("attention", "attention"), null);
+  assert.equal(getImportHealthNotificationType("attention", "healthy"), "recovered");
+  assert.equal(getImportHealthNotificationType("never", "healthy"), null);
 });
