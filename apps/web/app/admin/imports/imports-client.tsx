@@ -16,13 +16,17 @@ type SourceSummary = {
   origin: "database" | "environment";
   active: boolean;
   health: {
-    status: "healthy" | "attention" | "never";
+    status: "healthy" | "attention" | "stale" | "empty" | "never";
     lastRunAt: string | null;
     lastSuccessAt: string | null;
+    detected: number;
     imported: number;
     skipped: number;
     errors: number;
     message: string | null;
+    statusNote: string | null;
+    consecutiveEmptyRuns: number;
+    recentRuns: Array<{ at: string; detected: number; imported: number; skipped: number; errors: number }>;
   } | null;
 };
 
@@ -127,6 +131,15 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
     )
   );
   const scheduledSources = sources.activeSources.filter((source) => source.scheduleLabel !== "Manual only");
+  const statusPriority: Record<NonNullable<SourceSummary["health"]>["status"], number> = {
+    attention: 0, stale: 1, empty: 2, never: 3, healthy: 4,
+  };
+  const monitoredSources = [...scheduledSources].sort((left, right) =>
+    statusPriority[left.health?.status ?? "never"] - statusPriority[right.health?.status ?? "never"]
+  );
+  const healthyCount = monitoredSources.filter((source) => source.health?.status === "healthy").length;
+  const attentionCount = monitoredSources.filter((source) => source.health && !["healthy", "never"].includes(source.health.status)).length;
+  const neverCount = monitoredSources.filter((source) => !source.health || source.health.status === "never").length;
 
   async function handleCreateSource() {
     setSavingId("new");
@@ -216,14 +229,23 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
           </div>
           <span className="text-xs text-slate-400">Updates after every automatic or manual run</span>
         </div>
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-2xl font-bold text-emerald-800">{healthyCount}</p><p className="mt-1 text-xs font-semibold text-emerald-700">Healthy sources</p></div>
+          <div className={`rounded-2xl border p-4 ${attentionCount ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}><p className={`text-2xl font-bold ${attentionCount ? "text-red-800" : "text-slate-700"}`}>{attentionCount}</p><p className={`mt-1 text-xs font-semibold ${attentionCount ? "text-red-700" : "text-slate-500"}`}>Need attention</p></div>
+          <div className={`rounded-2xl border p-4 ${neverCount ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}><p className={`text-2xl font-bold ${neverCount ? "text-amber-800" : "text-slate-700"}`}>{neverCount}</p><p className={`mt-1 text-xs font-semibold ${neverCount ? "text-amber-700" : "text-slate-500"}`}>Never scanned</p></div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {scheduledSources.map((source) => {
+          {monitoredSources.map((source) => {
             const health = source.health;
             const status = health?.status ?? "never";
             const statusClass = status === "healthy"
               ? "bg-emerald-50 text-emerald-700"
               : status === "attention"
                 ? "bg-red-50 text-red-700"
+                : status === "stale"
+                  ? "bg-orange-50 text-orange-700"
+                  : status === "empty"
+                    ? "bg-amber-50 text-amber-800"
                 : "bg-slate-100 text-slate-600";
             return (
               <article key={source.key} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -233,16 +255,18 @@ export function ImportsClient({ sources }: { sources: SourceData }) {
                     <p className="mt-1 text-xs text-slate-500">{source.type}</p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass}`}>
-                    {status === "healthy" ? "Healthy" : status === "attention" ? "Needs attention" : "Never run"}
+                    {status === "healthy" ? "Healthy" : status === "attention" ? "Scan failed" : status === "stale" ? "Overdue" : status === "empty" ? "No listings found" : "Never run"}
                   </span>
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
                   <div><dt className="text-slate-400">Last run</dt><dd className="mt-1 font-medium text-slate-700">{formatRunDate(health?.lastRunAt ?? null)}</dd></div>
                   <div><dt className="text-slate-400">Last success</dt><dd className="mt-1 font-medium text-slate-700">{formatRunDate(health?.lastSuccessAt ?? null)}</dd></div>
-                  <div><dt className="text-slate-400">Imported</dt><dd className="mt-1 text-base font-semibold text-emerald-700">{health?.imported ?? 0}</dd></div>
-                  <div><dt className="text-slate-400">Skipped</dt><dd className="mt-1 text-base font-semibold text-slate-700">{health?.skipped ?? 0}</dd></div>
+                  <div><dt className="text-slate-400">Listings detected</dt><dd className="mt-1 text-base font-semibold text-blue-700">{health?.detected ?? 0}</dd></div>
+                  <div><dt className="text-slate-400">New / existing</dt><dd className="mt-1 text-base font-semibold text-slate-700">{health?.imported ?? 0} / {health?.skipped ?? 0}</dd></div>
                 </dl>
+                {health?.statusNote && <p className={`mt-4 rounded-lg px-3 py-2 text-xs leading-5 ${status === "healthy" ? "bg-slate-50 text-slate-600" : "bg-amber-50 text-amber-900"}`}>{health.statusNote}</p>}
                 {health?.message && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{health.message}</p>}
+                {health?.recentRuns?.length ? <details className="mt-4 text-xs text-slate-500"><summary className="cursor-pointer font-semibold text-slate-600">Recent scan results</summary><ul className="mt-2 space-y-1">{health.recentRuns.map((run) => <li key={run.at}>{formatRunDate(run.at)} · {run.detected} detected · {run.errors ? `${run.errors} error${run.errors === 1 ? "" : "s"}` : `${run.imported} new`}</li>)}</ul></details> : null}
               </article>
             );
           })}

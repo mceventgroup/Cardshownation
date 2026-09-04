@@ -213,6 +213,7 @@ async function handleSubmission(
       submitterName,
       submitterEmail,
       payloadJson: payload,
+      duplicatePolicy: formData.get("duplicateResolution") === "review-update" ? "review-update" : "reject",
     });
 
     if (result.status === "BLOCKED") {

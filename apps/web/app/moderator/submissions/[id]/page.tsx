@@ -9,6 +9,7 @@ import {
   DuplicateSubmissionError,
   getModeratorVisibleSubmissionById,
   getDuplicateReview,
+  mergeDuplicateSubmission,
   rejectShowSubmission,
   requestSubmissionCorrections,
   updatePendingSubmissionPayload,
@@ -63,6 +64,7 @@ async function approveSubmission(submissionId: string, formData: FormData) {
       reviewerId: session.user.id,
       reviewerRole: "MODERATOR",
       notes: note || null,
+      allowLikelyDuplicate: formData.get("confirmDistinct") === "yes",
     });
   } catch (error) {
     if (error instanceof DuplicateSubmissionError) {
@@ -73,6 +75,15 @@ async function approveSubmission(submissionId: string, formData: FormData) {
   if (!show) return;
 
   redirect(`/moderator/submissions/${submissionId}`);
+}
+
+async function mergeSubmission(submissionId: string) {
+  "use server";
+  const session = await requireModeratorSession(`/moderator/submissions/${submissionId}`);
+  const visible = await getModeratorVisibleSubmissionById(submissionId, session.user.id);
+  if (!visible || visible.status !== "PENDING") return;
+  await mergeDuplicateSubmission(submissionId, { reviewerId: session.user.id, reviewerRole: "MODERATOR" });
+  redirect(`/moderator/submissions/${submissionId}?saved=merged`);
 }
 
 async function saveSubmissionEdits(submissionId: string, formData: FormData) {
@@ -135,7 +146,9 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
   const rejectWithId = rejectSubmission.bind(null, submission.id);
   const editWithId = saveSubmissionEdits.bind(null, submission.id);
   const correctionsWithId = requestCorrections.bind(null, submission.id);
+  const mergeWithId = mergeSubmission.bind(null, submission.id);
   const duplicateReview = await getDuplicateReview(payload, submission.id);
+  const hasLikelyDuplicate = (duplicateReview?.score ?? 0) >= 72;
   const submittedFields: [string, unknown][] = [
     ["Show Name", payload.showName],
     ["Start Date", payload.startDate],
@@ -196,7 +209,7 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
       )}
       {sp.saved && (
         <p className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          {sp.saved === "corrections" ? "Correction request emailed to the submitter." : "Submission details saved."}
+          {sp.saved === "corrections" ? "Correction request emailed to the submitter." : sp.saved === "merged" ? "Safe missing details were merged into the existing record." : "Submission details saved."}
         </p>
       )}
 
@@ -229,13 +242,13 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
         </div>
       </div>
 
-      <DuplicateReviewCard submitted={payload} review={duplicateReview} area="moderator" />
+      <DuplicateReviewCard submitted={payload} review={duplicateReview} area="moderator" mergeAction={isPending ? mergeWithId : undefined} approveDistinctAction={isPending ? approveWithId : undefined} />
 
       {isPending && <SubmissionEditForm payload={payload} action={editWithId} />}
 
       {isPending ? (
         <div className="space-y-4">
-          <form action={approveWithId} className="space-y-4">
+          {!hasLikelyDuplicate && <form action={approveWithId} className="space-y-4">
             <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -260,7 +273,7 @@ export default async function ModeratorSubmissionDetailPage({ params, searchPara
             >
               Approve and Publish Show
             </button>
-          </form>
+          </form>}
 
           <form action={rejectWithId} className="space-y-3">
             <textarea

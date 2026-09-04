@@ -16,14 +16,65 @@ export type ScheduledImportRunResult = {
 };
 
 export type ImportSourceHealth = {
-  status: "healthy" | "attention" | "never";
+  status: "healthy" | "attention" | "stale" | "empty" | "never";
   lastRunAt: string | null;
   lastSuccessAt: string | null;
+  detected: number;
   imported: number;
   skipped: number;
   errors: number;
   message: string | null;
+  statusNote: string | null;
+  consecutiveEmptyRuns: number;
+  recentRuns: Array<{ at: string; detected: number; imported: number; skipped: number; errors: number }>;
 };
+
+type ImportLogLike = { createdAt: Date; imported: number; skipped: number; errors: number; errorDetails: string | null };
+
+export function summarizeImportHealth(source: string, sourceLogs: ImportLogLike[], now = new Date()): ImportSourceHealth {
+  const latest = sourceLogs[0];
+  if (!latest) {
+    return { status: "never", lastRunAt: null, lastSuccessAt: null, detected: 0, imported: 0, skipped: 0, errors: 0, message: null, statusNote: "This source has not recorded a scan yet.", consecutiveEmptyRuns: 0, recentRuns: [] };
+  }
+
+  const lastSuccess = sourceLogs.find((log) => log.errors === 0);
+  let consecutiveEmptyRuns = 0;
+  for (const log of sourceLogs) {
+    if (log.errors > 0 || log.imported + log.skipped > 0) break;
+    consecutiveEmptyRuns++;
+  }
+  const ageMs = now.getTime() - latest.createdAt.getTime();
+  const stale = ageMs > 8 * 24 * 60 * 60 * 1000;
+  const silentlyEmpty = source !== "tcdb" && latest.errors === 0 && consecutiveEmptyRuns >= 2;
+  const status = latest.errors > 0 ? "attention" : stale ? "stale" : silentlyEmpty ? "empty" : "healthy";
+  const statusNote = latest.errors > 0
+    ? "The latest scan reported an error."
+    : stale
+      ? "No scan has been recorded in more than eight days."
+      : silentlyEmpty
+        ? `${consecutiveEmptyRuns} successful scans in a row detected no listings. The source layout may have changed.`
+        : null;
+
+  return {
+    status,
+    lastRunAt: latest.createdAt.toISOString(),
+    lastSuccessAt: lastSuccess?.createdAt.toISOString() ?? null,
+    detected: latest.imported + latest.skipped,
+    imported: latest.imported,
+    skipped: latest.skipped,
+    errors: latest.errors,
+    message: latest.errorDetails,
+    statusNote,
+    consecutiveEmptyRuns,
+    recentRuns: sourceLogs.slice(0, 3).map((log) => ({
+      at: log.createdAt.toISOString(),
+      detected: log.imported + log.skipped,
+      imported: log.imported,
+      skipped: log.skipped,
+      errors: log.errors,
+    })),
+  };
+}
 
 async function getImportHealth(sourceKeys: string[]) {
   try {
@@ -36,25 +87,7 @@ async function getImportHealth(sourceKeys: string[]) {
     const result = new Map<string, ImportSourceHealth>();
     for (const source of normalizedKeys) {
       const sourceLogs = logs.filter((log) => log.source === source);
-      const latest = sourceLogs[0];
-      const lastSuccess = sourceLogs.find((log) => log.errors === 0);
-      result.set(source, latest ? {
-        status: latest.errors > 0 ? "attention" : "healthy",
-        lastRunAt: latest.createdAt.toISOString(),
-        lastSuccessAt: lastSuccess?.createdAt.toISOString() ?? null,
-        imported: latest.imported,
-        skipped: latest.skipped,
-        errors: latest.errors,
-        message: latest.errorDetails,
-      } : {
-        status: "never",
-        lastRunAt: null,
-        lastSuccessAt: null,
-        imported: 0,
-        skipped: 0,
-        errors: 0,
-        message: null,
-      });
+      result.set(source, summarizeImportHealth(source, sourceLogs));
     }
     return result;
   } catch (error) {

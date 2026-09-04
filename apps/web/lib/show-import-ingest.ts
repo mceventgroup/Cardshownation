@@ -4,6 +4,7 @@ import { getCityCoords } from "@/lib/city-coords";
 import { slugify } from "@/lib/utils";
 import { normalizeExternalUrl } from "@/lib/url";
 import { buildShowDedupeKey, findDuplicateForPayload } from "@/lib/submissions";
+import { mergeMissingShowDetails } from "@/lib/show-enrichment";
 
 export type ImportedShow = {
   externalId: string;
@@ -39,49 +40,11 @@ export type ImportSourceSummary = {
   errors: string[];
 };
 
-const ENRICHABLE_PAYLOAD_FIELDS = [
-  "description", "venueName", "venueAddress", "startTimeLabel", "endTimeLabel",
-  "admissionPrice", "admissionNotes", "tableCount", "websiteUrl", "facebookUrl",
-] as const;
-
-function hasUsefulValue(value: unknown) {
-  if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  return value !== null && value !== undefined;
-}
-
 export function mergeMissingImportedDetails(
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>
 ) {
-  const merged = { ...existing };
-  const changedFields: string[] = [];
-
-  for (const field of ENRICHABLE_PAYLOAD_FIELDS) {
-    if (!hasUsefulValue(merged[field]) && hasUsefulValue(incoming[field])) {
-      merged[field] = incoming[field];
-      changedFields.push(field);
-    }
-  }
-
-  const existingCategories = Array.isArray(existing.categories)
-    ? existing.categories.filter((value): value is string => typeof value === "string")
-    : [];
-  const incomingCategories = Array.isArray(incoming.categories)
-    ? incoming.categories.filter((value): value is string => typeof value === "string")
-    : [];
-  const mergedCategories = [...new Set([...existingCategories, ...incomingCategories])];
-  if (mergedCategories.length > existingCategories.length) {
-    merged.categories = mergedCategories;
-    changedFields.push("categories");
-  }
-
-  if (existing.isFree !== true && incoming.isFree === true && !hasUsefulValue(existing.admissionPrice)) {
-    merged.isFree = true;
-    changedFields.push("isFree");
-  }
-
-  return { merged, changedFields };
+  return mergeMissingShowDetails(existing, incoming);
 }
 
 function chunkValues<T>(values: T[], size: number) {

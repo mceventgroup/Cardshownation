@@ -50,6 +50,12 @@ export type DedupeRecord = {
   tableCount?: unknown;
   startTimeLabel?: unknown;
   endTimeLabel?: unknown;
+  admissionPrice?: unknown;
+  admissionNotes?: unknown;
+  vendorDetails?: unknown;
+  parkingInfo?: unknown;
+  categories?: unknown;
+  isFree?: unknown;
 };
 
 export function showMatchScore(left: DedupeRecord, right: DedupeRecord) {

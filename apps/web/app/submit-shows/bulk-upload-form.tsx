@@ -14,11 +14,13 @@ import {
   type PublicBulkCsvRow,
 } from "@/lib/public-bulk-upload";
 import { submitBulkShowsAction, type PublicBulkUploadState } from "./actions";
+import type { PublicDuplicatePreview } from "@/lib/duplicate-preview";
 
-type PreviewRow = PublicBulkCsvRow & { error?: string };
+type PreviewRow = PublicBulkCsvRow & { error?: string; match?: PublicDuplicatePreview | null };
 const initialPublicBulkUploadState: PublicBulkUploadState = {
   approved: 0,
   pending: 0,
+  updates: 0,
   duplicates: 0,
   errors: [],
   message: null,
@@ -31,6 +33,7 @@ export function PublicBulkUploadForm() {
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
 
   async function readFile(file: File) {
     setPreview([]);
@@ -77,10 +80,30 @@ export function PublicBulkUploadForm() {
     const validation = validatePublicBulkRows(rows);
     const errors = new Map<number, string>(validation.errors.map((error) => [error.row, error.message]));
     setPreview(rows.map((row) => ({ ...row, error: errors.get(row.rowNumber) })));
+    if (validation.validRows.length > 0) {
+      setCheckingDuplicates(true);
+      try {
+        const response = await fetch("/api/shows/duplicate-check", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ shows: validation.validRows.map((row) => ({ rowNumber: row.rowNumber, payload: row.payload })) }),
+        });
+        if (response.ok) {
+          const data = await response.json() as { matches?: Array<{ rowNumber: number; match: PublicDuplicatePreview | null }> };
+          const matches = new Map((data.matches ?? []).map((item) => [item.rowNumber, item.match]));
+          setPreview(rows.map((row) => ({ ...row, error: errors.get(row.rowNumber), match: matches.get(row.rowNumber) ?? null })));
+        }
+      } catch {
+        // Submission still performs the same server-side duplicate check.
+      } finally {
+        setCheckingDuplicates(false);
+      }
+    }
   }
 
   const validCount = preview.filter((row) => !row.error).length;
   const issueCount = preview.length - validCount;
+  const matchCount = preview.filter((row) => !row.error && row.match).length;
 
   return (
     <form action={action} className="mt-8 space-y-6" data-analytics-form="submit-shows-bulk">
@@ -120,15 +143,16 @@ export function PublicBulkUploadForm() {
         <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <div><p className="text-sm font-semibold text-brand-700">Step 3</p><h2 className="mt-1 text-xl font-semibold text-slate-950">Review before submitting</h2></div>
-            <div className="flex gap-2 text-xs font-semibold"><span className="rounded-full bg-green-50 px-3 py-1.5 text-green-700">{validCount} ready</span>{issueCount > 0 && <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700">{issueCount} need fixes</span>}</div>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold"><span className="rounded-full bg-green-50 px-3 py-1.5 text-green-700">{validCount} valid</span>{matchCount > 0 && <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">{matchCount} likely {matchCount === 1 ? "match" : "matches"}</span>}{issueCount > 0 && <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700">{issueCount} need fixes</span>}</div>
           </div>
+          {checkingDuplicates && <p className="flex items-center gap-2 border-b border-slate-100 bg-blue-50 px-5 py-3 text-sm text-blue-800"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking valid rows against existing and pending shows…</p>}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Row</th><th className="px-4 py-3">Show</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">Venue</th><th className="px-4 py-3">Category / admission</th><th className="px-4 py-3">Status</th></tr></thead>
-              <tbody className="divide-y divide-slate-100">{preview.slice(0, 50).map((row) => <tr key={row.rowNumber} className={row.error ? "bg-red-50/40" : ""}><td className="px-4 py-3 text-slate-400">{row.rowNumber}</td><td className="px-4 py-3 font-medium text-slate-900">{row.title || "—"}</td><td className="whitespace-nowrap px-4 py-3 text-slate-600">{row.startDate || "—"}{row.endDate && row.endDate !== row.startDate ? ` – ${row.endDate}` : ""}</td><td className="whitespace-nowrap px-4 py-3 text-slate-600">{row.city || "—"}{row.state ? `, ${row.state.toUpperCase()}` : ""}</td><td className="px-4 py-3 text-slate-600">{row.venueName || "—"}</td><td className="px-4 py-3 text-slate-600"><span className="block">{row.categories || "No category"}</span><span className="text-xs text-slate-400">{["yes", "true", "1", "free"].includes(String(row.isFree ?? "").toLowerCase()) ? "Free admission" : row.admissionPrice || "Admission not specified"}</span></td><td className="max-w-xs px-4 py-3">{row.error ? <span className="text-red-700">{row.error}</span> : <span className="inline-flex items-center gap-1 font-medium text-green-700"><CheckCircle2 className="h-4 w-4" aria-hidden />Ready</span>}</td></tr>)}</tbody>
+              <tbody className="divide-y divide-slate-100">{preview.slice(0, 50).map((row) => <tr key={row.rowNumber} className={row.error ? "bg-red-50/40" : row.match ? "bg-amber-50/60" : ""}><td className="px-4 py-3 text-slate-400">{row.rowNumber}</td><td className="px-4 py-3 font-medium text-slate-900">{row.title || "—"}</td><td className="whitespace-nowrap px-4 py-3 text-slate-600">{row.startDate || "—"}{row.endDate && row.endDate !== row.startDate ? ` – ${row.endDate}` : ""}</td><td className="whitespace-nowrap px-4 py-3 text-slate-600">{row.city || "—"}{row.state ? `, ${row.state.toUpperCase()}` : ""}</td><td className="px-4 py-3 text-slate-600">{row.venueName || "—"}</td><td className="px-4 py-3 text-slate-600"><span className="block">{row.categories || "No category"}</span><span className="text-xs text-slate-400">{["yes", "true", "1", "free"].includes(String(row.isFree ?? "").toLowerCase()) ? "Free admission" : row.admissionPrice || "Admission not specified"}</span></td><td className="max-w-xs px-4 py-3">{row.error ? <span className="text-red-700">{row.error}</span> : row.match ? <label className="flex cursor-pointer items-start gap-2 text-amber-900"><input type="checkbox" name="reviewDuplicateRows" value={row.rowNumber} className="mt-0.5 rounded border-amber-400 text-brand-600" /><span><strong>Likely match</strong><span className="mt-1 block text-xs leading-5">Select to send this row as an update for moderator review.</span></span></label> : <span className="inline-flex items-center gap-1 font-medium text-green-700"><CheckCircle2 className="h-4 w-4" aria-hidden />Ready</span>}</td></tr>)}</tbody>
             </table>
           </div>
-          {preview.length > 50 && <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">Showing the first 50 of {preview.length} rows. All valid rows will be submitted.</p>}
+          {preview.length > 50 && <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">Showing the first 50 of {preview.length} rows. Unshown likely matches will be skipped; use a second upload if you want to send any of them as updates.</p>}
         </section>
       )}
 
@@ -140,10 +164,10 @@ export function PublicBulkUploadForm() {
         </div>
         <div className="hidden" aria-hidden><label htmlFor="bulkCompanyWebsite">Leave blank</label><input id="bulkCompanyWebsite" name="companyWebsite" type="text" tabIndex={-1} autoComplete="off" /></div>
         <div className="mt-6 flex flex-col gap-4 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-xl text-sm leading-6 text-slate-500">Valid shows enter the same moderation queue as individual submissions. Existing matches are skipped automatically.</p>
+          <p className="max-w-xl text-sm leading-6 text-slate-500">Likely matches are skipped unless you select them above. Selected matches go to moderators as possible updates and never auto-publish.</p>
           <button type="submit" disabled={pending || validCount === 0 || Boolean(parseError)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50">
             {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}
-            {pending ? "Submitting schedule…" : `Submit ${validCount || "valid"} show${validCount === 1 ? "" : "s"}`}
+            {pending ? "Submitting schedule…" : "Submit reviewed schedule"}
           </button>
         </div>
       </section>
@@ -154,10 +178,10 @@ export function PublicBulkUploadForm() {
 }
 
 function UploadResults({ state }: { state: PublicBulkUploadState }) {
-  const accepted = state.approved + state.pending;
+  const accepted = state.approved + state.pending + state.updates;
   return <section aria-live="polite" className={`rounded-[2rem] border p-5 shadow-sm sm:p-7 ${state.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
     <div className="flex items-start gap-3">{state.success ? <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-green-700" aria-hidden /> : <AlertCircle className="mt-0.5 h-6 w-6 shrink-0 text-red-700" aria-hidden />}<div><h2 className="text-lg font-semibold text-slate-950">{state.success ? "Schedule submitted" : "Upload needs attention"}</h2><p className="mt-1 text-sm leading-6 text-slate-700">{state.message}</p></div></div>
-    {(accepted > 0 || state.duplicates > 0) && <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4"><ResultStat label="Sent for review" value={state.pending} /><ResultStat label="Published" value={state.approved} /><ResultStat label="Existing matches" value={state.duplicates} /><ResultStat label="Rows with issues" value={state.errors.length} /></div>}
+    {(accepted > 0 || state.duplicates > 0 || state.updates > 0) && <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5"><ResultStat label="New shows for review" value={state.pending} /><ResultStat label="Updates for review" value={state.updates} /><ResultStat label="Published" value={state.approved} /><ResultStat label="Matches skipped" value={state.duplicates} /><ResultStat label="Rows with issues" value={state.errors.length} /></div>}
     {state.errors.length > 0 && <div className="mt-5 rounded-2xl bg-white/80 p-4"><p className="text-sm font-semibold text-slate-800">Rows to fix</p><ul className="mt-2 space-y-1 text-sm text-slate-700">{state.errors.slice(0, 20).map((error: BulkRowError) => <li key={`${error.row}-${error.message}`}><strong>Row {error.row}:</strong> {error.message}</li>)}</ul></div>}
   </section>;
 }

@@ -9,6 +9,7 @@ import {
   DuplicateSubmissionError,
   getSubmissionById,
   getDuplicateReview,
+  mergeDuplicateSubmission,
   rejectShowSubmission,
   requestSubmissionCorrections,
   setOrganizerModerationStatus,
@@ -44,6 +45,7 @@ async function approveSubmission(submissionId: string, formData: FormData) {
     show = await approveShowSubmission(submissionId, {
       reviewerId: session.user.id,
       reviewerRole: "ADMIN",
+      allowLikelyDuplicate: formData.get("confirmDistinct") === "yes",
     });
   } catch (error) {
     if (error instanceof DuplicateSubmissionError) {
@@ -53,6 +55,14 @@ async function approveSubmission(submissionId: string, formData: FormData) {
   }
   if (!show) return;
   redirect(`/admin/shows/${show.id}`);
+}
+
+async function mergeSubmission(submissionId: string) {
+  "use server";
+  const session = await requireAdminSession(`/admin/submissions/${submissionId}`);
+  const result = await mergeDuplicateSubmission(submissionId, { reviewerId: session.user.id, reviewerRole: "ADMIN" });
+  if (result?.reviewedShowId) redirect(`/admin/shows/${result.reviewedShowId}`);
+  redirect(`/admin/submissions/${submissionId}?saved=merged`);
 }
 
 async function saveSubmissionEdits(submissionId: string, formData: FormData) {
@@ -114,7 +124,9 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
   const rejectWithId = rejectSubmission.bind(null, submission.id);
   const editWithId = saveSubmissionEdits.bind(null, submission.id);
   const correctionsWithId = requestCorrections.bind(null, submission.id);
+  const mergeWithId = mergeSubmission.bind(null, submission.id);
   const duplicateReview = await getDuplicateReview(payload, submission.id);
+  const hasLikelyDuplicate = (duplicateReview?.score ?? 0) >= 72;
   const submittedFields: [string, unknown][] = [
     ["Show Name", payload.showName],
     ["Start Date", payload.startDate],
@@ -186,7 +198,7 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
       )}
       {sp.saved && (
         <p className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          {sp.saved === "corrections" ? "Correction request emailed to the submitter." : "Submission details saved."}
+          {sp.saved === "corrections" ? "Correction request emailed to the submitter." : sp.saved === "merged" ? "Safe missing details were merged into the existing record." : "Submission details saved."}
         </p>
       )}
 
@@ -217,7 +229,7 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
         </div>
       </div>
 
-      <DuplicateReviewCard submitted={payload} review={duplicateReview} area="admin" />
+      <DuplicateReviewCard submitted={payload} review={duplicateReview} area="admin" mergeAction={isPending ? mergeWithId : undefined} approveDistinctAction={isPending ? approveWithId : undefined} />
 
       {isPending && <SubmissionEditForm payload={payload} action={editWithId} />}
 
@@ -236,7 +248,7 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
 
       {isPending ? (
         <div className="space-y-4">
-          <form action={approveWithId}>
+          {!hasLikelyDuplicate && <form action={approveWithId}>
             {hasOrganizerApprovalContext && moderationStatus !== "TRUSTED" && (
               <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <label className="flex items-start gap-3 text-sm text-slate-700">
@@ -257,7 +269,7 @@ export default async function ReviewSubmissionPage({ params, searchParams }: Pro
             >
               Approve and Publish Show
             </button>
-          </form>
+          </form>}
 
           <form action={rejectWithId} className="space-y-3">
             <textarea

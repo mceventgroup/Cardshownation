@@ -26,6 +26,7 @@ let getModeratorVisibleSubmissions: typeof import("./submissions").getModeratorV
 let getModeratorVisibleSubmissionById: typeof import("./submissions").getModeratorVisibleSubmissionById;
 let buildShowDedupeKey: typeof import("./submissions").buildShowDedupeKey;
 let submitShowForModeration: typeof import("./submissions").submitShowForModeration;
+let mergeDuplicateSubmission: typeof import("./submissions").mergeDuplicateSubmission;
 const restorers: Array<() => void> = [];
 
 function stubMethod(
@@ -70,6 +71,7 @@ before(async () => {
     getModeratorVisibleSubmissionById,
     buildShowDedupeKey,
     submitShowForModeration,
+    mergeDuplicateSubmission,
   } = await import("./submissions"));
 });
 
@@ -443,6 +445,37 @@ test("submitShowForModeration stops exact published duplicates", async () => {
   assert.equal(createSubmissionMock.mock.calls.length, 0);
 });
 
+test("submitShowForModeration sends a confirmed duplicate update to moderators", async () => {
+  stubMethod(db.show, "findUnique", async () => ({ id: "show-1", title: "KC Card Show" }));
+  stubMethod(db.organizer, "findUnique", async () => ({
+    id: "organizer-1",
+    name: "New Organizer",
+    email: "new@example.com",
+    moderationStatus: "TRUSTED",
+  }));
+  const createSubmissionMock = stubMethod(db.showSubmission, "create", async ({ data }) => ({ id: "submission-1", ...data }));
+
+  const result = await submitShowForModeration({
+    submitterName: "New Organizer",
+    submitterEmail: "new@example.com",
+    duplicatePolicy: "review-update",
+    payloadJson: {
+      organizerId: "organizer-1",
+      showName: "KC Card Show",
+      startDate: "2026-10-17",
+      city: "Kansas City",
+      state: "MO",
+      description: "New parking information",
+    },
+  });
+
+  assert.equal(result.status, "PENDING_UPDATE");
+  assert.equal(createSubmissionMock.mock.calls.length, 1);
+  const payload = createSubmissionMock.mock.calls[0]?.arguments[0].data.payloadJson as Record<string, unknown>;
+  assert.equal(payload.submissionIntent, "UPDATE_EXISTING");
+  assert.equal(payload.possibleDuplicateId, "show-1");
+});
+
 test("submitShowForModeration does not publish submitter email without public-email consent", async () => {
   stubMethod(db.show, "findUnique", async () => null);
   stubMethod(db.show, "findMany", async () => []);
@@ -605,6 +638,64 @@ test("approveShowSubmission returns the existing reviewed show for already-appro
   assert.equal(findShowMock.mock.calls.length, 1);
   assert.equal(updateSubmissionMock.mock.calls.length, 0);
   assert.equal(auditLogMock.mock.calls.length, 0);
+});
+
+test("mergeDuplicateSubmission adds missing details without overwriting the published listing", async () => {
+  const incoming = {
+    showName: "KC Card Show",
+    startDate: "2026-10-17",
+    city: "Kansas City",
+    state: "MO",
+    venueName: "Convention Center",
+    description: "Submitted description",
+    websiteUrl: "https://example.com/show",
+    categories: ["Sports Cards", "Pokemon"],
+  };
+  stubMethod(db.showSubmission, "findUnique", async () => ({
+    id: "submission-1",
+    status: "PENDING",
+    payloadJson: incoming,
+  }));
+  stubMethod(db.showSubmission, "findMany", async () => []);
+  const published = {
+    id: "show-1",
+    title: "KC Card Show",
+    slug: "kc-card-show",
+    startDate: new Date("2026-10-17T00:00:00.000Z"),
+    city: "Kansas City",
+    state: "MO",
+    description: "Organizer-confirmed description",
+    websiteUrl: null,
+    facebookUrl: null,
+    tableCount: null,
+    startTimeLabel: null,
+    endTimeLabel: null,
+    admissionPrice: null,
+    admissionNotes: null,
+    vendorDetails: null,
+    parkingInfo: null,
+    categories: ["Sports Cards"],
+    isFree: false,
+    venueId: "venue-1",
+    venue: { name: "Convention Center", address1: "123 Main St" },
+  };
+  stubMethod(db.show, "findMany", async () => [published]);
+  stubMethod(db.show, "findUnique", async () => published);
+  const updateShowMock = stubMethod(db.show, "update", async ({ data }) => ({ ...published, ...data }));
+  const updateSubmissionMock = stubMethod(db.showSubmission, "update", async ({ data }) => data);
+  stubMethod(db.auditLog, "create", async ({ data }) => data);
+
+  const result = await mergeDuplicateSubmission("submission-1", {
+    reviewerId: "moderator-1",
+    reviewerRole: "MODERATOR",
+  });
+
+  assert.equal(result?.reviewedShowId, "show-1");
+  const update = updateShowMock.mock.calls[0]?.arguments[0].data;
+  assert.equal(update.description, "Organizer-confirmed description");
+  assert.equal(update.websiteUrl, "https://example.com/show");
+  assert.deepEqual(update.categories, ["Sports Cards", "Pokemon"]);
+  assert.equal(updateSubmissionMock.mock.calls.at(-1)?.arguments[0].data.status, "APPROVED");
 });
 
 test("rejectShowSubmission rejects non-admin, non-moderator reviewer roles", async () => {

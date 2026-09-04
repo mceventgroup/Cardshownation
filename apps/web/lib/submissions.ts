@@ -16,6 +16,8 @@ import { normalizeExternalUrl } from "@/lib/url";
 import type { UserRole } from "@csn/db";
 import { informationScore, isLikelyDuplicate, showMatchScore, type DedupeRecord } from "@/lib/show-dedupe";
 import { sendSubmissionDecisionEmail } from "@/lib/email";
+import { mergeMissingShowDetails, ENRICHABLE_SHOW_FIELD_LABELS } from "@/lib/show-enrichment";
+import type { PublicDuplicatePreview } from "@/lib/duplicate-preview";
 
 const reviewerInclude = {
   reviewer: {
@@ -209,7 +211,7 @@ export async function getDuplicateReview(payload: Record<string, unknown>, exclu
     }),
   ]);
   const candidates = [
-    ...shows.map((show) => ({ kind: "show" as const, id: show.id, record: { slug: show.slug, showName: show.title, startDate: show.startDate.toISOString().slice(0, 10), city: show.city, state: show.state, venueName: show.venue?.name, venueAddress: show.venue?.address1, description: show.description, websiteUrl: show.websiteUrl, facebookUrl: show.facebookUrl, tableCount: show.tableCount, startTimeLabel: show.startTimeLabel, endTimeLabel: show.endTimeLabel } })),
+    ...shows.map((show) => ({ kind: "show" as const, id: show.id, record: { slug: show.slug, showName: show.title, startDate: show.startDate.toISOString().slice(0, 10), city: show.city, state: show.state, venueName: show.venue?.name, venueAddress: show.venue?.address1, description: show.description, websiteUrl: show.websiteUrl, facebookUrl: show.facebookUrl, tableCount: show.tableCount, startTimeLabel: show.startTimeLabel, endTimeLabel: show.endTimeLabel, admissionPrice: show.admissionPrice, admissionNotes: show.admissionNotes, vendorDetails: show.vendorDetails, parkingInfo: show.parkingInfo, categories: show.categories, isFree: show.isFree } })),
     ...submissions.map((submission) => ({ kind: "submission" as const, id: submission.id, record: submission.payloadJson as DedupeRecord })),
   ].map((candidate) => ({ ...candidate, score: showMatchScore(payload, candidate.record) }))
     .filter((candidate) => candidate.score >= 55)
@@ -219,6 +221,45 @@ export async function getDuplicateReview(payload: Record<string, unknown>, exclu
   const submittedInfo = informationScore(payload);
   const existingInfo = informationScore(best.record);
   return { ...best, submittedInfo, existingInfo, recommendation: submittedInfo > existingInfo ? "submission" as const : "existing" as const };
+}
+
+export async function getPublicDuplicatePreview(
+  payload: Record<string, unknown>
+): Promise<PublicDuplicatePreview | null> {
+  const review = await getDuplicateReview(payload);
+  if (!review || review.score < 72) return null;
+  const { changedFields } = mergeMissingShowDetails(review.record as Record<string, unknown>, payload);
+  const date = readString(review.record as Record<string, unknown>, "startDate") ?? readString(payload, "startDate") ?? "";
+  const state = readString(review.record as Record<string, unknown>, "state") ?? readString(payload, "state") ?? "";
+
+  if (review.kind === "submission") {
+    return {
+      kind: "submission",
+      score: review.score,
+      title: "A matching submission",
+      date,
+      city: readString(payload, "city") ?? "",
+      state,
+      venueName: readString(payload, "venueName") ?? "",
+      href: null,
+      recommendation: review.recommendation === "submission" ? "incoming" : "existing",
+      enrichableFields: changedFields.map((field) => ENRICHABLE_SHOW_FIELD_LABELS[field] ?? field),
+    };
+  }
+
+  const record = review.record as Record<string, unknown>;
+  return {
+    kind: "show",
+    score: review.score,
+    title: readString(record, "showName") ?? "Existing show",
+    date,
+    city: readString(record, "city") ?? "",
+    state,
+    venueName: readString(record, "venueName") ?? "",
+    href: readString(record, "slug") ? `/shows/${readString(record, "slug")}` : null,
+    recommendation: review.recommendation === "submission" ? "incoming" : "existing",
+    enrichableFields: changedFields.map((field) => ENRICHABLE_SHOW_FIELD_LABELS[field] ?? field),
+  };
 }
 
 function shouldNotifySubmitter(payload: Record<string, unknown> | null | undefined) {
@@ -541,6 +582,7 @@ export async function submitShowForModeration(input: {
   submitterName: string;
   submitterEmail: string;
   payloadJson: Record<string, unknown>;
+  duplicatePolicy?: "reject" | "review-update";
 }) {
   if (isFixtureMode()) {
     const submission = await createShowSubmission(input);
@@ -548,7 +590,7 @@ export async function submitShowForModeration(input: {
   }
 
   const duplicate = await findDuplicateForPayload(input.payloadJson, { includePending: true });
-  if (duplicate) {
+  if (duplicate && input.duplicatePolicy !== "review-update") {
     return { status: "DUPLICATE" as const, duplicate };
   }
 
@@ -571,6 +613,12 @@ export async function submitShowForModeration(input: {
     organizerId: organizer.id,
     organizerName: readString(input.payloadJson, "organizerName") ?? organizer.name,
     organizerEmail: readString(input.payloadJson, "organizerEmail") ?? organizer.email,
+    ...(duplicate ? {
+      submissionIntent: "UPDATE_EXISTING",
+      possibleDuplicateKind: duplicate.kind,
+      possibleDuplicateId: duplicate.id,
+      possibleDuplicateTitle: duplicate.title,
+    } : {}),
   };
   const submission = await createShowSubmission({
     ...input,
@@ -578,6 +626,10 @@ export async function submitShowForModeration(input: {
     organizerId: organizer.id,
     dedupeKey: buildShowDedupeKey(payloadJson),
   });
+
+  if (duplicate) {
+    return { status: "PENDING_UPDATE" as const, submission, duplicate };
+  }
 
   if (organizer.moderationStatus !== "TRUSTED") {
     return { status: "PENDING" as const, submission };
@@ -660,6 +712,7 @@ export async function approveShowSubmission(
     reviewerId?: string | null;
     reviewerRole?: UserRole | null;
     notes?: string | null;
+    allowLikelyDuplicate?: boolean;
   }
 ) {
   if (isFixtureMode()) {
@@ -684,7 +737,8 @@ export async function approveShowSubmission(
 
   const payload = submission.payloadJson as Record<string, unknown>;
   const duplicate = await findDuplicateForPayload(payload, { includePending: false });
-  if (duplicate) {
+  const canOverrideDuplicate = options?.allowLikelyDuplicate === true && (actorRole === "ADMIN" || actorRole === "MODERATOR");
+  if (duplicate && !canOverrideDuplicate) {
     throw new DuplicateSubmissionError(duplicate.id);
   }
   const show = await createApprovedShowFromPayload(payload);
@@ -716,6 +770,128 @@ export async function approveShowSubmission(
   await notifyDecision({ email: submission.submitterEmail, payload, decision: "approved", notes: options?.notes, showSlug: show.slug });
 
   return show;
+}
+
+export async function mergeDuplicateSubmission(
+  submissionId: string,
+  actor: { reviewerId: string; reviewerRole: UserRole }
+) {
+  if (actor.reviewerRole !== "ADMIN" && actor.reviewerRole !== "MODERATOR") {
+    throw new Error("Only admin or moderator reviewers can merge submissions.");
+  }
+  if (isFixtureMode()) return null;
+
+  const submission = await db.showSubmission.findUnique({ where: { id: submissionId } });
+  if (!submission || submission.status !== "PENDING") return null;
+  const incoming = submission.payloadJson as Record<string, unknown>;
+  const review = await getDuplicateReview(incoming, submissionId);
+  if (!review || review.score < 72) {
+    throw new Error("A likely duplicate is required before details can be merged.");
+  }
+
+  let changedFields: string[] = [];
+  let reviewedShowId: string | null = null;
+  let targetTitle = "pending submission";
+
+  if (review.kind === "show") {
+    const show = await db.show.findUnique({ where: { id: review.id }, include: { venue: true } });
+    if (!show) return null;
+    targetTitle = show.title;
+    reviewedShowId = show.id;
+    const current = {
+      description: show.description,
+      venueName: show.venue?.name,
+      venueAddress: show.venue?.address1,
+      startTimeLabel: show.startTimeLabel,
+      endTimeLabel: show.endTimeLabel,
+      admissionPrice: show.admissionPrice,
+      admissionNotes: show.admissionNotes,
+      tableCount: show.tableCount,
+      websiteUrl: show.websiteUrl,
+      facebookUrl: show.facebookUrl,
+      vendorDetails: show.vendorDetails,
+      parkingInfo: show.parkingInfo,
+      categories: show.categories,
+      isFree: show.isFree,
+    } satisfies Record<string, unknown>;
+    const merged = mergeMissingShowDetails(current, incoming);
+    changedFields = merged.changedFields;
+
+    let venueId = show.venueId;
+    if (!venueId) {
+      const venueName = readString(incoming, "venueName");
+      const venueAddress = readString(incoming, "venueAddress");
+      if (venueName && venueAddress) {
+        const coords = getCityCoords(show.city, show.state);
+        const venue = await db.venue.upsert({
+          where: { name_city_state: { name: venueName, city: show.city, state: show.state } },
+          create: { name: venueName, address1: venueAddress, city: show.city, state: show.state, latitude: coords?.lat ?? null, longitude: coords?.lng ?? null },
+          update: {},
+        });
+        venueId = venue.id;
+      }
+    }
+
+    const tableCount = Number.parseInt(String(merged.merged.tableCount ?? ""), 10);
+    await db.show.update({
+      where: { id: show.id },
+      data: {
+        description: readString(merged.merged, "description"),
+        startTimeLabel: readString(merged.merged, "startTimeLabel"),
+        endTimeLabel: readString(merged.merged, "endTimeLabel"),
+        admissionPrice: readString(merged.merged, "admissionPrice"),
+        admissionNotes: readString(merged.merged, "admissionNotes"),
+        tableCount: Number.isFinite(tableCount) && tableCount > 0 ? tableCount : null,
+        websiteUrl: normalizeExternalUrl(readString(merged.merged, "websiteUrl")),
+        facebookUrl: normalizeExternalUrl(readString(merged.merged, "facebookUrl")),
+        vendorDetails: readString(merged.merged, "vendorDetails"),
+        parkingInfo: readString(merged.merged, "parkingInfo"),
+        categories: Array.isArray(merged.merged.categories)
+          ? merged.merged.categories.filter((value): value is string => typeof value === "string")
+          : show.categories,
+        isFree: merged.merged.isFree === true,
+        venueId,
+        lastVerifiedAt: new Date(),
+      },
+    });
+  } else {
+    const target = await db.showSubmission.findUnique({ where: { id: review.id } });
+    if (!target || target.status !== "PENDING") return null;
+    const targetPayload = target.payloadJson as Record<string, unknown>;
+    targetTitle = readString(targetPayload, "showName") ?? targetTitle;
+    const merged = mergeMissingShowDetails(targetPayload, incoming);
+    changedFields = merged.changedFields;
+    if (changedFields.length > 0) {
+      await db.showSubmission.update({
+        where: { id: target.id },
+        data: { payloadJson: merged.merged as object },
+      });
+    }
+  }
+
+  const note = changedFields.length > 0
+    ? `Merged into ${targetTitle}. Added: ${changedFields.map((field) => ENRICHABLE_SHOW_FIELD_LABELS[field] ?? field).join(", ")}.`
+    : `Reviewed as a duplicate of ${targetTitle}; no missing details were available to add.`;
+  await db.showSubmission.update({
+    where: { id: submission.id },
+    data: {
+      status: review.kind === "show" ? "APPROVED" : "REJECTED",
+      reviewedShowId,
+      reviewerId: actor.reviewerId,
+      reviewerRole: actor.reviewerRole,
+      notes: note,
+    },
+  });
+  await writeAuditLog({
+    actorId: actor.reviewerId,
+    actorRole: actor.reviewerRole,
+    action: "submission.duplicate_merged",
+    targetType: "ShowSubmission",
+    targetId: submission.id,
+    details: { duplicateKind: review.kind, duplicateId: review.id, changedFields },
+  });
+
+  return { kind: review.kind, id: review.id, reviewedShowId, changedFields };
 }
 
 export async function updatePendingSubmissionPayload(

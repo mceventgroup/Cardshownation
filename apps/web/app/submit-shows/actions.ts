@@ -16,6 +16,7 @@ import { submitShowForModeration } from "@/lib/submissions";
 export type PublicBulkUploadState = {
   approved: number;
   pending: number;
+  updates: number;
   duplicates: number;
   errors: BulkRowError[];
   message: string | null;
@@ -25,6 +26,7 @@ export type PublicBulkUploadState = {
 const initialPublicBulkUploadState: PublicBulkUploadState = {
   approved: 0,
   pending: 0,
+  updates: 0,
   duplicates: 0,
   errors: [],
   message: null,
@@ -96,8 +98,15 @@ export async function submitBulkShowsAction(
   const contactName = submitterName ?? fallbackName.replace(/\b\w/g, (letter) => letter.toUpperCase());
   let approved = 0;
   let pending = 0;
+  let updates = 0;
   let duplicates = 0;
   const rowErrors = [...errors];
+  const reviewDuplicateRows = new Set(
+    formData.getAll("reviewDuplicateRows").flatMap((value) => {
+      const rowNumber = typeof value === "string" ? Number.parseInt(value, 10) : Number.NaN;
+      return Number.isInteger(rowNumber) ? [rowNumber] : [];
+    })
+  );
 
   for (const row of validRows) {
     try {
@@ -105,9 +114,11 @@ export async function submitBulkShowsAction(
         submitterName: contactName,
         submitterEmail,
         payloadJson: { ...row.payload, organizerName: contactName },
+        duplicatePolicy: reviewDuplicateRows.has(row.rowNumber) ? "review-update" : "reject",
       });
       if (result.status === "APPROVED") approved += 1;
       else if (result.status === "PENDING") pending += 1;
+      else if (result.status === "PENDING_UPDATE") updates += 1;
       else if (result.status === "DUPLICATE") duplicates += 1;
       else rowErrors.push({ row: row.rowNumber, message: "This organizer cannot submit shows." });
     } catch {
@@ -115,15 +126,16 @@ export async function submitBulkShowsAction(
     }
   }
 
-  const accepted = approved + pending;
+  const accepted = approved + pending + updates;
   return {
     approved,
     pending,
+    updates,
     duplicates,
     errors: rowErrors,
     success: accepted > 0,
     message: accepted > 0
-      ? `${accepted} show${accepted === 1 ? "" : "s"} submitted successfully. We skipped ${duplicates} existing match${duplicates === 1 ? "" : "es"}.`
+      ? `${accepted} show${accepted === 1 ? "" : "s"} submitted successfully. ${updates ? `${updates} likely match${updates === 1 ? " was" : "es were"} sent for moderator review. ` : ""}We skipped ${duplicates} existing match${duplicates === 1 ? "" : "es"}.`
       : "No new shows were submitted. Review the results below.",
   };
 }

@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
 import { formatDateLabel, listDateRange } from "@/lib/daily-schedule";
+import type { PublicDuplicatePreview } from "@/lib/duplicate-preview";
 
 type StateOption = { code: string; name: string };
 
@@ -27,11 +29,48 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
   const [endTimeLabel, setEndTimeLabel] = useState("");
   const [admissionPrice, setAdmissionPrice] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
+  const [duplicateMatch, setDuplicateMatch] = useState<PublicDuplicatePreview | null>(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [sendDuplicateForReview, setSendDuplicateForReview] = useState(false);
   const [venueSuggestions, setVenueSuggestions] = useState<Array<{ id: string; name: string; address1: string; city: string; state: string }>>([]);
   const dailyDates = useMemo(() => {
     if (!isMultiDay || !startDate || !endDate) return [];
     return listDateRange(startDate, endDate);
   }, [endDate, isMultiDay, startDate]);
+
+  useEffect(() => {
+    if (showName.trim().length < 3 || !startDate || city.trim().length < 2 || !state || venueName.trim().length < 2) {
+      setDuplicateMatch(null);
+      setCheckingDuplicate(false);
+      setSendDuplicateForReview(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setCheckingDuplicate(true);
+      try {
+        const response = await fetch("/api/shows/duplicate-check", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ shows: [{ rowNumber: 1, payload: { showName, startDate, city, state, venueName, venueAddress } }] }),
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const data = await response.json() as { matches?: Array<{ match?: PublicDuplicatePreview | null }> };
+        const match = data.matches?.[0]?.match ?? null;
+        setDuplicateMatch(match);
+        if (!match) setSendDuplicateForReview(false);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) setDuplicateMatch(null);
+      } finally {
+        if (!controller.signal.aborted) setCheckingDuplicate(false);
+      }
+    }, 550);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [city, showName, startDate, state, venueAddress, venueName]);
 
   return (
     <>
@@ -111,6 +150,37 @@ export function SubmitShowFormSteps({ categories, inputClass, states, timeOption
               <input id="venueAddress" name="venueAddress" type="text" autoComplete="street-address" className={inputClass} placeholder="123 Main St — leave blank if unknown" value={venueAddress} onChange={(event) => setVenueAddress(event.target.value)} />
             </div>
           </div>
+
+          {checkingDuplicate && (
+            <p className="flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600" aria-live="polite">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking for an existing listing…
+            </p>
+          )}
+          {duplicateMatch && !checkingDuplicate && (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4" aria-live="polite">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden />
+                <div className="min-w-0">
+                  <p className="font-semibold text-amber-950">
+                    {duplicateMatch.kind === "show" ? "This show may already be listed" : "A matching show is already awaiting review"}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-amber-900">
+                    {duplicateMatch.title} · {duplicateMatch.date} · {duplicateMatch.city}, {duplicateMatch.state}
+                    {duplicateMatch.venueName ? ` · ${duplicateMatch.venueName}` : ""}
+                  </p>
+                  {duplicateMatch.href && (
+                    <a href={duplicateMatch.href} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-amber-900 underline underline-offset-4">
+                      View existing listing <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    </a>
+                  )}
+                </div>
+              </div>
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-white/70 px-3 py-3 text-sm leading-6 text-amber-950">
+                <input type="checkbox" name="duplicateResolution" value="review-update" checked={sendDuplicateForReview} onChange={(event) => setSendDuplicateForReview(event.target.checked)} className="mt-1 rounded border-amber-400 text-brand-600 focus:ring-brand-500" />
+                <span><strong>Send this to a moderator anyway.</strong> Use this only when you have new or corrected details, or believe these are separate shows.</span>
+              </label>
+            </div>
+          )}
 
           <div className="rounded-3xl border border-dashed border-brand-200 bg-brand-50/50 p-5">
             <label htmlFor="flyerFile" className="block text-sm font-semibold text-slate-800">Upload a flyer <span className="font-normal text-slate-500">(optional)</span></label>
