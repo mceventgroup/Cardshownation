@@ -38,28 +38,28 @@ export function PromoterUploadForm() {
           <div>
             <h2 className="text-lg font-semibold text-slate-950">Bulk show upload</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Upload one CSV to add multiple shows at once. Trusted organizers auto-publish non-duplicate rows. New organizers&apos; rows become pending submissions for review.
+              Upload one Excel or CSV spreadsheet to add multiple shows at once. Trusted organizers auto-publish non-duplicate rows. New organizers&apos; rows become pending submissions for review.
             </p>
           </div>
           <a
-            href="/show-upload-template.csv"
+            href="/card-show-nation-guided-upload.xlsx"
             download
             className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
           >
             <Download className="h-4 w-4" />
-            Download CSV template
+            Download guided template
           </a>
         </div>
 
         <div className="mt-6">
           <label htmlFor="file" className="mb-2 block text-sm font-medium text-slate-700">
-            CSV file
+            Excel or CSV file
           </label>
           <input
             id="file"
             name="file"
             type="file"
-            accept=".csv,text/csv"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.csv,text/csv"
             required
             className="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 file:mr-4 file:rounded-full file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
           />

@@ -1,9 +1,8 @@
 "use server";
 
-import Papa from "papaparse";
 import { requirePromoterSession } from "@/lib/promoter-auth";
-import { bulkCreatePromoterShows, type PromoterBulkCsvRow } from "@/lib/promoters";
-import { normalizeBulkHeader } from "@/lib/public-bulk-upload";
+import { bulkCreatePromoterShows } from "@/lib/promoters";
+import { readBulkUploadFile } from "@/lib/bulk-upload-file";
 
 export type PromoterUploadState = {
   approved: number;
@@ -24,8 +23,6 @@ const initialState: PromoterUploadState = {
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 500;
 
-type CsvRow = Omit<PromoterBulkCsvRow, "rowNumber">;
-
 export async function uploadPromoterShowsCsvAction(
   _prevState: PromoterUploadState,
   formData: FormData,
@@ -36,49 +33,39 @@ export async function uploadPromoterShowsCsvAction(
   if (!(file instanceof File) || file.size === 0) {
     return {
       ...initialState,
-      message: "Choose a CSV file before uploading.",
+      message: "Choose an Excel or CSV file before uploading.",
     };
   }
 
   if (file.size > MAX_UPLOAD_BYTES) {
     return {
       ...initialState,
-      message: "CSV file is too large. Keep uploads under 2 MB.",
+      message: "Spreadsheet is too large. Keep uploads under 2 MB.",
     };
   }
 
-  const csvText = await file.text();
-  const parsed = Papa.parse<CsvRow>(csvText, {
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: normalizeBulkHeader,
-  });
-
-  if (parsed.errors.length > 0) {
+  const parsed = await readBulkUploadFile(file);
+  if (parsed.error) {
     return {
       ...initialState,
-      message: parsed.errors[0]?.message ?? "Could not parse the CSV file.",
+      message: parsed.error,
     };
   }
 
-  const rows = parsed.data
-    .map((row, index) => ({
-      rowNumber: index + 2,
-      ...row,
-    }))
+  const rows = parsed.rows
     .filter((row) => !String(row.title ?? "").trim().toUpperCase().startsWith("EXAMPLE"));
 
   if (rows.length > MAX_IMPORT_ROWS) {
     return {
       ...initialState,
-      message: "CSV file has too many rows. Split uploads into batches of 500 rows or fewer.",
+      message: "Spreadsheet has too many rows. Split uploads into batches of 500 rows or fewer.",
     };
   }
 
   if (rows.length === 0) {
     return {
       ...initialState,
-      message: "No importable rows were found in that CSV file.",
+      message: "No importable rows were found in that spreadsheet.",
     };
   }
 

@@ -62,6 +62,7 @@ const HEADER_ALIASES: Record<string, (typeof PUBLIC_BULK_UPLOAD_HEADERS)[number]
   endtime: "endTimeLabel",
   address: "venueAddress",
   streetaddress: "venueAddress",
+  category: "categories",
   venue: "venueName",
   website: "websiteUrl",
   facebook: "facebookUrl",
@@ -90,6 +91,24 @@ function duplicateKey(payload: Record<string, unknown>) {
 export function getMissingBulkHeaders(headers: string[]) {
   const normalized = new Set(headers.map((header) => normalizeBulkHeader(header)));
   return REQUIRED_HEADERS.filter((header) => !normalized.has(header));
+}
+
+function spreadsheetCellText(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function rowsFromBulkSpreadsheet(grid: unknown[][]) {
+  const headers = (grid[0] ?? []).map((value) => normalizeBulkHeader(spreadsheetCellText(value)));
+  const rows = grid.slice(1).flatMap((values, index) => {
+    const row = Object.fromEntries(headers.map((header, column) => [header, spreadsheetCellText(values[column])])) as Omit<PublicBulkCsvRow, "rowNumber">;
+    return Object.values(row).some((value) => String(value ?? "").trim())
+      ? [{ ...row, rowNumber: index + 2 }]
+      : [];
+  });
+  return { headers, rows };
 }
 
 export function validatePublicBulkRows(rows: PublicBulkCsvRow[]) {

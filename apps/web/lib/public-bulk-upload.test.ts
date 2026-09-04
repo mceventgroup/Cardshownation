@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getMissingBulkHeaders, validatePublicBulkRows } from "./public-bulk-upload";
+import { getMissingBulkHeaders, rowsFromBulkSpreadsheet, validatePublicBulkRows } from "./public-bulk-upload";
 
 test("bulk upload identifies missing required columns", () => {
   assert.deepEqual(getMissingBulkHeaders(["title", "startDate", "city", "state"]), ["venueName"]);
@@ -45,4 +45,15 @@ test("bulk upload rejects malformed and repeated rows", () => {
 
   assert.equal(result.validRows.length, 1);
   assert.deepEqual(result.errors.map((error) => error.row), [3, 4]);
+});
+
+test("guided Excel rows convert dates, dropdown values, and headers", () => {
+  const result = rowsFromBulkSpreadsheet([
+    ["Show Name", "Start Date", "City", "State", "Venue Name", "Category", "Free Admission", "Table Count"],
+    ["Wichita Card Show", new Date("2027-03-12T00:00:00.000Z"), "Wichita", "KS", "Century II", "Sports Cards", true, 80],
+  ]);
+  assert.equal(result.rows[0].startDate, "2027-03-12");
+  assert.equal(result.rows[0].categories, "Sports Cards");
+  assert.equal(result.rows[0].isFree, "Yes");
+  assert.equal(result.rows[0].tableCount, "80");
 });

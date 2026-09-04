@@ -29,6 +29,7 @@
     "react-dom": "19.2.0",
     "react-konva": "19.2.0",
     "react-reconciler": "0.33.0",
+    "read-excel-file": "^9.3.10",
     "resend": "^6.12.2",
     "sharp": "^0.35.3",
     "stripe": "^22.4.0",

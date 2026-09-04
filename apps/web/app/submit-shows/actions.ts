@@ -1,18 +1,16 @@
 "use server";
 
 import { headers } from "next/headers";
-import Papa from "papaparse";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getRequestIp } from "@/lib/request-ip";
 import { hashOpaqueToken } from "@/lib/token-hash";
 import {
   MAX_PUBLIC_BULK_UPLOAD_BYTES,
   MAX_PUBLIC_BULK_UPLOAD_ROWS,
-  normalizeBulkHeader,
   validatePublicBulkRows,
   type BulkRowError,
-  type PublicBulkCsvRow,
 } from "@/lib/public-bulk-upload";
+import { readBulkUploadFile } from "@/lib/bulk-upload-file";
 import { submitShowForModeration } from "@/lib/submissions";
 
 export type PublicBulkUploadState = {
@@ -59,23 +57,18 @@ export async function submitBulkShowsAction(
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { ...initialPublicBulkUploadState, message: "Choose a CSV file to upload." };
+    return { ...initialPublicBulkUploadState, message: "Choose an Excel or CSV file to upload." };
   }
   if (file.size > MAX_PUBLIC_BULK_UPLOAD_BYTES) {
-    return { ...initialPublicBulkUploadState, message: "That file is too large. Keep the CSV under 750 KB." };
+    return { ...initialPublicBulkUploadState, message: "That file is too large. Keep the spreadsheet under 750 KB." };
   }
 
-  const parsed = Papa.parse<Omit<PublicBulkCsvRow, "rowNumber">>(await file.text(), {
-    header: true,
-    skipEmptyLines: "greedy",
-    transformHeader: normalizeBulkHeader,
-  });
-  if (parsed.errors.length > 0) {
-    return { ...initialPublicBulkUploadState, message: parsed.errors[0]?.message ?? "We could not read that CSV file." };
+  const parsed = await readBulkUploadFile(file);
+  if (parsed.error) {
+    return { ...initialPublicBulkUploadState, message: parsed.error };
   }
 
-  const rows = parsed.data
-    .map((row, index) => ({ ...row, rowNumber: index + 2 }))
+  const rows = parsed.rows
     .filter((row) => !String(row.title ?? "").trim().toUpperCase().startsWith("EXAMPLE"));
   if (rows.length === 0) {
     return { ...initialPublicBulkUploadState, message: "No show rows were found. Keep the header row and replace the example row." };
