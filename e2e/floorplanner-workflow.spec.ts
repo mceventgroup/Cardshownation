@@ -56,3 +56,25 @@ test("floor planner tools become a dismissible drawer on narrow screens", async 
   await page.getByRole("button", { name: "Close editor tools" }).last().click();
   await expect(page.getByRole("complementary")).toBeHidden();
 });
+
+
+test("navigation switches cleanly between moving the view and placing tables", async ({ page }) => {
+  await openEditor(page);
+  const navigation = page.getByRole("toolbar", { name: "Canvas navigation" });
+  await expect(navigation).toBeVisible();
+  await navigation.getByRole("button", { name: "Hand", exact: true }).click();
+  await expect(navigation.getByRole("button", { name: "Hand", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: /^Add table/ }).click();
+  await expect(navigation.getByRole("button", { name: "Hand", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByText("Click the floor to add a table. Esc when finished.")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(navigation.getByRole("button", { name: "Select", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const initialZoom = await page.getByTestId("canvas-zoom").textContent();
+  await navigation.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect(page.getByTestId("canvas-zoom")).not.toHaveText(initialZoom!);
+  await navigation.getByRole("button", { name: "Fit room", exact: true }).click();
+  await page.keyboard.press("h");
+  await expect(navigation.getByRole("button", { name: "Hand", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+  await expect(navigation.getByRole("button", { name: "Hand", exact: true })).toHaveAttribute("aria-pressed", "false");
+});

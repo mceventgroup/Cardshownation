@@ -49,8 +49,8 @@ const SECTIONS = [
   {
     title: 'Navigation',
     items: [
-      'Pan with `Space + Drag`.',
-      'Use the `+`, `-`, and `Reset` controls for zoom.',
+      'Choose `Hand` to drag the view, or hold `Space + Drag`. Choose `Select` to move tables.',
+      'Use `+` and `-` to zoom. `Fit room` (0) brings the room back into view.',
       'Use the mini-map in the top right to understand where you are in large layouts.',
       'Use the `Measure` tool to click two points and read the distance.',
     ],

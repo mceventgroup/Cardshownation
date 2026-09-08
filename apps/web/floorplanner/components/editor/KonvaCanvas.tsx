@@ -46,7 +46,6 @@ import TableNode from './TableNode'
 import SelectionRect from './SelectionRect'
 import TransformerControl from './TransformerControl'
 import InlineLabelEditor from './InlineLabelEditor'
-import ShortcutsLegend from './ShortcutsLegend'
 import BackgroundImageLayer from './BackgroundImageLayer'
 import TableContextMenu, { type ContextMenuAction } from './TableContextMenu'
 import { clampToWallSetback, pushOutOfDoorZones, computeRoomBounds, getRoomBoundaryEdges, findBoundaryEdgeForDoor, findNearestBoundarySample, isRectWithinWallSetback } from '@floorplanner/domain/room-contour'
@@ -156,16 +155,11 @@ export default function KonvaCanvas() {
   const [editingTableId, setEditingTableId] = useState<string | null>(null)
   const [editingPos, setEditingPos] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
 
-  // Shortcuts legend visibility (stays as overlay)
-  const [showShortcuts, setShowShortcuts] = useState(false)
-
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tableId: string } | null>(null)
   const [hoveredTableId, setHoveredTableId] = useState<string | null>(null)
-  const [controlsCollapsed, setControlsCollapsed] = useState(false)
-  const [controlsPos, setControlsPos] = useState<Point>({ x: 16, y: 16 })
-  const [panLocked, setPanLocked] = useState(false)
-  const controlsDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null)
+  const panLocked = activeTool === 'hand'
+  const setActiveTool = useEditorStore(s => s.setActiveTool)
   const [recentlyAssignedTableIds, setRecentlyAssignedTableIds] = useState<Set<string>>(new Set())
   const [assignmentHint, setAssignmentHint] = useState<string | null>(null)
   const placementClickHandledRef = useRef(false)
@@ -189,38 +183,6 @@ export default function KonvaCanvas() {
   // Active vendor ref for mouse handler (avoids stale closure)
   const activeVendorRef = useRef(activeVendorId)
   activeVendorRef.current = activeVendorId
-
-  // Zoom/shortcut keys that stay in canvas
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const t = e.target as HTMLElement
-      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return
-      if (e.key === 'Escape') {
-        activeVendorRef.current = null
-        setActiveVendor(null)
-        setHoveredVendor(null)
-        return
-      }
-      if (e.key === '?') {
-        setShowShortcuts(prev => !prev)
-      }
-      if (e.key === '+' || e.key === '=') {
-        setStageScaleLocal(prev => Math.min(MAX_ZOOM, prev * ZOOM_STEP))
-      }
-      if (e.key === '-') {
-        setStageScaleLocal(prev => Math.max(MIN_ZOOM, prev / ZOOM_STEP))
-      }
-      if (e.key === '0') {
-        setStageScaleLocal(1)
-        setStagePosLocal({ x: 0, y: 0 })
-      }
-      if (e.key.toLowerCase() === 'h') {
-        setPanLocked(prev => !prev)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [setActiveVendor, setHoveredVendor])
 
   useEffect(() => {
     setStageTransform(stageScale, stagePos)
@@ -1675,13 +1637,35 @@ export default function KonvaCanvas() {
 
   const zoomBy = useCallback((factor: number) => {
     const nextScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, stageScale * factor))
+    setStagePosLocal({
+      x: stageSize.width / 2 - (stageSize.width / 2 - stagePos.x) * nextScale / stageScale,
+      y: stageSize.height / 2 - (stageSize.height / 2 - stagePos.y) * nextScale / stageScale,
+    })
     setStageScaleLocal(nextScale)
-  }, [stageScale])
+  }, [stageScale, stagePos, stageSize])
 
   const resetView = useCallback(() => {
-    setStageScaleLocal(1)
-    setStagePosLocal({ x: 0, y: 0 })
-  }, [])
+    const bounds = room ? computeRoomBounds(room) : null
+    const width = bounds?.width || settings.canvasWidth
+    const height = bounds?.height || settings.canvasHeight
+    const scale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(Math.max(1, stageSize.width - 80) / width, Math.max(1, stageSize.height - 120) / height)))
+    setStageScaleLocal(scale)
+    setStagePosLocal({ x: (stageSize.width - width * scale) / 2 - (bounds?.x ?? 0) * scale, y: (stageSize.height - height * scale) / 2 - (bounds?.y ?? 0) * scale })
+  }, [room, settings.canvasWidth, settings.canvasHeight, stageSize])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement
+      if (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key === 'Escape') { setActiveVendor(null); setHoveredVendor(null) }
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomBy(ZOOM_STEP) }
+      if (e.key === '-') { e.preventDefault(); zoomBy(1 / ZOOM_STEP) }
+      if (e.key === '0') { e.preventDefault(); resetView() }
+      if (e.key.toLowerCase() === 'h' && !e.repeat) setActiveTool(panLocked ? 'select' : 'hand')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [zoomBy, resetView, setActiveVendor, setHoveredVendor, setActiveTool, panLocked])
 
   const miniMap = useMemo(() => {
     const canvasWidth = settings.canvasWidth
@@ -1701,10 +1685,6 @@ export default function KonvaCanvas() {
   const activeRoomZone = useMemo(
     () => roomZones.find(zone => zone.id === activeRoomId) ?? null,
     [activeRoomId, roomZones],
-  )
-  const activeRoomLabel = useMemo(
-    () => (activeRoomId ? getRoomLabel(displayRoom, activeRoomId) : null),
-    [activeRoomId, displayRoom],
   )
 
   const handleMiniMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -1735,37 +1715,6 @@ export default function KonvaCanvas() {
         : [droppedTable.id]
       assignVendorToTableIds(vendorId, targetIds)
   }, [assignVendorToTableIds, selectedIds, showMode, tableList, tables, toCanvas])
-
-  const handleControlsDragStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button')) return
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    controlsDragRef.current = {
-      pointerId: e.pointerId,
-      offsetX: e.clientX - rect.left - controlsPos.x,
-      offsetY: e.clientY - rect.top - controlsPos.y,
-    }
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }, [controlsPos.x, controlsPos.y])
-
-  const handleControlsDragMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = controlsDragRef.current
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (!drag || drag.pointerId !== e.pointerId || !rect) return
-    setControlsPos({
-      x: Math.max(0, e.clientX - rect.left - drag.offsetX),
-      y: Math.max(0, e.clientY - rect.top - drag.offsetY),
-    })
-  }, [])
-
-  const handleControlsDragEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = controlsDragRef.current
-    if (!drag || drag.pointerId !== e.pointerId) return
-    controlsDragRef.current = null
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    }
-  }, [])
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -2015,65 +1964,19 @@ export default function KonvaCanvas() {
 
       {!showMode && (
         <>
-          <div
-            className="absolute z-20 w-[320px] rounded-2xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur-sm"
-            style={{ left: controlsPos.x, top: controlsPos.y }}
-          >
-            <div
-              className="flex cursor-move items-center gap-2 border-b border-slate-200 px-3 py-2"
-              onPointerDown={handleControlsDragStart}
-              onPointerMove={handleControlsDragMove}
-              onPointerUp={handleControlsDragEnd}
-              onPointerCancel={handleControlsDragEnd}
-            >
-              <div className="flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Canvas Controls
-              </div>
-              <button
-                onClick={() => setControlsCollapsed(prev => !prev)}
-                className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-              >
-                {controlsCollapsed ? 'Expand' : 'Collapse'}
-              </button>
-            </div>
-
-            {!controlsCollapsed && (
-              <div className="p-2">
-                <div className="flex items-center gap-2">
-                  <button onClick={() => zoomBy(ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">+</button>
-                  <button onClick={() => zoomBy(1 / ZOOM_STEP)} className="h-10 w-10 rounded-xl bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">-</button>
-                  <button onClick={resetView} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">Reset</button>
-                  <button
-                    onClick={() => setPanLocked(prev => !prev)}
-                    className={`rounded-xl px-3 py-2 text-xs font-semibold ${panLocked ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-                  >
-                    Hand {panLocked ? 'On' : 'Off'}
-                  </button>
-                  <button
-                    onClick={() => setGridVisible(!gridVisible)}
-                    className={`rounded-xl px-3 py-2 text-xs font-semibold ${gridVisible ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-                  >
-                    Grid
-                  </button>
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  Pan with space + drag, middle drag, or turn Hand on with `H`. Click the mini map to jump the view.
-                </div>
-                {activeRoomId && (
-                  <div className="mt-2 inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                    Active room: {activeRoomLabel ?? activeRoomId}
-                  </div>
-                )}
-                {assignmentHint && (
-                  <div className="mt-2 rounded-xl bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700">
-                    {assignmentHint}
-                  </div>
-                )}
-              </div>
-            )}
+          <div role="toolbar" aria-label="Canvas navigation" className="absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-1 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg">
+            <button aria-pressed={activeTool === 'select'} onClick={() => setActiveTool('select')} className="rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 aria-pressed:bg-blue-600 aria-pressed:text-white">Select</button>
+            <button aria-pressed={panLocked} onClick={() => setActiveTool('hand')} className="rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 aria-pressed:bg-blue-600 aria-pressed:text-white">Hand</button>
+            <button aria-label="Zoom out" onClick={() => zoomBy(1 / ZOOM_STEP)} className="h-9 w-9 shrink-0 rounded-xl text-lg text-slate-700 hover:bg-slate-100">−</button>
+            <span data-testid="canvas-zoom" className="min-w-10 text-center text-xs tabular-nums text-slate-600">{Math.round(stageScale * 100)}%</span>
+            <button aria-label="Zoom in" onClick={() => zoomBy(ZOOM_STEP)} className="h-9 w-9 shrink-0 rounded-xl text-lg text-slate-700 hover:bg-slate-100">+</button>
+            <button onClick={resetView} title="Fit room to screen (0)" className="whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Fit room</button>
+            <button aria-pressed={gridVisible} onClick={() => setGridVisible(!gridVisible)} className="hidden rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 aria-pressed:bg-slate-100 sm:block">Grid</button>
           </div>
-
-          <div className="absolute right-4 top-4 z-20 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
+          <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(360px,calc(100%-24px))] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-sm" role="status">
+            {assignmentHint ?? (activeVendorId ? 'Click a table to assign the selected vendor. Esc to finish.' : panLocked ? 'Drag anywhere to move around. Choose Select to move tables.' : activeTool === 'place-table' ? 'Click the floor to add a table. Esc when finished.' : activeTool === 'place-row' ? 'Click the floor to place your row. Esc when finished.' : activeTool === 'select' ? 'Drag tables to move them. Drag empty space to select a group.' : 'Use the options on the left. Esc to return to Select.')}
+          </div>
+          <div className="absolute right-4 top-4 z-20 hidden lg:block rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Mini Map</div>
             <div
               className="relative overflow-hidden rounded-xl bg-slate-100 cursor-pointer"
@@ -2138,10 +2041,6 @@ export default function KonvaCanvas() {
         />
       )}
 
-      {/* Shortcuts legend */}
-      {showShortcuts && (
-        <ShortcutsLegend onClose={() => setShowShortcuts(false)} />
-      )}
 
       {/* Right-click context menu */}
       {contextMenu && (() => {

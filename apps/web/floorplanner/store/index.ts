@@ -91,7 +91,7 @@ function createDocumentHash(slice: DocumentSlice): string {
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ActiveTool = 'select' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-circle' | 'draw-room-freehand' | 'split-room' | 'place-door' | 'measure'
+export type ActiveTool = 'select' | 'hand' | 'place-table' | 'place-row' | 'draw-room' | 'draw-room-circle' | 'draw-room-freehand' | 'split-room' | 'place-door' | 'measure'
 export type DocumentSource = 'browser' | 'cloud' | 'file'
 
 type RowBuilderState = {

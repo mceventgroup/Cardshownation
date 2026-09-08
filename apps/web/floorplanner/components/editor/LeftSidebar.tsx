@@ -32,13 +32,15 @@ interface LeftSidebarProps {
 
 const TABLE_TOOLS: { tool: ActiveTool; label: string; shortcut: string }[] = [
   { tool: 'select', label: 'Select', shortcut: 'S' },
-  { tool: 'place-table', label: 'Table', shortcut: 'T' },
-  { tool: 'place-row', label: 'Row', shortcut: 'R' },
+  { tool: 'hand', label: 'Hand', shortcut: 'H' },
+  { tool: 'place-table', label: 'Add table', shortcut: 'T' },
+  { tool: 'place-row', label: 'Add row', shortcut: 'R' },
   { tool: 'measure', label: 'Measure', shortcut: 'M' },
 ]
 
 const SPACE_TOOLS: { tool: ActiveTool; label: string; shortcut: string }[] = [
   { tool: 'select', label: 'Select', shortcut: 'S' },
+  { tool: 'hand', label: 'Hand', shortcut: 'H' },
   { tool: 'split-room', label: 'Split room', shortcut: 'X' },
 ]
 
