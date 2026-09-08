@@ -1,4 +1,5 @@
 import type {
+  Measurement,
   TableObject,
   Row,
   Section,
@@ -31,6 +32,7 @@ export interface DocumentSlice {
   room: CompositeRoom | null
   doors: Record<string, Door>
   settings: LayoutSettings
+  measurements?: Record<string, Measurement>
   backgroundImages: Record<string, BackgroundImage>
 }
 
@@ -95,6 +97,7 @@ export function extractDocumentSlice(state: {
   room: CompositeRoom | null
   doors: Record<string, Door>
   settings: LayoutSettings
+  measurements?: Record<string, Measurement>
   backgroundImages: Record<string, BackgroundImage>
 }): DocumentSlice {
   return {
@@ -107,6 +110,7 @@ export function extractDocumentSlice(state: {
     doors: state.doors,
     settings: state.settings,
     backgroundImages: state.backgroundImages,
+    measurements: state.measurements ?? {},
   }
 }
 
@@ -131,6 +135,7 @@ export function saveToLocalStorage(slice: DocumentSlice): SaveError | null {
       localStorage.setItem(layoutPrefix + manifest.activeLayoutId, JSON.stringify(payload))
       const entry = manifest.layouts.find(l => l.id === manifest.activeLayoutId)
       if (entry) {
+        entry.name = slice.settings.eventName.trim() || entry.name
         entry.savedAt = payload.savedAt
         entry.tableCount = Object.keys(slice.tables).length
         entry.vendorCount = Object.keys(slice.vendors).length
@@ -169,7 +174,6 @@ export function clearLocalStorage(): void {
   try {
     const { storageKey } = getStorageKeys()
     localStorage.removeItem(storageKey)
-    void clearAllBackgroundImagesExternally()
   } catch {
     // Ignore
   }
@@ -193,6 +197,13 @@ function saveManifest(manifest: LayoutManifest): void {
 
 export function listLayouts(): LayoutEntry[] {
   return loadManifest().layouts
+}
+
+/** Detach the canvas before loading a cloud/file plan or starting a new show. */
+export function detachActiveLayout(): void {
+  const manifest = loadManifest()
+  manifest.activeLayoutId = null
+  saveManifest(manifest)
 }
 
 export function getActiveLayoutId(): string | null {
@@ -349,13 +360,21 @@ export function duplicateLayout(id: string, newName?: string): string | null {
 }
 
 export function deleteLayout(id: string): void {
+  const wasActive = getActiveLayoutId() === id
   const { layoutPrefix, storageKey } = getStorageKeys()
   try {
     const raw = localStorage.getItem(layoutPrefix + id)
     if (raw) {
       const payload: PersistedPayload = JSON.parse(raw)
       const imageIds = Object.keys(payload?.data?.backgroundImages ?? {})
-      void deleteBackgroundImagesExternally(imageIds)
+      const stillUsed = new Set<string>()
+      for (const other of listLayouts().filter(layout => layout.id !== id)) {
+        try {
+          const saved = JSON.parse(localStorage.getItem(layoutPrefix + other.id) || '{}')
+          for (const imageId of Object.keys(saved.data?.backgroundImages ?? {})) stillUsed.add(imageId)
+        } catch { /* A damaged save must not block deleting another show. */ }
+      }
+      void deleteBackgroundImagesExternally(imageIds.filter(imageId => !stillUsed.has(imageId)))
     }
   } catch {
     // Ignore malformed layout payload during asset cleanup.
@@ -369,6 +388,7 @@ export function deleteLayout(id: string): void {
   }
   saveManifest(manifest)
 
+  if (!wasActive) return
   if (manifest.activeLayoutId) {
     const nextLayoutRaw = localStorage.getItem(layoutPrefix + manifest.activeLayoutId)
     if (nextLayoutRaw) {
@@ -491,4 +511,21 @@ function migrate(payload: PersistedPayload): PersistedPayload {
 
   payload.version = CURRENT_VERSION
   return payload
+}
+
+export interface CloudSaveLink { id: string; name: string; revision: number | null; hash: string | null }
+export function readCloudSaveLink(): CloudSaveLink | null {
+  try {
+    const raw = localStorage.getItem(getStorageKeys().storageKey + ':account')
+    if (!raw) return null
+    const value = JSON.parse(raw)
+    return typeof value.id === 'string' && typeof value.name === 'string' ? value : null
+  } catch { return null }
+}
+export function writeCloudSaveLink(link: CloudSaveLink | null): void {
+  try {
+    const key = getStorageKeys().storageKey + ':account'
+    if (link) localStorage.setItem(key, JSON.stringify(link))
+    else localStorage.removeItem(key)
+  } catch { /* Device storage may be disabled; account saving still works. */ }
 }

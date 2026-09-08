@@ -1,3 +1,4 @@
+import type { Measurement } from '@floorplanner/domain/types'
 // ─────────────────────────────────────────────────────────────────────────────
 // EDITOR STORE
 //
@@ -22,7 +23,7 @@ import type { ImportSession, FieldMapping, ConflictResolution } from '@floorplan
 import { DEFAULT_SETTINGS, DRAFT_LAYOUT_ID } from '@floorplanner/lib/defaults'
 import {
   loadFromLocalStorage, extractDocumentSlice, saveToLocalStorage, clearLocalStorage,
-  saveLayoutAs, loadLayout, restoreBackgroundImagePayloads, saveToFile as saveToFileLib, parseFilePayload, getActiveLayoutEntry,
+  readCloudSaveLink, writeCloudSaveLink, detachActiveLayout, saveLayoutAs, loadLayout, restoreBackgroundImagePayloads, saveToFile as saveToFileLib, parseFilePayload, getActiveLayoutEntry,
   type DocumentSlice,
 } from '@floorplanner/lib/persistence'
 import { getFloorplannerStorageNamespace } from '@floorplanner/lib/runtime'
@@ -55,6 +56,9 @@ function safeAssignDefined<T extends object>(target: T, updates: Partial<T>): vo
 }
 
 function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): void {
+  state.documentGeneration++
+  state.cloudSaveStatus = 'idle'
+  state.cloudSaveError = null
   state.tables = syncRoomFieldsForTables(slice.tables, slice.room, slice.sections)
   state.rows = slice.rows
   state.sections = slice.sections
@@ -63,6 +67,7 @@ function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): vo
   state.room = slice.room
   state.activeRoomId = getDefaultRoomId(slice.room)
   state.doors = slice.doors
+  state.measurements = slice.measurements ?? {}
   state.backgroundImages = slice.backgroundImages
   state.settings = slice.settings
   state.selectedIds = new Set()
@@ -106,6 +111,12 @@ type RowBuilderState = {
 }
 
 export interface EditorState {
+  documentGeneration: number
+  cloudSaveStatus: 'idle' | 'waiting' | 'saving' | 'saved' | 'error'
+  cloudSaveError: string | null
+  measurements: Record<string, Measurement>
+  measurementLength: number | null
+  setMeasurementLength: (length: number | null) => void
   // ── Canvas (document) state ─────────────────────────────────────────────
   tables: Record<string, TableObject>
   rows: Record<string, Row>
@@ -188,6 +199,7 @@ export interface EditorState {
   setActiveRoomId: (id: string | null) => void
   clearVendors: () => void
   clearLayout: () => void
+  saveCurrentLayout: () => void
   saveCurrentLayoutAs: (name: string) => string
   switchToLayout: (layoutId: string) => boolean
   saveLayoutToFile: () => void
@@ -204,7 +216,7 @@ export interface EditorState {
   activeCloudLayoutName: string | null
   activeCloudLayoutRevision: number | null
   setActiveCloudLayout: (layout: { id: string; name: string; revision?: number | null } | null) => void
-  markCloudSaved: (layout: { id: string; name: string; revision?: number | null; savedAt?: string | null }) => void
+  markCloudSaved: (layout: { id: string; name: string; revision?: number | null; savedAt?: string | null; savedHash?: string }) => void
 
   // ── CSV Import actions ─────────────────────────────────────────────────
   importSession: ImportSession | null
@@ -241,6 +253,12 @@ export interface EditorState {
 export const useEditorStore = create<EditorState>()(
   immer((set, get) => ({
     // ── Initial state (hydrated from localStorage if available) ────────────
+    documentGeneration: 0,
+    cloudSaveStatus: 'idle',
+    cloudSaveError: null,
+    measurements: {},
+    measurementLength: null,
+    setMeasurementLength: length => set(state => { state.measurementLength = length }),
     tables:        {},
     rows:          {},
     sections:      {},
@@ -303,6 +321,7 @@ export const useEditorStore = create<EditorState>()(
 
       const slice = loadFromLocalStorage()
       const activeLayout = getActiveLayoutEntry()
+      const cloudLink = readCloudSaveLink()
       set(state => {
         state.hasHydratedFromStorage = true
         if (!slice) return
@@ -313,6 +332,14 @@ export const useEditorStore = create<EditorState>()(
         state.lastLocalSaveAt = activeLayout?.savedAt ?? new Date().toISOString()
         state.lastCloudSyncHash = null
         state.lastFileSyncHash = null
+        if (cloudLink) {
+          state.activeDocumentSource = 'cloud'
+          state.activeCloudLayoutId = cloudLink.id
+          state.activeCloudLayoutName = cloudLink.name
+          state.activeCloudLayoutRevision = cloudLink.revision
+          state.activeDocumentLabel = cloudLink.name
+          state.lastCloudSyncHash = cloudLink.hash
+        }
       })
       if (slice) {
         void restoreBackgroundImagePayloads(slice).then(restored => {
@@ -759,8 +786,12 @@ export const useEditorStore = create<EditorState>()(
     },
 
     clearLayout() {
+      detachActiveLayout()
       const savedAt = new Date().toISOString()
       set(state => {
+        state.documentGeneration++
+        state.cloudSaveStatus = 'idle'
+        state.cloudSaveError = null
         state.tables = {}
         state.rows = {}
         state.sections = {}
@@ -769,8 +800,9 @@ export const useEditorStore = create<EditorState>()(
         state.room = null
         state.activeRoomId = null
         state.doors = {}
+        state.measurements = {}
         state.backgroundImages = {}
-        state.settings = DEFAULT_SETTINGS
+        state.settings = { ...DEFAULT_SETTINGS, eventName: 'Untitled show' }
         state.selectedIds = new Set()
         state.activeTool = 'select'
         state.activeVendorId = null
@@ -795,13 +827,38 @@ export const useEditorStore = create<EditorState>()(
       clearLocalStorage()
     },
 
+    saveCurrentLayout() {
+      const state = get()
+      if (!getActiveLayoutEntry()) {
+        get().saveCurrentLayoutAs(state.settings.eventName.trim() || 'Untitled show')
+        return
+      }
+      const error = saveToLocalStorage(extractDocumentSlice(state))
+      if (error) {
+        set(draft => { draft.saveStatus = 'error'; draft.saveError = error })
+        throw new Error('Could not save on this device. Download a backup to keep your work.')
+      }
+      set(draft => {
+        draft.saveStatus = 'saved'
+        draft.saveError = null
+        draft.lastLocalSaveAt = new Date().toISOString()
+        draft.activeDocumentLabel = draft.settings.eventName.trim() || 'Untitled show'
+      })
+    },
+
     saveCurrentLayoutAs(name) {
       const state = get()
-      const slice = extractDocumentSlice(state)
+      const slice = { ...extractDocumentSlice(state), settings: { ...state.settings, eventName: name } }
       const id = saveLayoutAs(name, slice)
       const savedAt = new Date().toISOString()
       const hash = createDocumentHash(slice)
       set(draft => {
+        draft.documentGeneration++
+        draft.cloudSaveStatus = 'idle'
+        draft.cloudSaveError = null
+        draft.settings = slice.settings
+        draft.saveStatus = 'saved'
+        draft.saveError = null
         draft.activeDocumentSource = 'browser'
         draft.activeDocumentLabel = name
         draft.lastLocalSaveAt = savedAt
@@ -836,10 +893,7 @@ export const useEditorStore = create<EditorState>()(
       set(draft => {
         draft.lastFileSaveAt = new Date().toISOString()
         draft.lastFileSyncHash = createDocumentHash(slice)
-        if (draft.activeDocumentSource !== 'cloud') {
-          draft.activeDocumentSource = 'file'
-          draft.activeDocumentLabel = title || fallbackName
-        }
+
       })
     },
 
@@ -851,6 +905,7 @@ export const useEditorStore = create<EditorState>()(
       } catch (err) {
         return err instanceof Error ? err.message : 'Failed to load file.'
       }
+      detachActiveLayout()
       set(state => {
         applyDocumentSliceToState(state, slice)
         state.currentDocumentHash = createDocumentHash(slice)
@@ -867,6 +922,7 @@ export const useEditorStore = create<EditorState>()(
     },
 
     loadDocumentSlice(slice, options) {
+      detachActiveLayout()
       const hash = createDocumentHash(slice)
       set(state => {
         applyDocumentSliceToState(state, slice)
@@ -903,7 +959,7 @@ export const useEditorStore = create<EditorState>()(
         state.activeDocumentSource = 'cloud'
         state.activeDocumentLabel = layout.name
         state.lastCloudSaveAt = layout.savedAt ?? new Date().toISOString()
-        state.lastCloudSyncHash = state.currentDocumentHash
+        state.lastCloudSyncHash = layout.savedHash ?? state.currentDocumentHash
       })
     },
 
@@ -942,6 +998,9 @@ let _saveTimer: ReturnType<typeof setTimeout> | null = null
 let _savedClearTimer: ReturnType<typeof setTimeout> | null = null
 
 useEditorStore.subscribe((state, prev) => {
+  if (state.hasHydratedFromStorage && (state.activeCloudLayoutId !== prev.activeCloudLayoutId || state.activeCloudLayoutRevision !== prev.activeCloudLayoutRevision || state.lastCloudSyncHash !== prev.lastCloudSyncHash)) {
+    writeCloudSaveLink(state.activeCloudLayoutId ? { id: state.activeCloudLayoutId, name: state.activeCloudLayoutName ?? state.settings.eventName, revision: state.activeCloudLayoutRevision, hash: state.lastCloudSyncHash } : null)
+  }
   // Only react when document data changes — not when saveStatus/saveError update.
   // With immer, unchanged sub-trees keep their reference, so identity checks work.
   const docChanged =
@@ -952,6 +1011,7 @@ useEditorStore.subscribe((state, prev) => {
     state.vendorAssignments !== prev.vendorAssignments ||
     state.room            !== prev.room            ||
     state.doors           !== prev.doors           ||
+    state.measurements !== prev.measurements ||
     state.backgroundImages !== prev.backgroundImages ||
     state.settings        !== prev.settings
   if (!docChanged) return

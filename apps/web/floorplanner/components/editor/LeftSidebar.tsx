@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useWarnings } from '@floorplanner/hooks/useWarnings'
 import { useEditorStore, selectActiveTool, selectSelectedIds, selectSelectedRowId } from '@floorplanner/store/index'
 import type { ActiveTool } from '@floorplanner/store/index'
+import MeasurementPanel from './MeasurementPanel'
 import TableBuilderPanel from './TableBuilderPanel'
 import BulkTableEditPanel from './BulkTableEditPanel'
 import RowBuilderPanel from './RowBuilderPanel'
@@ -83,6 +84,7 @@ function ToolOptions() {
   const selectedIds = useEditorStore(selectSelectedIds)
   const selectedRowId = useEditorStore(selectSelectedRowId)
 
+  if (activeTool === 'measure') return <MeasurementPanel />
   if (activeTool === 'place-table') return <TableBuilderPanel />
   if (activeTool === 'place-row') return <RowBuilderPanel />
 

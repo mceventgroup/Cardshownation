@@ -290,3 +290,10 @@ export interface BackgroundImage {
   visible: boolean
   order: number             // z-order for multiple images (lower = behind)
 }
+
+/** Fixed map annotations, in inches. Moving a table does not move these reference marks. */
+export interface Measurement {
+  id: string
+  start: Point
+  end: Point
+}

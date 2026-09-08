@@ -86,3 +86,12 @@ test('section renumbering keeps separate room zones grouped in room order', () =
     ],
   )
 })
+
+
+test('unassigned tables use unique plain numbers across rooms and area assignments keep prefixes', async () => {
+  const { syncRoomFieldsForTables } = await import('./room-numbering')
+  const a = { ...createTable('a', 0, 0, 'R1', 'Main Room01'), sectionId: null }
+  const b = { ...createTable('b', 200, 0, 'R2', 'Side Room01'), sectionId: null }
+  const result = syncRoomFieldsForTables({ a, b }, null)
+  assert.deepEqual(Object.values(result).map(table => table.displayId).sort(), ['1', '2'])
+})

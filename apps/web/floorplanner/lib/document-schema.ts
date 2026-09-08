@@ -293,6 +293,10 @@ function parseSettings(value: unknown, label: string): LayoutSettings {
 export function validateDocumentSlice(value: unknown): DocumentSlice {
   const record = asRecord(value, 'Layout data')
   return {
+    measurements: record.measurements === undefined ? {} : validateMap(record.measurements, 'Layout data.measurements', (value, label) => {
+      const entry = asRecord(value, label)
+      return { id: expectString(entry.id, label + '.id'), start: expectPoint(entry.start, label + '.start'), end: expectPoint(entry.end, label + '.end') }
+    }),
     tables: validateMap(record.tables, 'Layout data.tables', parseTable),
     rows: validateMap(record.rows, 'Layout data.rows', parseRow),
     sections: validateMap(record.sections, 'Layout data.sections', parseSection),

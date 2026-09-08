@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useEditorStore, selectCanUndo, selectCanRedo, selectSelectedIds, selectTables } from '@floorplanner/store/index'
 import type { TableId } from '@floorplanner/domain/types'
 import { getPendingChangesMessage, hasPendingEditorChanges } from '@floorplanner/lib/editor-save-state'
+import { keepCurrentDeviceShow, saveCurrentShow } from '@floorplanner/lib/save-show'
 import ImportModal from './ImportModal'
 import ExportModal from './ExportModal'
 import LayoutManagerModal from './LayoutManagerModal'
@@ -21,6 +22,8 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebarOpen }: ToolbarProps) {
+  const cloudSaveStatus = useEditorStore(s => s.cloudSaveStatus)
+  const cloudSaveError = useEditorStore(s => s.cloudSaveError)
   const canUndo = useEditorStore(selectCanUndo)
   const canRedo = useEditorStore(selectCanRedo)
   const undo = useEditorStore(s => s.undo)
@@ -42,7 +45,8 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
   const [showFloorPlanImport, setShowFloorPlanImport] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showLayouts, setShowLayouts] = useState(false)
-  const [layoutView, setLayoutView] = useState<'browser' | 'cloud'>('browser')
+  const [savingShow, setSavingShow] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
   const [openMenu, setOpenMenu] = useState<'project' | 'more' | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
@@ -51,6 +55,10 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
 
   const confirmDiscardCurrentWork = useCallback((action: string) => {
     const state = useEditorStore.getState()
+    if (state.activeDocumentSource === 'browser') {
+      try { keepCurrentDeviceShow(); return true }
+      catch (error) { setFileError(error instanceof Error ? error.message : 'Save failed.'); return false }
+    }
     if (!hasPendingEditorChanges({
       saveStatus: state.saveStatus,
       saveError: state.saveError,
@@ -66,7 +74,7 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
 
   const handleStartNewLayout = useCallback(() => {
     if (!confirmDiscardCurrentWork('Start a new layout')) return
-    if (!window.confirm('Start a new layout? Current work will be cleared.')) return
+    try { keepCurrentDeviceShow() } catch (error) { setFileError(error instanceof Error ? error.message : 'Save failed.'); return }
     useEditorStore.getState().clearLayout()
     setOpenMenu(null)
   }, [confirmDiscardCurrentWork])
@@ -75,6 +83,7 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
+    try { keepCurrentDeviceShow() } catch (error) { setFileError(error instanceof Error ? error.message : 'Save failed.'); return }
     const err = await loadFromFile(file)
     if (err) setFileError(err)
   }, [loadFromFile])
@@ -86,24 +95,26 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
   }, [confirmDiscardCurrentWork])
 
   const openBrowserLayouts = useCallback(() => {
-    if (!confirmDiscardCurrentWork('Open browser saves')) return
-    setLayoutView('browser')
-    setShowLayouts(true)
-    setOpenMenu(null)
-  }, [confirmDiscardCurrentWork])
-
-  const openCloudLayouts = useCallback(() => {
-    if (!confirmDiscardCurrentWork('Open cloud saves')) return
-    setLayoutView('cloud')
-    setShowLayouts(true)
-    setOpenMenu(null)
-  }, [confirmDiscardCurrentWork])
-
-  const saveToCloud = useCallback(() => {
-    setLayoutView('cloud')
+    setSaveMessage(null)
     setShowLayouts(true)
     setOpenMenu(null)
   }, [])
+
+  const saveToCloud = useCallback(async () => {
+    if (savingShow) return
+    setSavingShow(true)
+    setFileError(null)
+    setSaveMessage(null)
+    try { setSaveMessage(await saveCurrentShow()) }
+    catch (error) { setFileError(error instanceof Error ? error.message : 'The show could not be saved. Please try again.') }
+    finally { setSavingShow(false) }
+  }, [savingShow])
+
+  useEffect(() => {
+    const save = () => { void saveToCloud() }
+    window.addEventListener('floorplanner:save-show', save)
+    return () => window.removeEventListener('floorplanner:save-show', save)
+  }, [saveToCloud])
 
   const saveToFile = useCallback(() => {
     useEditorStore.getState().saveLayoutToFile()
@@ -118,6 +129,7 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
   }, [])
 
   const updateTitle = useCallback((value: string) => {
+    setSaveMessage(null)
     dispatch({
       type: 'UPDATE_SETTINGS',
       prev: { eventName: settings.eventName },
@@ -179,13 +191,19 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
   const selectedPremiumCount = selectedTableIds.filter(id => tables[id]?.premium).length
   const hasSelection = selectedTableIds.length > 0
   const allSelectedPremium = hasSelection && selectedPremiumCount === selectedTableIds.length
-  const saveIndicator = saveStatus === 'error'
-    ? 'Browser save failed'
+  const saveIndicator = cloudSaveStatus === 'error'
+    ? 'Cloud autosave paused'
+    : cloudSaveStatus === 'saving'
+      ? 'Saving to your account…'
+      : cloudSaveStatus === 'waiting'
+        ? 'Cloud autosave pending'
+        : saveStatus === 'error'
+    ? 'Device save failed'
     : saveStatus === 'saving'
-      ? 'Saving locally...'
+      ? 'Saving on this device…'
       : hasPendingChanges
-        ? 'Saved locally - sync needed'
-        : 'Autosaved locally'
+        ? (activeDocumentSource === 'cloud' ? 'Account changes need saving' : 'Changes need saving')
+        : (activeDocumentSource === 'cloud' ? 'Saved to your account' : 'Saved on this device')
 
   const toggleSelectedPremium = useCallback(() => {
     if (selectedTableIds.length === 0) return
@@ -216,7 +234,9 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
           >
             Tools
           </button>
+          <button onClick={openBrowserLayouts} disabled={savingShow} className="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">Open shows</button>
           <button
+            disabled={savingShow}
             onClick={() => toggleMenu('project')}
             aria-haspopup="menu"
             aria-expanded={openMenu === 'project'}
@@ -299,27 +319,21 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
             )}
 
             <button
-              onClick={saveToCloud}
+              onClick={() => void saveToCloud()}
+              disabled={savingShow}
               className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              {activeDocumentSource === 'cloud' ? 'Sync' : 'Save'}
+              {savingShow ? 'Saving…' : 'Save'}
             </button>
 
             <button
               onClick={() => { setShowExport(true); setOpenMenu(null) }}
               className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Export
+              Print &amp; share
             </button>
 
-            <button
-              onClick={() => setShowMode(true)}
-              className="hidden rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex"
-            >
-              Print
-            </button>
-
-            <button
+<button
               onClick={() => toggleMenu('more')}
               aria-label="More floor planner options"
               aria-haspopup="menu"
@@ -338,9 +352,8 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
         <div role="menu" className="absolute left-3 top-full mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
           <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Start or open</div>
           {[
-            ['New floor plan', 'Start with an empty canvas', handleStartNewLayout],
-            ['Browser saves', 'Layouts saved on this device', openBrowserLayouts],
-            ['Cloud saves', 'Open or manage synced layouts', openCloudLayouts],
+            ['New show', 'Keep this show and start a fresh plan', handleStartNewLayout],
+            ['Open saved show', 'Browse device and account saves', openBrowserLayouts],
             ['Open backup file', 'Load a .json floor plan', openFilePicker],
           ].map(([label, description, action]) => (
             <button key={label as string} role="menuitem" onClick={action as () => void} className="w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50">
@@ -362,8 +375,8 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
 
       {openMenu === 'more' && (
         <div role="menu" className="absolute right-3 top-full mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-          <button role="menuitem" onClick={() => { setShowMode(true); setOpenMenu(null) }} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:hidden">
-            Print view
+          <button role="menuitem" onClick={() => { setShowMode(true); setOpenMenu(null) }} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Presentation view
           </button>
           <button role="menuitem" onClick={() => { onToggleTheme(); setOpenMenu(null) }} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Appearance
@@ -379,7 +392,7 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
       {showFloorPlanImport && <BackgroundImageModal onClose={() => setShowFloorPlanImport(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
-      {showLayouts && <LayoutManagerModal initialView={layoutView} onClose={() => setShowLayouts(false)} />}
+      {showLayouts && <LayoutManagerModal onClose={() => setShowLayouts(false)} />}
       {showHelp && <HelpCheatSheetModal onClose={() => setShowHelp(false)} />}
 
       <input
@@ -390,6 +403,8 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
         onChange={handleFileChange}
       />
 
+      {cloudSaveError && !fileError && <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{cloudSaveError}</div>}
+      {saveMessage && !fileError && <div role="status" className="fixed bottom-12 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 shadow-lg">{saveMessage}<button aria-label="Dismiss save message" onClick={() => setSaveMessage(null)}>×</button></div>}
       {fileError && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-600 text-white text-sm px-4 py-2 rounded shadow-lg z-50 flex items-center gap-3">
           <span>{fileError}</span>

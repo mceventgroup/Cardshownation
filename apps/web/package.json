@@ -19,6 +19,7 @@
     "clsx": "^2.1.1",
     "google-auth-library": "^10.9.1",
     "immer": "^10.1.1",
+    "jspdf": "^4.2.1",
     "konva": "8.4.3",
     "lucide-react": "^0.414.0",
     "nanoid": "^3.3.18",

@@ -43,10 +43,10 @@ export default function StatusBar() {
   const unassignedCount = totalCount - assignedCount
   const percentFilled = totalCount > 0 ? Math.round((assignedCount / totalCount) * 100) : 0
   const sourceLabel = activeDocumentSource === 'cloud'
-    ? 'Cloud'
+    ? 'Account'
     : activeDocumentSource === 'file'
       ? 'File'
-      : 'Browser'
+      : 'This device'
   const sourceSaveTime = activeDocumentSource === 'cloud'
     ? formatRelativeTime(lastCloudSaveAt)
     : activeDocumentSource === 'file'
@@ -92,7 +92,7 @@ export default function StatusBar() {
           )}
           {hasPendingChanges && (
             <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800">
-              Unsynced changes
+              Changes need saving
             </span>
           )}
         </div>
@@ -103,7 +103,7 @@ export default function StatusBar() {
           Scroll to zoom | Space+drag to pan | Shift+click for multi-select
         </span>
         {saveStatus === 'saving' && <span className="text-xs text-slate-400">Saving...</span>}
-        {saveStatus === 'saved' && <span className="text-xs text-emerald-600">Saved</span>}
+        {saveStatus === 'saved' && <span className="text-xs text-emerald-600">Device copy saved</span>}
         {saveStatus === 'error' && (
           <span className="text-xs text-red-500" title={saveError === 'quota-exceeded' ? 'Storage full - clear space or export your layout.' : 'Save failed.'}>
             {saveError === 'quota-exceeded' ? 'Storage full' : 'Save error'}

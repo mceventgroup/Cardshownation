@@ -1,3 +1,5 @@
+import type { Measurement } from '@floorplanner/domain/types'
+import { formatMeasurement } from '@floorplanner/domain/measurements'
 import type {
   BackgroundImage,
   CompositeRoom,
@@ -63,6 +65,9 @@ export interface ExportMetadata {
 export type ExportColorMode = 'color' | 'bw'
 
 export interface PrintOptions {
+  hideHeader?: boolean
+  highlightTableIds?: string[]
+  measurements?: Record<string, Measurement>
   showVendorNames: boolean
   showPaymentStatus: boolean
   title: string
@@ -101,7 +106,7 @@ interface RoomSection {
   backgroundImages: BackgroundImage[]
 }
 
-interface ExportDocument {
+export interface ExportDocument {
   svg: string
   content: string
   width: number
@@ -453,7 +458,7 @@ export function exportFloorplanImage(
   filename = 'floorplan.png',
 ): void {
   const tableList = Object.values(tables)
-  if (tableList.length === 0 && !room) {
+  if (tableList.length === 0 && !room && !Object.keys(options?.measurements ?? {}).length) {
     alert('Nothing to export - add some tables first.')
     return
   }
@@ -540,7 +545,7 @@ export function printLayout(
   backgroundImages?: Record<string, BackgroundImage>,
 ): void {
   const tableList = Object.values(tables)
-  if (tableList.length === 0 && !room) {
+  if (tableList.length === 0 && !room && !Object.keys(options?.measurements ?? {}).length) {
     alert('Nothing to export - add some tables first.')
     return
   }
@@ -563,10 +568,10 @@ export function printShowModeSheet(
   title: string,
   doors: Record<string, Door>,
   backgroundImages?: Record<string, BackgroundImage>,
-  options?: Pick<PrintOptions, 'showSectionColors' | 'showInventoryKey'>,
+  options?: Pick<PrintOptions, 'showSectionColors' | 'showInventoryKey' | 'measurements'>,
 ): void {
   const tableList = Object.values(tables)
-  if (tableList.length === 0 && !room) {
+  if (tableList.length === 0 && !room && !Object.keys(options?.measurements ?? {}).length) {
     alert('Nothing to export - add some tables first.')
     return
   }
@@ -1053,7 +1058,7 @@ export function printVendorTableAssignments(
   openPrintWindow(html, 1000, 900, true)
 }
 
-function buildSVG(
+export function buildSVG(
   tables: TableObject[],
   sections: Record<string, Section>,
   vendors: Record<string, Vendor>,
@@ -1077,6 +1082,12 @@ function buildSVG(
 
   const roomSections = getRoomSections(tables, room, backgroundImages)
   const context = createRenderContext(roomSections, doors)
+  for (const mark of Object.values(options.measurements ?? {})) {
+    const bounds = boundsFromPolygon([mark.start, mark.end])
+    context.sourceBounds = unionBounds(context.sourceBounds, { x: bounds.x - 40, y: bounds.y - 24, width: bounds.width + 80, height: bounds.height + 48 })
+  }
+  context.offsetX = OUTER_PAD - context.sourceBounds.x * context.scale
+  context.offsetY = HEADER_HEIGHT + OUTER_PAD - context.sourceBounds.y * context.scale
   verifyLayoutFidelity(roomSections, context)
 
   const pageWidth = Math.max(
@@ -1084,19 +1095,19 @@ function buildSVG(
     Math.ceil(context.sourceBounds.width * context.scale + OUTER_PAD * 2),
   )
   const pageHeight = Math.max(
-    540,
+    options.hideHeader ? 200 : 540,
     Math.ceil(HEADER_HEIGHT + context.sourceBounds.height * context.scale + OUTER_PAD + FOOTER_HEIGHT),
   )
   const orientation = pageWidth >= pageHeight ? 'landscape' : 'portrait'
   const parts: string[] = [
     `<rect width="${pageWidth}" height="${pageHeight}" fill="#ffffff" />`,
-    `<text x="${OUTER_PAD}" y="38" font-size="28" font-family="system-ui, sans-serif" font-weight="700" fill="#0f172a">${esc(metadata.eventName)}</text>`,
-    `<text x="${OUTER_PAD}" y="62" font-size="14" font-family="system-ui, sans-serif" fill="#475569">${esc([metadata.venue, metadata.date].filter(Boolean).join(' | '))}</text>`,
-    `<text x="${OUTER_PAD}" y="82" font-size="12" font-family="system-ui, sans-serif" fill="#64748b">${esc(options.title || 'Floor Plan')} | ${tables.length} tables | ${Object.keys(assignments).length} assigned</text>`,
+    options.hideHeader ? '' : `<text x="${OUTER_PAD}" y="38" font-size="28" font-family="system-ui, sans-serif" font-weight="700" fill="#0f172a">${esc(metadata.eventName)}</text>`,
+    options.hideHeader ? '' : `<text x="${OUTER_PAD}" y="62" font-size="14" font-family="system-ui, sans-serif" fill="#475569">${esc([metadata.venue, metadata.date].filter(Boolean).join(' | '))}</text>`,
+    options.hideHeader ? '' : `<text x="${OUTER_PAD}" y="82" font-size="12" font-family="system-ui, sans-serif" fill="#64748b">${esc(options.title || 'Floor Plan')} | ${tables.length} tables | ${Object.keys(assignments).length} assigned</text>`,
   ]
 
   const legendX = pageWidth - OUTER_PAD - LEGEND_ITEM_WIDTH * 3
-  const legendItems = showInventoryKey
+  const legendItems = options.highlightTableIds ? [{ label: 'Your tables', fill: '#2563eb', stroke: '#1d4ed8' }, { label: 'Other tables', fill: '#f1f5f9', stroke: '#475569' }] : showInventoryKey
     ? [
         { label: selectedInventoryOption?.label ?? 'Matching Inventory', fill: colorMode === 'bw' ? '#d1d5db' : (selectedInventoryOption?.color ?? '#2563eb'), stroke: '#334155' },
         { label: 'Other Vendors', fill: colorMode === 'bw' ? '#ffffff' : '#e2e8f0', stroke: '#64748b' },
@@ -1148,7 +1159,7 @@ function buildSVG(
       const inventoryMatch = vendorHasInventory(vendor, showInventoryKey)
       const inventoryColor = showInventoryKey ? inventoryColorMap.get(showInventoryKey) ?? '#2563eb' : null
       const caseCount = vendor?.cases ?? 0
-      const isCaseHighlighted = caseCount > 0
+      const isCaseHighlighted = !options.highlightTableIds && caseCount > 0
       const sectionColor = table.sectionId ? sections[table.sectionId]?.color : null
       const baseFill = showInventoryKey
         ? assignment
@@ -1161,7 +1172,7 @@ function buildSVG(
           : assignment
             ? assignment.colorOverride ?? vendorColor(assignment.vendorId)
             : sectionColor ?? '#e5e7eb'
-      const fill = colorMode === 'bw'
+      const fill = options.highlightTableIds ? (options.highlightTableIds.includes(table.id) ? '#2563eb' : '#f1f5f9') : colorMode === 'bw'
         ? (assignment ? '#d1d5db' : '#ffffff')
         : sanitizeColor(baseFill)
       const stroke = colorMode === 'bw'
@@ -1225,6 +1236,12 @@ function buildSVG(
     parts.push(buildDoorSvg(door, context))
   }
 
+  for (const mark of Object.values(options.measurements ?? {})) {
+    const x1 = transformX(context, mark.start.x), y1 = transformY(context, mark.start.y)
+    const x2 = transformX(context, mark.end.x), y2 = transformY(context, mark.end.y)
+    const color = colorMode === 'bw' ? '#111827' : '#0369a1'
+    parts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="2" /><circle cx="${x1}" cy="${y1}" r="3" fill="${color}" /><circle cx="${x2}" cy="${y2}" r="3" fill="${color}" /><text x="${(x1+x2)/2}" y="${(y1+y2)/2-8}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="${color}" stroke="white" stroke-width="4" paint-order="stroke">${esc(formatMeasurement(mark.start, mark.end))}</text>`)
+  }
   const content = parts.join('')
   return {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${pageWidth}" height="${pageHeight}" viewBox="0 0 ${pageWidth} ${pageHeight}">${content}</svg>`,
@@ -1404,19 +1421,24 @@ function buildPrintHTML(
 </html>`
 }
 
-function openPrintWindow(html: string, width: number, height: number, autoPrint: boolean): void {
-  const printHtml = autoPrint
-    ? html.replace('</body>', '<script>window.addEventListener("load", function () { setTimeout(function () { try { window.focus(); window.print(); } catch (error) {} }, 300); });</script></body>')
-    : html
-  const blob = new Blob([printHtml], { type: 'text/html' })
-  const url = URL.createObjectURL(blob)
-  const win = window.open(url, '_blank', `width=${width},height=${height}`)
-  if (!win) {
-    alert('Popup blocked - please allow popups for this site.')
-    URL.revokeObjectURL(url)
-    return
+export function openPrintWindow(html: string, width: number, height: number, autoPrint: boolean): void {
+  // Run handlers from the trusted app; inherited CSP blocks inline print scripts.
+  const win = window.open('about:blank', '_blank', `width=${width},height=${height}`)
+  if (!win) throw new Error('Your browser blocked the print window. Allow popups, or download the PDF instead.')
+  const cleanHtml = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/ onclick="[^"]*"/g, '')
+  win.document.open()
+  win.document.write(cleanHtml)
+  win.document.close()
+  win.document.querySelectorAll<HTMLButtonElement>('button').forEach(button => {
+    if (button.classList.contains('download-action')) { button.remove(); return }
+    button.addEventListener('click', () => { win.focus(); win.print() })
+  })
+  if (autoPrint) {
+    void Promise.all(Array.from(win.document.images).map(img => img.decode().catch(() => {})))
+      .then(() => win.document.fonts.ready).then(() => {
+        if (!win.closed) { win.focus(); win.print() }
+      })
   }
-  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 function esc(value: string): string {
@@ -1431,7 +1453,7 @@ function sanitizeCsvCell(value: string): string {
   return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
 }
 
-function sanitizeColor(color: string): string {
+export function sanitizeColor(color: string): string {
   return /^#[0-9a-fA-F]{3,8}$/.test(color) || /^[a-zA-Z]{2,30}$/.test(color) ? color : '#e2e8f0'
 }
 

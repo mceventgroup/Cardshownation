@@ -36,6 +36,10 @@ export class CloudRevisionConflictError extends Error {
   }
 }
 
+export class CloudRequestError extends Error {
+  constructor(message: string, public status: number, public retryAfterMs: number) { super(message) }
+}
+
 export class CloudQuotaExceededError extends Error {
   limit: number | null
 
@@ -72,7 +76,10 @@ async function assertOk(response: Response): Promise<void> {
       typeof payload.limit === 'number' ? payload.limit : null,
     )
   }
-  throw new Error(payload.error ?? `Request failed (${response.status})`)
+  const retryAfter = response.headers.get('Retry-After')
+  const seconds = Number(retryAfter)
+  const retryAfterMs = retryAfter && Number.isFinite(seconds) ? seconds * 1000 : 0
+  throw new CloudRequestError(payload.error ?? `Request failed (${response.status})`, response.status, retryAfterMs)
 }
 
 function getCloudUrl(pathname: string): string {
@@ -128,6 +135,7 @@ export async function saveCloudLayout(input: {
   expectedRevision?: number | null
 }): Promise<CloudLayoutSummary> {
   const response = await fetch(getCloudUrl('/cloud-layouts'), {
+    signal: AbortSignal.timeout(20000),
     method: 'POST',
     credentials: 'same-origin',
     headers: {

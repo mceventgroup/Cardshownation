@@ -1,3 +1,4 @@
+import type { Measurement } from '@floorplanner/domain/types'
 // ─────────────────────────────────────────────────────────────────────────────
 // COMMAND EXECUTOR
 //
@@ -41,6 +42,7 @@ function safeAssign<T extends object>(target: T, source: Partial<T>): T {
 }
 
 export type MutableCanvasState = {
+  measurements?: Record<string, Measurement>
   tables: Record<string, TableObject>
   rows: Record<string, Row>
   sections: Record<string, Section>
@@ -53,6 +55,7 @@ export type MutableCanvasState = {
 
 export function applyCommand(state: MutableCanvasState, command: LayoutCommand): void {
   switch (command.type) {
+    case 'UPDATE_MEASUREMENTS': { state.measurements = command.next; break }
     case 'PLACE_TABLE': {
       state.tables[command.table.id] = { ...command.table }
       break
@@ -342,6 +345,7 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
 
 export function reverseCommand(state: MutableCanvasState, command: LayoutCommand): void {
   switch (command.type) {
+    case 'UPDATE_MEASUREMENTS': { state.measurements = command.prev; break }
     case 'PLACE_TABLE': {
       delete state.tables[command.table.id]
       break

@@ -3,6 +3,9 @@ import assert from 'node:assert/strict'
 
 import {
   clearAllLayouts,
+  detachActiveLayout,
+  saveToLocalStorage,
+  loadFromLocalStorage,
   deleteLayout,
   duplicateLayout,
   listLayouts,
@@ -107,4 +110,19 @@ test('device project workflow saves, duplicates, renames, opens, and deletes saf
       value: previousStorage,
     })
   }
+})
+
+
+test('detaching an opened plan prevents autosave from overwriting the previous show', () => {
+  const previousStorage = globalThis.localStorage
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: new MemoryStorage() })
+  try {
+    const original = makeProject()
+    const id = saveLayoutAs('Saturday', original)
+    detachActiveLayout()
+    const next = { ...original, tables: {}, settings: { ...original.settings, eventName: 'Sunday' } }
+    assert.equal(saveToLocalStorage(next), null)
+    assert.equal(loadFromLocalStorage()?.settings.eventName, 'Sunday')
+    assert.equal(Object.keys(loadLayout(id)!.tables).length, 1)
+  } finally { Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage }) }
 })

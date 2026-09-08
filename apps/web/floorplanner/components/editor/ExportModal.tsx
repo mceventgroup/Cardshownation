@@ -1,290 +1,92 @@
 'use client'
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPORT MODAL
-//
-// Options:
-//   PNG  — Konva stage screenshot at 2× resolution
-//   Print/PDF — SVG floor-plan in a new print window (browser PDF dialog)
-//
-// View toggle:
-//   Organizer — shows vendor names + payment status
-//   Public — table labels and section colors only
-// ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useEditorStore } from '@floorplanner/store/index'
-import { exportFloorplanImage, exportVendorAssignmentsCsv, printLayout, printVendorManifest } from '@floorplanner/lib/export'
+import { exportVendorAssignmentsCsv, printVendorManifest } from '@floorplanner/lib/export'
+import { assignedVendors, assignmentText, buildShareDocument, downloadShareImage, downloadSharePdf, printShareDocuments } from '@floorplanner/lib/share-assignments'
 
-interface Props {
-  onClose: () => void
-}
-
-export default function ExportModal({ onClose }: Props) {
-  const darkFieldClassName =
-    'bg-gray-800 border border-gray-600 text-gray-100 placeholder:text-gray-400 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500'
-  const tables      = useEditorStore(s => s.tables)
-  const sections    = useEditorStore(s => s.sections)
-  const vendors     = useEditorStore(s => s.vendors)
-  const assignments = useEditorStore(s => s.vendorAssignments)
-  const room        = useEditorStore(s => s.room)
-  const doors       = useEditorStore(s => s.doors)
-  const bgImages    = useEditorStore(s => s.backgroundImages)
-
-  const [view, setView]              = useState<'organizer' | 'public'>('organizer')
-  const [showPayment, setShowPayment] = useState(true)
-  const [title, setTitle]            = useState('Floor Plan')
-  const [eventName, setEventName]    = useState('Floor Plan')
-  const [venue, setVenue]            = useState('')
-  const [eventDate, setEventDate]    = useState('')
-  const [colorMode, setColorMode]    = useState<'color' | 'bw'>('color')
-  const [includeAssignmentsPage, setIncludeAssignmentsPage] = useState(false)
-  const [caseRentalsOnly, setCaseRentalsOnly] = useState(false)
-
+export default function ExportModal({ onClose }: { onClose: () => void }) {
+  // Snapshot the show when opening so a batch always represents the same plan.
+  const [data] = useState(() => useEditorStore.getState())
+  const vendors = useMemo(() => assignedVendors(data), [data])
+  const [mode, setMode] = useState<'vendor' | 'all' | 'map'>(vendors.length ? 'vendor' : 'map')
+  const [vendorKey, setVendorKey] = useState(vendors[0]?.key ?? '')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const selected = vendors.find(v => v.key === vendorKey)
+  const preview = useMemo(() => buildShareDocument(data, mode === 'map' ? undefined : vendorKey || undefined), [data, mode, vendorKey])
+  const title = `${data.settings.eventName || 'Card Show'}-${mode === 'map' ? 'floor-map' : mode === 'all' ? 'all-vendor-assignments' : selected?.displayName || 'assignment'}`
+  const text = assignmentText(data, vendorKey)
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+    const prior = document.activeElement as HTMLElement | null
+    const dialog = document.getElementById('print-share-dialog')!
+    dialog.focus()
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy) onClose()
+      if (event.key === 'Tab') {
+        const elements = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), select, textarea, summary, [tabindex="0"]')).filter(el => el.getClientRects().length)
+        const first = elements[0], last = elements[elements.length - 1]
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  // onClose is stable
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function handlePNG() {
-    exportFloorplanImage(
-      tables,
-      sections,
-      vendors,
-      assignments,
-      room,
-      doors,
-      {
-        showVendorNames: view === 'organizer',
-        showPaymentStatus: view === 'organizer' && showPayment,
-        title,
-        colorMode,
-        metadata: {
-          eventName,
-          venue,
-          date: eventDate,
-        },
-        includeVendorAssignmentsPage: includeAssignmentsPage,
-      },
-      bgImages,
-      `${title || 'floorplan'}.png`,
-    )
-    onClose()
+    window.addEventListener('keydown', keydown)
+    return () => { window.removeEventListener('keydown', keydown); prior?.focus() }
+  }, [onClose, busy])
+  function documents() { return mode === 'all' ? vendors.map(v => buildShareDocument(data, v.key)) : [preview] }
+  async function act(action: () => void | Promise<void>, success = '') {
+    setError(''); setMessage(''); setBusy(true)
+    try { await action(); setMessage(success) } catch (e) { setError(e instanceof Error ? e.message : 'Could not finish. Please try again.') } finally { setBusy(false) }
   }
-
-  function handlePrint() {
-    printLayout(tables, sections, assignments, room, doors, {
-      showVendorNames:   view === 'organizer',
-      showPaymentStatus: view === 'organizer' && showPayment,
-      title,
-      colorMode,
-      metadata: {
-        eventName,
-        venue,
-        date: eventDate,
-      },
-      includeVendorAssignmentsPage: includeAssignmentsPage,
-    }, bgImages)
-    onClose()
-  }
-
-  function handleVendorCsv() {
-    exportVendorAssignmentsCsv(tables, vendors, assignments, room, title || 'vendor-assignments')
-    onClose()
-  }
-
-  const tableCount = Object.keys(tables).length
-  const assignedCount = Object.keys(assignments).length
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-md">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h2 className="text-white font-semibold text-base">Export Floor Plan</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
-        </div>
-
-        <div className="p-5 flex flex-col gap-5">
-
-          {/* Title */}
-          <div className="flex flex-col gap-1">
-            <label className="text-gray-400 text-xs">Title</label>
-            <input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              className={darkFieldClassName}
-              placeholder="Floor Plan"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label className="text-gray-400 text-xs">Event Name</label>
-              <input
-                value={eventName}
-                onChange={e => setEventName(e.target.value)}
-                className={darkFieldClassName}
-                placeholder="Card Show"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-gray-400 text-xs">Venue</label>
-              <input
-                value={venue}
-                onChange={e => setVenue(e.target.value)}
-                className={darkFieldClassName}
-                placeholder="Convention Center"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-gray-400 text-xs">Event Date</label>
-            <input
-              value={eventDate}
-              onChange={e => setEventDate(e.target.value)}
-              className={darkFieldClassName}
-              placeholder="2026-05-01"
-            />
-          </div>
-
-          {/* View */}
-          <div className="flex flex-col gap-2">
-            <label className="text-gray-400 text-xs">View</label>
-            <div className="flex gap-2">
-              {(['organizer', 'public'] as const).map(v => (
-                <button
-                  key={v}
-                  onClick={() => setView(v)}
-                  className={`flex-1 py-2 text-sm rounded border transition-colors ${
-                    view === v
-                      ? 'border-blue-500 bg-blue-600/20 text-blue-300'
-                      : 'border-gray-600 text-gray-400 hover:border-gray-500'
-                  }`}
-                >
-                  {v === 'organizer' ? 'Organizer (with vendor info)' : 'Public (tables only)'}
-                </button>
-              ))}
-            </div>
-            {view === 'organizer' && (
-              <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={showPayment}
-                  onChange={e => setShowPayment(e.target.checked)}
-                  className="accent-blue-500"
-                />
-                Show payment status
-              </label>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-gray-400 text-xs">Export Mode</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setColorMode('color')}
-                className={`flex-1 py-2 text-sm rounded border transition-colors ${
-                  colorMode === 'color'
-                    ? 'border-blue-500 bg-blue-600/20 text-blue-300'
-                    : 'border-gray-600 text-gray-400 hover:border-gray-500'
-                }`}
-              >
-                Full Color
-              </button>
-              <button
-                onClick={() => setColorMode('bw')}
-                className={`flex-1 py-2 text-sm rounded border transition-colors ${
-                  colorMode === 'bw'
-                    ? 'border-blue-500 bg-blue-600/20 text-blue-300'
-                    : 'border-gray-600 text-gray-400 hover:border-gray-500'
-                }`}
-              >
-                Print Friendly
-              </button>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={includeAssignmentsPage}
-                onChange={e => setIncludeAssignmentsPage(e.target.checked)}
-                className="accent-blue-500"
-              />
-              Include vendor assignment page in PDF export
-            </label>
-          </div>
-
-          {/* Stats */}
-          <div className="bg-gray-800 rounded p-3 text-xs text-gray-400 flex gap-4">
-            <span><span className="text-white">{tableCount}</span> tables</span>
-            <span><span className="text-white">{assignedCount}</span> assigned</span>
-            <span><span className="text-white">{Object.keys(sections).length}</span> sections</span>
-          </div>
-
-          {/* Export buttons */}
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={handlePrint}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a1 1 0 001 1h8a1 1 0 001-1v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a1 1 0 00-1-1H6a1 1 0 00-1 1zm2 0h6v3H7V4zm-1 9h8v4H6v-4zm8-4a1 1 0 110 2 1 1 0 010-2z" clipRule="evenodd" />
-              </svg>
-              Print / Save as PDF
-            </button>
-            <button
-              onClick={handlePNG}
-              className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-              Save High-Res Floorplan Image
-            </button>
-          </div>
-
-          <button
-              onClick={() => { printVendorManifest(tables, vendors, assignments, title, { casesOnly: caseRentalsOnly }); onClose() }}
-              className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z" clipRule="evenodd" />
-              </svg>
-              Print Vendor Checklist
-            </button>
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={caseRentalsOnly}
-              onChange={e => setCaseRentalsOnly(e.target.checked)}
-              className="accent-blue-500"
-            />
-            Print only vendors with case rentals
+  const button = 'rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50'
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+    <div id="print-share-dialog" role="dialog" aria-modal="true" aria-labelledby="print-share-title" tabIndex={-1} className="max-h-[92dvh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white text-slate-900 shadow-xl">
+      <header className="flex items-center justify-between border-b p-5">
+        <div><h2 id="print-share-title" className="text-lg font-bold">Print &amp; share</h2><p className="text-sm text-slate-500">Table assignments and maps, ready to hand out or share.</p></div>
+        <button aria-label="Close print and share" disabled={busy} onClick={onClose} className={button}>Close</button>
+      </header>
+      <div className="grid gap-6 p-5 md:grid-cols-2">
+        <div className="space-y-4">
+          <label className="block text-sm font-semibold">What do you need?
+            <select aria-label="What to print or share" value={mode} onChange={e => { setMode(e.target.value as typeof mode); setMessage(''); setError('') }} disabled={busy} className="mt-2 w-full rounded-xl border p-3">
+              <option value="vendor" disabled={!vendors.length}>One vendor’s assignment</option>
+              <option value="all" disabled={!vendors.length}>All vendors — one page each</option>
+              <option value="map">Full show map + vendor directory</option>
+            </select>
           </label>
-
-          <button
-            onClick={handleVendorCsv}
-            className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded flex items-center justify-center gap-2"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm3 2v8h8V6H6zm1 1h2v2H7V7zm0 3h2v3H7v-3zm4-3h2v2h-2V7zm0 3h2v3h-2v-3z" />
-            </svg>
-            Export Vendor Assignments CSV
-          </button>
-
-          <p className="text-gray-600 text-xs">
-            Print/PDF exports rooms as separate labeled sections with global consecutive numbering.
-            Floorplan image export creates a readable multi-room PNG.
-            Vendor Checklist prints a sortable list with check-in column.
-          </p>
+          {!vendors.length && <p className="text-sm text-slate-600">Assign tables to a vendor to create their personal assignment map.</p>}
+          {mode !== 'map' && <label className="block text-sm font-semibold">{mode === 'all' ? 'Preview vendor' : 'Vendor'}
+            <select aria-label="Vendor to share" value={vendorKey} disabled={busy} onChange={e => { setVendorKey(e.target.value); setMessage(''); setError('') }} className="mt-2 w-full rounded-xl border p-3">
+              {vendors.map(v => <option key={v.key} value={v.key}>{v.displayName} ({v.tables.length} tables)</option>)}
+            </select>
+          </label>}
+          <p className="text-sm text-slate-600">{mode === 'all' ? `${vendors.length} pages, with each vendor’s tables highlighted on their own map.` : mode === 'vendor' ? 'Their name, table numbers, room, and highlighted spots on the show map.' : 'One complete map with numbered, color-coded tables and a matching vendor directory.'}</p>
+          <div className="flex flex-wrap gap-2">
+            <button disabled={busy} onClick={() => void act(() => downloadSharePdf(documents(), title), 'PDF downloaded. Attach it to your email or print it.')} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Download PDF</button>
+            <button disabled={busy} onClick={() => void act(() => printShareDocuments(documents(), title))} className={button}>Print</button>
+            {mode !== 'all' && <button disabled={busy} onClick={() => void act(() => downloadShareImage(preview, title), 'Image downloaded. Attach it to email or upload it to Facebook.')} className={button}>Download image</button>}
+          </div>
+          {mode === 'vendor' && <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+            <label className="block text-sm font-semibold" htmlFor="vendor-share-text">Message for email or Facebook</label>
+            <textarea id="vendor-share-text" readOnly value={text} rows={6} className="w-full rounded-lg border bg-white p-2 text-sm" />
+            <button disabled={busy} onClick={() => void act(() => navigator.clipboard.writeText(text), 'Message copied. Paste it into your email or Facebook post and attach the downloaded image.')} className={button}>Copy message</button>
+            <p className="text-xs text-slate-500">Download the PDF for email, or the image for email and Facebook. Then attach it to your message or post.</p>
+          </div>}
+          {busy && <p role="status" className="text-sm">Preparing your file…</p>}
+          {message && <p role="status" className="text-sm text-green-700">{message}</p>}
+          {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+          <details className="border-t pt-3"><summary className="cursor-pointer text-sm font-semibold">Organizer tools</summary><div className="mt-3 flex flex-wrap gap-2">
+            <button className={button} disabled={busy} onClick={() => void act(() => printVendorManifest(data.tables, data.vendors, data.vendorAssignments, data.settings.eventName))}>Print check-in list</button>
+            <button className={button} disabled={busy} onClick={() => void act(() => printVendorManifest(data.tables, data.vendors, data.vendorAssignments, data.settings.eventName, { casesOnly: true }))}>Print case rentals</button>
+            <button className={button} disabled={busy} onClick={() => void act(() => exportVendorAssignmentsCsv(data.tables, data.vendors, data.vendorAssignments, data.room, data.settings.eventName))}>Download assignment spreadsheet</button>
+          </div></details>
+        </div>
+        <div className="min-w-0 rounded-xl bg-slate-100 p-3"><p className="mb-2 text-xs font-semibold text-slate-500">{mode === 'all' ? `Preview • ${selected?.displayName}` : 'Preview'}</p>
+          {/* SVG generated from escaped public display data only. */}
+          <img alt="Assignment map preview" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}`} className="w-full bg-white shadow" />
         </div>
       </div>
     </div>
-  )
+  </div>
 }

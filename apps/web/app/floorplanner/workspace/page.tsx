@@ -48,7 +48,7 @@ export default async function FloorplannerWorkspacePage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-400/30">
-              {session.maxCloudProjects} active cloud project
+              Up to {session.maxCloudProjects} cloud {session.maxCloudProjects === 1 ? 'save' : 'saves'}
             </span>
             {session.accessSource === "subscription" && (
               <Link

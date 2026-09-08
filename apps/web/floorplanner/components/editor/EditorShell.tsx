@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { useCloudAutosave } from '@floorplanner/hooks/useCloudAutosave'
 import { useKeyboardShortcuts } from '@floorplanner/hooks/useKeyboardShortcuts'
 import { useEditorStore, selectShowCaseHighlights, selectShowInventoryKey, selectShowMode, selectShowSectionColors } from '@floorplanner/store/index'
 import { exportFloorplanImage, exportVendorAssignmentsCsv, exportVendorListImage, printShowModeSheet, printVendorManifest, printVendorTableAssignments } from '@floorplanner/lib/export'
@@ -93,6 +94,7 @@ export default function EditorShell({
   storageNamespace,
 }: EditorShellProps) {
   useKeyboardShortcuts()
+  useCloudAutosave()
   const hydrateFromStorage = useEditorStore(s => s.hydrateFromStorage)
   const loadDocumentSlice = useEditorStore(s => s.loadDocumentSlice)
   const showMode = useEditorStore(selectShowMode)
@@ -109,6 +111,7 @@ export default function EditorShell({
   const currentDocumentHash = useEditorStore(s => s.currentDocumentHash)
   const lastCloudSyncHash = useEditorStore(s => s.lastCloudSyncHash)
   const lastFileSyncHash = useEditorStore(s => s.lastFileSyncHash)
+  const measurements = useEditorStore(s => s.measurements)
   const tables = useEditorStore(s => s.tables)
   const sections = useEditorStore(s => s.sections)
   const vendors = useEditorStore(s => s.vendors)
@@ -257,6 +260,7 @@ export default function EditorShell({
                 doors,
                 backgroundImages,
                 {
+                  measurements,
                   showSectionColors,
                   showInventoryKey,
                 },
@@ -272,6 +276,7 @@ export default function EditorShell({
                   showVendorNames: false,
                   showPaymentStatus: false,
                   title: 'Floor Plan',
+                  measurements,
                   showSectionColors,
                   showInventoryKey,
                 },

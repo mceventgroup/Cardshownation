@@ -102,7 +102,7 @@ export function getDefaultRoomId(room: CompositeRoom | null): string | null {
 }
 
 export function formatDisplayId(roomId: string, tableNumber: number): string {
-  return `${roomId}-${tableNumber}`
+  return String(tableNumber)
 }
 
 export function getSectionPrefix(sectionName: string): string {
@@ -596,10 +596,12 @@ export function buildAllSectionRenumberChanges(
   }
 
   const unsectioned = allTables.filter(table => !table.sectionId || !sectionIds.has(table.sectionId))
+  let nextUnsectionedNumber = 1
   for (const bucket of getRoomBuckets(unsectioned, room)) {
     const ordered = sortTablesForRenumbering(bucket.tables, direction, bucket.zone)
-    ordered.forEach((table, index) => {
-      changes.push(createRenumberChange(table, formatScopedDisplayId(bucket.prefix, index + 1), index + 1, preserveLabelOverride))
+    ordered.forEach(table => {
+      const number = nextUnsectionedNumber++
+      changes.push(createRenumberChange(table, String(number), number, preserveLabelOverride))
     })
   }
 

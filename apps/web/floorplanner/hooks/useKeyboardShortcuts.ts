@@ -197,7 +197,7 @@ export function useKeyboardShortcuts() {
 
       if (ctrl && e.key === 's') {
         e.preventDefault()
-        useEditorStore.getState().saveLayoutToFile()
+        window.dispatchEvent(new Event('floorplanner:save-show'))
         return
       }
 

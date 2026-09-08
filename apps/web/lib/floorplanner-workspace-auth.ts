@@ -49,7 +49,7 @@ export async function getFloorplannerWorkspaceSession(): Promise<FloorplannerWor
     return {
       role: "ADMIN",
       user: adminSession.user,
-      maxCloudProjects: 10,
+      maxCloudProjects: 30,
       accessSource: "staff",
     };
   }

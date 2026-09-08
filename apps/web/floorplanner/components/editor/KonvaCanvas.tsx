@@ -27,7 +27,7 @@ import 'konva/lib/shapes/Image'
 import 'konva/lib/shapes/Text'
 import 'konva/lib/shapes/Transformer'
 import 'konva/lib/shapes/Label'
-import { Stage, Layer, Rect, Line, Ellipse } from 'react-konva/lib/ReactKonvaCore'
+import { Stage, Layer, Rect, Line, Ellipse, Text } from 'react-konva/lib/ReactKonvaCore'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Point, TableId, DoorId, DoorSide, DoorKind } from '@floorplanner/domain/types'
@@ -39,6 +39,7 @@ import { DEFAULT_NUMBERING_SCHEME } from '@floorplanner/domain/numbering'
 import { createTableId, createRowId, createAssignmentId, createRoomCircleId, createRoomSegmentId, createDoorId } from '@floorplanner/lib/id'
 import { DRAG_THRESHOLD, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DRAFT_LAYOUT_ID, OPEN_TABLE_FILL, vendorColor } from '@floorplanner/lib/defaults'
 import { registerStage } from '@floorplanner/lib/stage'
+import { formatMeasurement, measurementEnd, snapMeasurementPoint } from '@floorplanner/domain/measurements'
 import GridLayer from './GridLayer'
 import RoomLayer from './RoomLayer'
 import DoorNode from './DoorNode'
@@ -106,6 +107,11 @@ export default function KonvaCanvas() {
   // Node ref map: populated by TableNode via registerNode callback
   const nodeRefs = useRef<Map<string, Konva.Node>>(new Map())
 
+  const measurements = useEditorStore(s => s.measurements)
+  const measurementStart = useRef<Point | null>(null)
+  const [measurementPreview, setMeasurementPreview] = useState<{ start: Point; end: Point } | null>(null)
+  const [placementError, setPlacementError] = useState<string | null>(null)
+
   // Store state
   const tables      = useEditorStore(selectTables)
   const selectedIds = useEditorStore(selectSelectedIds)
@@ -143,6 +149,12 @@ export default function KonvaCanvas() {
   const setStageTransform = useEditorStore(s => s.setStageTransform)
   const setGridVisible    = useEditorStore(s => s.setGridVisible)
   const setActiveRoomId   = useEditorStore(s => s.setActiveRoomId)
+
+  useEffect(() => {
+    measurementStart.current = null
+    setMeasurementPreview(null)
+    setPlacementError(null)
+  }, [activeTool])
 
   // Stage size — tracks container element dimensions
   const [stageSize, setStageSize] = useState({ width: 1200, height: 800 })
@@ -496,12 +508,37 @@ export default function KonvaCanvas() {
       }
     }
 
+    if (!rowFitsSetback(built.tables) && currentRoom && cfg.orientation !== 'curved') {
+      const zones = getRoomZones(currentRoom)
+      const zone = zones.find(zone => zone.id === roomId)
+      if (zone) {
+        const rowBounds = geometry.unionBounds(built.tables.map(table => geometry.getBounds(table).bounds))
+        const inset = effectiveWallSetback
+        if (rowBounds.width <= zone.bounds.width - inset * 2 && rowBounds.height <= zone.bounds.height - inset * 2) {
+          origin = {
+            x: Math.max(zone.bounds.x + inset, Math.min(origin.x, zone.bounds.x + zone.bounds.width - inset - rowBounds.width)),
+            y: Math.max(zone.bounds.y + inset, Math.min(origin.y, zone.bounds.y + zone.bounds.height - inset - rowBounds.height)),
+          }
+          built = buildRowWithSpacing(cfg.spacing)
+        }
+      }
+    }
     if (!rowFitsSetback(built.tables)) {
+      setPlacementError('This full row will not fit here with the wall setback. Move it to a larger area, reduce the count or spacing, or adjust the setback in Setup.')
       return
     }
+    setPlacementError(null)
 
     dispatch({ type: 'PLACE_ROW', row: built.row, tables: built.tables, timestamp: Date.now() })
     setSelected(built.tables.map(t => t.id))
+    const bounds = geometry.unionBounds(built.tables.map(table => geometry.getBounds(table).bounds))
+    const current = useEditorStore.getState()
+    const viewport = containerRef.current?.getBoundingClientRect()
+    if (viewport && (bounds.x * current.stageScale + current.stagePosition.x < 0 || bounds.y * current.stageScale + current.stagePosition.y < 0 || (bounds.x + bounds.width) * current.stageScale + current.stagePosition.x > viewport.width || (bounds.y + bounds.height) * current.stageScale + current.stagePosition.y > viewport.height)) {
+      const scale = Math.max(MIN_ZOOM, Math.min(current.stageScale, (viewport.width - 80) / bounds.width, (viewport.height - 140) / bounds.height))
+      setStageScaleLocal(scale)
+      setStagePosLocal({ x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale, y: (viewport.height - bounds.height * scale) / 2 - bounds.y * scale })
+    }
   }, [activeRoomId, settings, tables, dispatch, setSelected, setActiveRoomId])
 
   // ── Place table helper ─────────────────────────────────────────────────────
@@ -805,6 +842,24 @@ export default function KonvaCanvas() {
       setActiveRoomId(clickedTable.roomId)
     }
 
+    if (activeTool === 'measure') {
+      const point = snapMeasurementPoint(canvasPos, room, Object.values(tables), 12 / useEditorStore.getState().stageScale)
+      if (!measurementStart.current) {
+        measurementStart.current = point
+        setMeasurementPreview({ start: point, end: point })
+      } else {
+        const start = measurementStart.current
+        const end = measurementEnd(start, point, useEditorStore.getState().measurementLength, e.evt.shiftKey)
+        if (Math.hypot(end.x - start.x, end.y - start.y) < 0.5) return
+        const prev = useEditorStore.getState().measurements
+        const id = crypto.randomUUID()
+        dispatch({ type: 'UPDATE_MEASUREMENTS', prev, next: { ...prev, [id]: { id, start, end } }, timestamp: Date.now() })
+        measurementStart.current = null
+        setMeasurementPreview(null)
+      }
+      return
+    }
+
     if (activeTool === 'place-table') {
       if (!isTable) {
         placeTableAt(canvasPos)
@@ -1033,12 +1088,19 @@ export default function KonvaCanvas() {
 
   // ── Mouse move ─────────────────────────────────────────────────────────────
 
-  const handleMouseMove = useCallback(() => {
+  const handleMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
     const stage = stageRef.current
     if (!stage) return
 
     const pointer = stage.getPointerPosition()
     if (!pointer) return
+
+    if (useEditorStore.getState().activeTool === 'measure' && measurementStart.current) {
+      const current = useEditorStore.getState()
+      const point = snapMeasurementPoint(toCanvas(pointer), current.room, Object.values(current.tables), 12 / current.stageScale)
+      setMeasurementPreview({ start: measurementStart.current, end: measurementEnd(measurementStart.current, point, current.measurementLength, e.evt.shiftKey) })
+      return
+    }
 
     // Panning
     if (isPanningRef.current && panStartRef.current) {
@@ -1645,13 +1707,17 @@ export default function KonvaCanvas() {
   }, [stageScale, stagePos, stageSize])
 
   const resetView = useCallback(() => {
-    const bounds = room ? computeRoomBounds(room) : null
+    const items = Object.values(tables).map(table => geometry.getBounds(table).bounds)
+    const roomBounds = room ? computeRoomBounds(room) : null
+    if (roomBounds) items.push(roomBounds)
+    for (const mark of Object.values(measurements)) items.push({ x: Math.min(mark.start.x, mark.end.x), y: Math.min(mark.start.y, mark.end.y), width: Math.max(1, Math.abs(mark.end.x - mark.start.x)), height: Math.max(1, Math.abs(mark.end.y - mark.start.y)) })
+    const bounds = items.length ? geometry.unionBounds(items) : null
     const width = bounds?.width || settings.canvasWidth
     const height = bounds?.height || settings.canvasHeight
     const scale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(Math.max(1, stageSize.width - 80) / width, Math.max(1, stageSize.height - 120) / height)))
     setStageScaleLocal(scale)
     setStagePosLocal({ x: (stageSize.width - width * scale) / 2 - (bounds?.x ?? 0) * scale, y: (stageSize.height - height * scale) / 2 - (bounds?.y ?? 0) * scale })
-  }, [room, settings.canvasWidth, settings.canvasHeight, stageSize])
+  }, [room, tables, measurements, settings.canvasWidth, settings.canvasHeight, stageSize])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1666,6 +1732,14 @@ export default function KonvaCanvas() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [zoomBy, resetView, setActiveVendor, setHoveredVendor, setActiveTool, panLocked])
+
+  const hasHydrated = useEditorStore(s => s.hasHydratedFromStorage)
+  const fittedOnOpen = useRef(false)
+  useEffect(() => {
+    if (fittedOnOpen.current || !hasHydrated || stageSize.width <= 0 || stageSize.height <= 0) return
+    fittedOnOpen.current = true
+    if (room || Object.keys(tables).length || Object.keys(measurements).length) resetView()
+  }, [hasHydrated, stageSize, room, tables, measurements, resetView])
 
   const miniMap = useMemo(() => {
     const canvasWidth = settings.canvasWidth
@@ -1960,6 +2034,18 @@ export default function KonvaCanvas() {
             />
           </Layer>
         )}
+        <Layer listening={false}>
+          {[...Object.values(measurements), ...(measurementPreview ? [measurementPreview] : [])].map((mark, index) => {
+            const size = 12 / stageScale
+            const middle = { x: (mark.start.x + mark.end.x) / 2, y: (mark.start.y + mark.end.y) / 2 }
+            return <React.Fragment key={'id' in mark ? String(mark.id) : 'preview'}>
+              <Line points={[mark.start.x, mark.start.y, mark.end.x, mark.end.y]} stroke="#0369a1" strokeWidth={2 / stageScale} dash={'id' in mark ? undefined : [6 / stageScale, 4 / stageScale]} />
+              {[mark.start, mark.end].map((point, i) => <Ellipse key={i} x={point.x} y={point.y} radiusX={3 / stageScale} radiusY={3 / stageScale} fill="#0369a1" />)}
+              <Rect x={middle.x - 40 / stageScale} y={middle.y - 22 / stageScale} width={80 / stageScale} height={20 / stageScale} fill="white" cornerRadius={4 / stageScale} />
+              <Text x={middle.x - 40 / stageScale} y={middle.y - 18 / stageScale} width={80 / stageScale} text={formatMeasurement(mark.start, mark.end)} fontSize={size} align="center" fill="#0369a1" />
+            </React.Fragment>
+          })}
+        </Layer>
       </Stage>
 
       {!showMode && (
@@ -1974,7 +2060,7 @@ export default function KonvaCanvas() {
             <button aria-pressed={gridVisible} onClick={() => setGridVisible(!gridVisible)} className="hidden rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 aria-pressed:bg-slate-100 sm:block">Grid</button>
           </div>
           <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(360px,calc(100%-24px))] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-sm" role="status">
-            {assignmentHint ?? (activeVendorId ? 'Click a table to assign the selected vendor. Esc to finish.' : panLocked ? 'Drag anywhere to move around. Choose Select to move tables.' : activeTool === 'place-table' ? 'Click the floor to add a table. Esc when finished.' : activeTool === 'place-row' ? 'Click the floor to place your row. Esc when finished.' : activeTool === 'select' ? 'Drag tables to move them. Drag empty space to select a group.' : 'Use the options on the left. Esc to return to Select.')}
+            {placementError ?? assignmentHint ?? (activeTool === 'measure' ? (measurementPreview ? 'Click the endpoint to save this distance. Shift for a straight line.' : 'Click a wall, table edge, or point to start a measurement.') : activeVendorId ? 'Click a table to assign the selected vendor. Esc to finish.' : panLocked ? 'Drag anywhere to move around. Choose Select to move tables.' : activeTool === 'place-table' ? 'Click the floor to add a table. Esc when finished.' : activeTool === 'place-row' ? 'Click the floor to place your row. Esc when finished.' : activeTool === 'select' ? 'Drag tables to move them. Drag empty space to select a group.' : 'Use the options on the left. Esc to return to Select.')}
           </div>
           <div className="absolute right-4 top-4 z-20 hidden lg:block rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Mini Map</div>

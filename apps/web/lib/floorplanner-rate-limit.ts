@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
 const FLOORPLANNER_MUTATION_LIMIT = {
-  maxAttempts: 20,
+  // Allow debounced autosaves (at most one per five seconds), plus manual actions.
+  maxAttempts: 120,
   windowMs: 5 * 60 * 1000,
   blockMs: 15 * 60 * 1000,
 };

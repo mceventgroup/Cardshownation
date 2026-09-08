@@ -76,6 +76,10 @@ export default function RowBuilderPanel() {
         {orientation === 'curved' ? 'Click near a curved wall to place the row midpoint' : 'Click canvas to place row'}
       </p>
 
+      <p className="mb-3 rounded-lg bg-blue-50 p-2 text-xs text-blue-800">
+        {tableCount} tables · {formatDimension(tableCount * tableWidth + Math.max(0, tableCount - 1) * spacing)} total length.
+        {orientation === 'vertical' ? ' Runs downward, with the table ends touching when spacing is zero.' : ''}
+      </p>
       <label className="block mb-2">
         <span className="text-gray-600 text-xs">Tables</span>
         <input

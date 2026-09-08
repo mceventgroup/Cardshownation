@@ -1,3 +1,4 @@
+import type { Measurement } from './types'
 // ─────────────────────────────────────────────────────────────────────────────
 // COMMAND MODEL AND UNDO/REDO
 //
@@ -352,7 +353,14 @@ export interface UpdateSettingsCommand extends CommandBase {
 // UNION TYPE
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface UpdateMeasurementsCommand extends CommandBase {
+  readonly type: 'UPDATE_MEASUREMENTS'
+  readonly prev: Record<string, Measurement>
+  readonly next: Record<string, Measurement>
+}
+
 export type LayoutCommand =
+  | UpdateMeasurementsCommand
   | PlaceTableCommand
   | PlaceTablesCommand
   | MoveTablesCommand
