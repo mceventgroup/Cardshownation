@@ -99,6 +99,11 @@ New Floor Planner subscriptions are off by default. Existing subscribers retain 
 still open Stripe's billing portal to manage or cancel their current subscription. Set
 `PURCHASING_ENABLED=true` only when new purchases should reopen.
 
+Admins can grant or revoke floor-planner access for individual member and promoter accounts from
+`/admin/users`. Manual grants are independent of Stripe billing and are recorded in the audit log.
+Promoters with an active paid subscription are shown as **Promoter Pro** throughout the promoter,
+admin, billing, and Floor Planner workspace views.
+
 The daily moderation cron also reconciles approved upcoming Kansas shows into Discord
 `#upcoming-shows`. It creates missing posts, updates changed posts, removes stale or duplicate
 managed posts, and leaves unrelated channel messages alone. Configure:

@@ -56,6 +56,7 @@ model User {
   passwordHash      String?
   sessionVersion    Int        @default(1)
   role              UserRole   @default(FAN)
+  floorplannerAccessGranted Boolean @default(false)
   emailVerifiedAt   DateTime?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt

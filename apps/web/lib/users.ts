@@ -63,6 +63,10 @@ type AdminUserActionInput = {
   userId: string;
 };
 
+type AdminFloorplannerAccessInput = AdminUserActionInput & {
+  enabled: boolean;
+};
+
 type UpdateFanProfileInput = {
   userId: string;
   name: string;
@@ -567,6 +571,7 @@ export async function listManageableAccounts() {
           id: true,
           name: true,
           verified: true,
+          floorplanEnabled: true,
         },
       },
       floorplannerSubscription: {
@@ -585,6 +590,54 @@ export async function listManageableAccounts() {
       },
     },
     orderBy: [{ createdAt: "desc" }],
+  });
+}
+
+export async function setFloorplannerAccessByAdmin(input: AdminFloorplannerAccessInput) {
+  const user = await db.user.findUnique({
+    where: { id: input.userId },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      floorplannerAccessGranted: true,
+      organizer: {
+        select: { id: true },
+      },
+    },
+  });
+
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
+    throw new Error("Floor-planner access can only be changed for member and promoter accounts.");
+  }
+
+  await db.user.update({
+    where: { id: user.id },
+    data: {
+      floorplannerAccessGranted: input.enabled,
+      organizer: user.organizer
+        ? {
+            update: {
+              floorplanEnabled: input.enabled,
+            },
+          }
+        : undefined,
+    },
+  });
+
+  await writeAuditLog({
+    actorId: input.actorId,
+    actorRole: "ADMIN",
+    action: input.enabled
+      ? "user.floorplanner_access_granted"
+      : "user.floorplanner_access_revoked",
+    targetType: "User",
+    targetId: user.id,
+    details: {
+      email: user.email,
+      role: user.role,
+      previousValue: user.floorplannerAccessGranted,
+    },
   });
 }
 

@@ -330,6 +330,13 @@ export async function getPromoterDashboardData(userId: string) {
           email: true,
           role: true,
           emailVerifiedAt: true,
+          floorplannerAccessGranted: true,
+          floorplannerSubscription: {
+            select: {
+              status: true,
+              currentPeriodEnd: true,
+            },
+          },
           organizer: {
             select: {
               id: true,
@@ -363,6 +370,13 @@ export async function getPromoterDashboardData(userId: string) {
           email: true,
           role: true,
           emailVerifiedAt: true,
+          floorplannerAccessGranted: true,
+          floorplannerSubscription: {
+            select: {
+              status: true,
+              currentPeriodEnd: true,
+            },
+          },
           organizer: {
             select: {
               id: true,
@@ -401,9 +415,10 @@ export async function getPromoterDashboardData(userId: string) {
     organizer: {
       ...user.organizer,
       floorplanEnabled:
-        hasFloorplanEnabledColumn && "floorplanEnabled" in user.organizer
+        user.floorplannerAccessGranted ||
+        (hasFloorplanEnabledColumn && "floorplanEnabled" in user.organizer
           ? user.organizer.floorplanEnabled
-          : false,
+          : false),
     },
     approvals: user.organizer.approvals,
     shows: user.organizer.shows,
@@ -1013,8 +1028,10 @@ export async function getAdminPromoterById(organizerId: string) {
           id: true,
           name: true,
           email: true,
+          role: true,
           createdAt: true,
           emailVerifiedAt: true,
+          floorplannerAccessGranted: true,
           floorplannerSubscription: {
             select: {
               status: true,

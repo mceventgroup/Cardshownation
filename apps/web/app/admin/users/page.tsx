@@ -19,8 +19,13 @@ import {
   listModeratorAccounts,
   revokeModeratorAccessByAdmin,
   sendPasswordResetByAdmin,
+  setFloorplannerAccessByAdmin,
 } from "@/lib/users";
-import { isFloorplannerSubscriptionActive } from "@/lib/floorplanner-access";
+import {
+  hasManualFloorplannerAccess,
+  isFloorplannerSubscriptionActive,
+  isPromoterPro,
+} from "@/lib/floorplanner-access";
 import type { UserRole } from "@csn/db";
 import { MIN_MODERATOR_PASSWORD_LENGTH } from "@/lib/passwords";
 
@@ -34,6 +39,7 @@ type SearchParams = {
   resetSent?: string;
   testCreated?: string;
   userDeleted?: string;
+  floorplannerAccess?: string;
   error?: string;
   errorMessage?: string;
 };
@@ -395,6 +401,36 @@ async function deleteUser(formData: FormData) {
   }
 }
 
+async function setFloorplannerAccess(formData: FormData) {
+  "use server";
+
+  const session = await requireAdminSession("/admin/users");
+  const userId = readRequiredString(formData, "userId", 120);
+  const enabled = formData.get("enabled") === "true";
+
+  if (!userId) {
+    redirect("/admin/users?error=floorplanner-access");
+  }
+
+  try {
+    await setFloorplannerAccessByAdmin({
+      actorId: session.user.id,
+      userId,
+      enabled,
+    });
+    redirect(`/admin/users?floorplannerAccess=${enabled ? "granted" : "revoked"}`);
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    const message = getRedirectErrorMessage(
+      error,
+      "Floor-planner access could not be updated.",
+    );
+    redirect(
+      `/admin/users?error=floorplanner-access&errorMessage=${encodeURIComponent(message)}`,
+    );
+  }
+}
+
 function getMessage(sp: SearchParams) {
   if (sp.accountCreated === "1") {
     return sp.inviteFailed === "1"
@@ -430,6 +466,14 @@ function getMessage(sp: SearchParams) {
     return "User account deleted.";
   }
 
+  if (sp.floorplannerAccess === "granted") {
+    return "Floor-planner access granted.";
+  }
+
+  if (sp.floorplannerAccess === "revoked") {
+    return "Floor-planner access revoked.";
+  }
+
   if (sp.error === "moderator") {
     return sp.errorMessage ?? `Moderator creation failed. Passwords must be at least ${MIN_MODERATOR_PASSWORD_LENGTH} characters.`;
   }
@@ -460,6 +504,10 @@ function getMessage(sp: SearchParams) {
 
   if (sp.error === "user-delete") {
     return "User deletion failed.";
+  }
+
+  if (sp.error === "floorplanner-access") {
+    return sp.errorMessage ?? "Floor-planner access could not be updated.";
   }
 
   return null;
@@ -501,7 +549,8 @@ export default async function AdminUsersPage({
         <h1 className="text-2xl font-bold text-slate-900">Users</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-500">
           Manage account access, send password reset links, promote moderators, and review
-          recent sensitive actions.
+          recent sensitive actions. You can also grant or revoke Floor Planner access without
+          requiring a Stripe subscription.
         </p>
       </div>
 
@@ -813,6 +862,15 @@ export default async function AdminUsersPage({
               const canPromote = account.role === "FAN";
               const isModerator = account.role === "MODERATOR";
               const isOrganizer = account.role === "ORGANIZER";
+              const hasPaidFloorplanner = isFloorplannerSubscriptionActive(
+                account.floorplannerSubscription,
+              );
+              const promoterPro = isPromoterPro(
+                account.role,
+                account.floorplannerSubscription,
+              );
+              const hasAdminFloorplanner = hasManualFloorplannerAccess(account);
+              const canManageFloorplanner = account.role === "FAN" || isOrganizer;
 
               return (
                 <div key={account.id} className="px-5 py-4">
@@ -823,7 +881,7 @@ export default async function AdminUsersPage({
                           {account.name ?? account.email}
                         </p>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                          {formatRole(account.role)}
+                          {promoterPro ? "Promoter Pro" : formatRole(account.role)}
                         </span>
                         {isTestAccountEmail(account.email) && (
                           <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-700">
@@ -835,9 +893,14 @@ export default async function AdminUsersPage({
                             Verified promoter
                           </span>
                         )}
-                        {isFloorplannerSubscriptionActive(account.floorplannerSubscription) && (
+                        {hasPaidFloorplanner && !promoterPro && (
                           <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-700">
                             Paid floor planner
+                          </span>
+                        )}
+                        {hasAdminFloorplanner && (
+                          <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                            Admin-granted floor planner
                           </span>
                         )}
                       </div>
@@ -874,6 +937,25 @@ export default async function AdminUsersPage({
                             className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
                           >
                             Make moderator
+                          </button>
+                        </form>
+                      )}
+
+                      {canManageFloorplanner && (
+                        <form action={setFloorplannerAccess}>
+                          <input type="hidden" name="userId" value={account.id} />
+                          <input
+                            type="hidden"
+                            name="enabled"
+                            value={hasAdminFloorplanner ? "false" : "true"}
+                          />
+                          <button
+                            type="submit"
+                            className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition-colors hover:bg-violet-100"
+                          >
+                            {hasAdminFloorplanner
+                              ? "Revoke floor planner"
+                              : "Grant floor planner"}
                           </button>
                         </form>
                       )}

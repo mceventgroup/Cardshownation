@@ -605,8 +605,8 @@ export default async function AccountPage({
               Build your show layout
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              One active cloud floor plan for $19.99 per month, available to members and
-              promoters.
+              One active cloud floor plan for $19.99 monthly or $199 yearly with 17%
+              savings, available to members and promoters.
             </p>
             <Link
               href="/floorplanner"

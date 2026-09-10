@@ -3,6 +3,7 @@ import { hasActiveFloorplannerSubscription } from "@/lib/floorplanner-billing";
 import { getModeratorSession } from "@/lib/moderator-auth";
 import { getPromoterSession } from "@/lib/promoter-auth";
 import { getUserSession } from "@/lib/user-auth";
+import { hasManualFloorplannerAccess } from "@/lib/floorplanner-access";
 
 export type FloorplannerWorkspaceRole =
   | "ADMIN"
@@ -18,7 +19,7 @@ export type FloorplannerWorkspaceSession = {
     email: string;
   };
   maxCloudProjects: number;
-  accessSource: "staff" | "subscription" | "complimentary";
+  accessSource: "staff" | "subscription" | "admin_grant";
 };
 
 export async function getFloorplannerCustomerSession() {
@@ -78,15 +79,12 @@ export async function getFloorplannerWorkspaceSession(): Promise<FloorplannerWor
     };
   }
 
-  if (
-    customerSession.role === "ORGANIZER" &&
-    customerSession.organizer?.floorplanEnabled
-  ) {
+  if (hasManualFloorplannerAccess(customerSession)) {
     return {
       role: customerSession.role,
       user: customerSession.user,
       maxCloudProjects: 1,
-      accessSource: "complimentary",
+      accessSource: "admin_grant",
     };
   }
 

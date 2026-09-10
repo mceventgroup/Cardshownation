@@ -16,6 +16,9 @@ import {
 } from "@/lib/floorplanner-workspace-auth";
 import {
   FLOORPLANNER_MONTHLY_PRICE_LABEL,
+  FLOORPLANNER_YEARLY_MONTHLY_EQUIVALENT_LABEL,
+  FLOORPLANNER_YEARLY_PRICE_LABEL,
+  FLOORPLANNER_YEARLY_SAVINGS_LABEL,
   getStripeConfigStatus,
 } from "@/lib/stripe";
 import {
@@ -142,14 +145,26 @@ export default async function FloorplannerPage({
                     </button>
                   </form>
                 ) : purchasingEnabled ? (
-                  <form action={startFloorplannerCheckout}>
+                  <form action={startFloorplannerCheckout} className="flex flex-col gap-3 sm:flex-row">
                     <button
                       type="submit"
+                      name="billingInterval"
+                      value="month"
                       disabled={!stripeReady}
                       className="inline-flex w-full items-center justify-center rounded-full bg-cyan-300 px-6 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                     >
-                      {stripeReady ? "Start my floor plan" : "Purchases temporarily unavailable"}
+                      {stripeReady ? "Monthly · $19.99" : "Purchases temporarily unavailable"}
                     </button>
+                    {stripeReady && (
+                      <button
+                        type="submit"
+                        name="billingInterval"
+                        value="year"
+                        className="inline-flex w-full items-center justify-center rounded-full border border-cyan-300 px-6 py-3 text-sm font-semibold text-cyan-200 transition-colors hover:bg-cyan-300/10 sm:w-auto"
+                      >
+                        Yearly · Save 17%
+                      </button>
+                    )}
                   </form>
                 ) : (
                   <button
@@ -190,16 +205,35 @@ export default async function FloorplannerPage({
             </p>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-700 bg-white p-7 text-slate-950 shadow-2xl shadow-cyan-950/30 sm:p-9">
+          <div id="pricing" className="rounded-[2rem] border border-slate-700 bg-white p-7 text-slate-950 shadow-2xl shadow-cyan-950/30 sm:p-9">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
               {purchasingEnabled ? "One-show plan" : "Purchasing paused"}
             </p>
             {purchasingEnabled ? (
-              <div className="mt-4 flex items-end gap-2">
-                <span className="text-5xl font-semibold tracking-tight">
-                  {FLOORPLANNER_MONTHLY_PRICE_LABEL}
-                </span>
-                <span className="pb-1 text-base text-slate-500">/ month</span>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-3xl border border-slate-200 p-5">
+                  <p className="text-sm font-semibold text-slate-600">Monthly</p>
+                  <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                    {FLOORPLANNER_MONTHLY_PRICE_LABEL}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">per month</p>
+                  <p className="mt-4 text-xs leading-5 text-slate-500">
+                    Flexible billing. Cancel from the Stripe portal.
+                  </p>
+                </div>
+                <div className="relative rounded-3xl border-2 border-cyan-500 bg-cyan-50 p-5">
+                  <span className="absolute right-4 top-4 rounded-full bg-cyan-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                    Save 17%
+                  </span>
+                  <p className="text-sm font-semibold text-cyan-800">Yearly</p>
+                  <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                    {FLOORPLANNER_YEARLY_PRICE_LABEL}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">per year</p>
+                  <p className="mt-4 text-xs leading-5 text-slate-600">
+                    {FLOORPLANNER_YEARLY_MONTHLY_EQUIVALENT_LABEL}/month equivalent · Save {FLOORPLANNER_YEARLY_SAVINGS_LABEL} yearly
+                  </p>
+                </div>
               </div>
             ) : (
               <p className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">

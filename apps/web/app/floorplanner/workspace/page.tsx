@@ -47,6 +47,11 @@ export default async function FloorplannerWorkspacePage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {session.role === "ORGANIZER" && session.accessSource === "subscription" && (
+              <span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-xs font-semibold text-cyan-200 ring-1 ring-cyan-300/30">
+                Promoter Pro
+              </span>
+            )}
             <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-400/30">
               Up to {session.maxCloudProjects} cloud {session.maxCloudProjects === 1 ? 'save' : 'saves'}
             </span>

@@ -8,6 +8,24 @@ type SubscriptionAccessRecord = {
   currentPeriodEnd: Date | null;
 };
 
+type ManualAccessRecord = {
+  floorplannerAccessGranted?: unknown;
+  user?: {
+    floorplannerAccessGranted?: unknown;
+  } | null;
+  organizer?: {
+    floorplanEnabled?: unknown;
+  } | null;
+};
+
+export function hasManualFloorplannerAccess(account: ManualAccessRecord | null | undefined) {
+  return Boolean(
+    account?.floorplannerAccessGranted ||
+      account?.user?.floorplannerAccessGranted ||
+      account?.organizer?.floorplanEnabled,
+  );
+}
+
 export function isFloorplannerSubscriptionActive(
   subscription: SubscriptionAccessRecord | null | undefined,
   now = new Date(),
@@ -20,6 +38,14 @@ export function isFloorplannerSubscriptionActive(
     subscription.currentPeriodEnd === null ||
     subscription.currentPeriodEnd.getTime() > now.getTime()
   );
+}
+
+export function isPromoterPro(
+  role: string,
+  subscription: SubscriptionAccessRecord | null | undefined,
+  now = new Date(),
+) {
+  return role === "ORGANIZER" && isFloorplannerSubscriptionActive(subscription, now);
 }
 
 export function isFloorplannerSubscriptionTerminal(status: string) {

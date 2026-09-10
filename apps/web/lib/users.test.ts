@@ -93,6 +93,76 @@ test("assignModeratorAccessByAdmin rejects organizer accounts", async () => {
   );
 });
 
+test("setFloorplannerAccessByAdmin grants account access and records an audit log", async () => {
+  stubMethod(db.user, "findUnique", async () => ({
+    id: "fan-1",
+    email: "fan@example.com",
+    role: "FAN",
+    floorplannerAccessGranted: false,
+    organizer: null,
+  }));
+  const updateUserMock = stubMethod(db.user, "update", async (input) => input);
+  const auditLogMock = stubMethod(db.auditLog, "create", async (input) => input);
+
+  await usersModule.setFloorplannerAccessByAdmin({
+    actorId: "admin-1",
+    userId: "fan-1",
+    enabled: true,
+  });
+
+  assert.deepEqual(updateUserMock.mock.calls[0]?.arguments[0], {
+    where: { id: "fan-1" },
+    data: {
+      floorplannerAccessGranted: true,
+      organizer: undefined,
+    },
+  });
+  assert.deepEqual(auditLogMock.mock.calls[0]?.arguments[0], {
+    data: {
+      actorId: "admin-1",
+      actorRole: "ADMIN",
+      action: "user.floorplanner_access_granted",
+      targetType: "User",
+      targetId: "fan-1",
+      details: {
+        email: "fan@example.com",
+        role: "FAN",
+        previousValue: false,
+      },
+    },
+  });
+});
+
+test("setFloorplannerAccessByAdmin keeps promoter account and organizer grants in sync", async () => {
+  stubMethod(db.user, "findUnique", async () => ({
+    id: "promoter-1",
+    email: "promoter@example.com",
+    role: "ORGANIZER",
+    floorplannerAccessGranted: true,
+    organizer: { id: "organizer-1" },
+  }));
+  const updateUserMock = stubMethod(db.user, "update", async (input) => input);
+  stubMethod(db.auditLog, "create", async (input) => input);
+
+  await usersModule.setFloorplannerAccessByAdmin({
+    actorId: "admin-1",
+    userId: "promoter-1",
+    enabled: false,
+  });
+
+  assert.deepEqual(updateUserMock.mock.calls[0]?.arguments[0], {
+    where: { id: "promoter-1" },
+    data: {
+      floorplannerAccessGranted: false,
+      organizer: {
+        update: {
+          floorplanEnabled: false,
+        },
+      },
+    },
+  });
+});
+
 test("createManagedAccountByAdmin creates member accounts and records the audit log", async () => {
   stubMethod(db.user, "findUnique", async () => null);
   const createUserMock = stubMethod(db.user, "create", async (input) => ({

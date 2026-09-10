@@ -3,8 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { requireAdminSession } from "@/lib/admin-auth";
 import { writeAuditLog } from "@/lib/audit-log";
 import { db } from "@/lib/db";
-import { isFloorplannerSubscriptionActive } from "@/lib/floorplanner-access";
+import {
+  hasManualFloorplannerAccess,
+  isPromoterPro,
+} from "@/lib/floorplanner-access";
 import { getAdminPromoterById } from "@/lib/promoters";
+import { setFloorplannerAccessByAdmin } from "@/lib/users";
 import {
   setOrganizerModerationStatus,
   type OrganizerModerationStatus,
@@ -63,17 +67,30 @@ async function updateModerationStatus(organizerId: string, formData: FormData) {
 async function toggleFloorplanAccess(organizerId: string, nextValue: boolean) {
   "use server";
   const session = await requireAdminSession(`/admin/promoters/${organizerId}`);
-  await db.organizer.update({
+  const organizer = await db.organizer.findUnique({
     where: { id: organizerId },
-    data: { floorplanEnabled: nextValue },
+    select: { userId: true },
   });
-  await writeAuditLog({
-    actorId: session.user.id,
-    actorRole: "ADMIN",
-    action: nextValue ? "promoter.floorplan_enabled" : "promoter.floorplan_disabled",
-    targetType: "Organizer",
-    targetId: organizerId,
-  });
+
+  if (organizer?.userId) {
+    await setFloorplannerAccessByAdmin({
+      actorId: session.user.id,
+      userId: organizer.userId,
+      enabled: nextValue,
+    });
+  } else {
+    await db.organizer.update({
+      where: { id: organizerId },
+      data: { floorplanEnabled: nextValue },
+    });
+    await writeAuditLog({
+      actorId: session.user.id,
+      actorRole: "ADMIN",
+      action: nextValue ? "promoter.floorplan_enabled" : "promoter.floorplan_disabled",
+      targetType: "Organizer",
+      targetId: organizerId,
+    });
+  }
   redirect(`/admin/promoters/${organizerId}`);
 }
 
@@ -205,21 +222,26 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
 
   if (!promoter) notFound();
 
+  const hasAdminFloorplanner = hasManualFloorplannerAccess({
+    floorplannerAccessGranted: promoter.user?.floorplannerAccessGranted,
+    organizer: promoter,
+  });
   const verifyAction = toggleVerified.bind(null, promoter.id, !promoter.verified);
   const moderationAction = updateModerationStatus.bind(null, promoter.id);
   const toggleFloorplanAccessAction = toggleFloorplanAccess.bind(
     null,
     promoter.id,
-    !promoter.floorplanEnabled
+    !hasAdminFloorplanner
   );
   const markEmailVerifiedAction = markEmailVerified.bind(null, promoter.id);
-  const hasPaidFloorplanner = isFloorplannerSubscriptionActive(
+  const promoterPro = isPromoterPro(
+    promoter.user?.role ?? "ORGANIZER",
     promoter.user?.floorplannerSubscription,
   );
-  const floorplannerAccessLabel = hasPaidFloorplanner
-    ? "Paid"
-    : promoter.floorplanEnabled
-      ? "Complimentary"
+  const floorplannerAccessLabel = promoterPro
+    ? "Promoter Pro"
+    : hasAdminFloorplanner
+      ? "Admin granted"
       : "Disabled";
 
   return (
@@ -237,6 +259,11 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
             {promoter.verified && (
               <span className="rounded-full border border-green-100 bg-green-50 px-3 py-1 text-sm font-medium text-green-700">
                 Verified promoter
+              </span>
+            )}
+            {promoterPro && (
+              <span className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-sm font-medium text-cyan-700">
+                Promoter Pro
               </span>
             )}
           </div>
@@ -278,9 +305,9 @@ export default async function AdminPromoterDetailPage({ params }: Props) {
               type="submit"
               className="rounded-lg border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
-              {promoter.floorplanEnabled
-                ? "Remove complimentary access"
-                : "Grant complimentary access"}
+              {hasAdminFloorplanner
+                ? "Revoke floor planner access"
+                : "Grant floor planner access"}
             </button>
           </form>
 

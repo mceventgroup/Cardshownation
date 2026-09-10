@@ -56,6 +56,7 @@ export async function getPromoterSession() {
           role: true,
           emailVerifiedAt: true,
           sessionVersion: true,
+          floorplannerAccessGranted: true,
           organizer: {
             select: {
               id: true,
@@ -79,6 +80,7 @@ export async function getPromoterSession() {
           role: true,
           emailVerifiedAt: true,
           sessionVersion: true,
+          floorplannerAccessGranted: true,
           organizer: {
             select: {
               id: true,
@@ -107,9 +109,10 @@ export async function getPromoterSession() {
     organizer: {
       ...user.organizer,
       floorplanEnabled:
-        hasFloorplanEnabledColumn && "floorplanEnabled" in user.organizer
+        user.floorplannerAccessGranted ||
+        (hasFloorplanEnabledColumn && "floorplanEnabled" in user.organizer
           ? user.organizer.floorplanEnabled
-          : false,
+          : false),
     },
   };
 }

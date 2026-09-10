@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logoutPromoter } from "@/app/promoter/actions";
 import { getPromoterSession, getPromoterSessionSecret } from "@/lib/promoter-auth";
+import { isPromoterPro } from "@/lib/floorplanner-access";
 import { getPromoterDashboardData } from "@/lib/promoters";
 import { formatShowDate } from "@/lib/utils";
 
@@ -44,6 +45,10 @@ export default async function PromoterPortalPage({
   if (!dashboard) {
     redirect("/promoter/login");
   }
+  const promoterPro = isPromoterPro(
+    dashboard.user.role,
+    dashboard.user.floorplannerSubscription,
+  );
 
   const notice = sp.claim === "sent"
     ? "Claim and corrected show details sent for review. The live listing will not change until approved."
@@ -62,9 +67,16 @@ export default async function PromoterPortalPage({
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-700">
                 Organizer dashboard
               </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-                {dashboard.organizer.name}
-              </h1>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+                  {dashboard.organizer.name}
+                </h1>
+                {promoterPro && (
+                  <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-700 ring-1 ring-cyan-200">
+                    Promoter Pro
+                  </span>
+                )}
+              </div>
               <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
                 Create shows faster, reuse your saved organizer details, and manage repeat events
                 from one organizer account.
@@ -113,7 +125,7 @@ export default async function PromoterPortalPage({
               label="Publishing"
               value={dashboard.organizer.moderationStatus === "TRUSTED" ? "Instant" : dashboard.organizer.moderationStatus === "BLOCKED" ? "Paused" : "Reviewed"}
             />
-            <StatCard label="Support" value="Free listing" />
+            <StatCard label="Account" value={promoterPro ? "Promoter Pro" : "Promoter"} />
           </div>
 
           <div className="mt-8">

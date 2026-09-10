@@ -10,10 +10,17 @@ import {
   isFloorplannerSubscriptionActive,
 } from "@/lib/floorplanner-billing";
 import {
+  hasManualFloorplannerAccess,
+  isPromoterPro,
+} from "@/lib/floorplanner-access";
+import {
   getFloorplannerCustomerSession,
   getFloorplannerWorkspaceSession,
 } from "@/lib/floorplanner-workspace-auth";
-import { FLOORPLANNER_MONTHLY_PRICE_LABEL } from "@/lib/stripe";
+import {
+  FLOORPLANNER_MONTHLY_PRICE_LABEL,
+  FLOORPLANNER_YEARLY_PRICE_LABEL,
+} from "@/lib/stripe";
 import {
   isPurchasingEnabled,
   PURCHASING_PAUSED_MESSAGE,
@@ -33,11 +40,9 @@ export default async function FloorplannerBillingPage() {
 
   const subscription = await getFloorplannerSubscription(customerSession.user.id);
   const paidAccess = isFloorplannerSubscriptionActive(subscription);
-  const complimentary =
-    !paidAccess &&
-    customerSession.role === "ORGANIZER" &&
-    Boolean(customerSession.organizer?.floorplanEnabled);
-  const active = complimentary || paidAccess;
+  const promoterPro = isPromoterPro(customerSession.role, subscription);
+  const adminGranted = !paidAccess && hasManualFloorplannerAccess(customerSession);
+  const active = adminGranted || paidAccess;
   const purchasingEnabled = isPurchasingEnabled();
 
   return (
@@ -51,23 +56,31 @@ export default async function FloorplannerBillingPage() {
         </h1>
         <p className="mt-4 text-base leading-7 text-slate-600">
           {purchasingEnabled
-            ? `One active cloud project for ${FLOORPLANNER_MONTHLY_PRICE_LABEL} per month.`
+            ? `Choose ${FLOORPLANNER_MONTHLY_PRICE_LABEL} monthly or ${FLOORPLANNER_YEARLY_PRICE_LABEL} yearly with 17% savings.`
             : PURCHASING_PAUSED_MESSAGE}
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
           <Detail
             label="Access"
-            value={complimentary ? "Complimentary" : active ? "Active" : "Inactive"}
+            value={
+              promoterPro
+                ? "Promoter Pro"
+                : adminGranted
+                  ? "Admin granted"
+                  : active
+                    ? "Active"
+                    : "Inactive"
+            }
           />
           <Detail
             label="Billing status"
-            value={complimentary ? "Admin granted" : subscription?.status ?? "Not subscribed"}
+            value={adminGranted ? "No subscription required" : subscription?.status ?? "Not subscribed"}
           />
           <Detail
             label="Renews / ends"
             value={
-              complimentary
+              adminGranted
                 ? "No billing date"
                 : subscription?.currentPeriodEnd
                   ? subscription.currentPeriodEnd.toLocaleDateString()
@@ -98,17 +111,29 @@ export default async function FloorplannerBillingPage() {
                 Manage in Stripe
               </button>
             </form>
-          ) : !complimentary && purchasingEnabled ? (
-            <form action={startFloorplannerCheckout} className="space-y-2">
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:w-auto"
-              >
-                Subscribe
-              </button>
-              <p className="max-w-xs text-xs leading-5 text-slate-500">By subscribing, you agree to the <Link href="/billing-terms" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Billing Terms</Link> and recurring monthly charges until cancellation.</p>
+          ) : !adminGranted && purchasingEnabled ? (
+            <form action={startFloorplannerCheckout} className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="submit"
+                  name="billingInterval"
+                  value="month"
+                  className="inline-flex w-full items-center justify-center rounded-full border border-brand-200 px-6 py-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50 sm:w-auto"
+                >
+                  Monthly · {FLOORPLANNER_MONTHLY_PRICE_LABEL}
+                </button>
+                <button
+                  type="submit"
+                  name="billingInterval"
+                  value="year"
+                  className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:w-auto"
+                >
+                  Yearly · Save 17%
+                </button>
+              </div>
+              <p className="max-w-lg text-xs leading-5 text-slate-500">By subscribing, you agree to the <Link href="/billing-terms" className="font-semibold text-brand-700 underline-offset-4 hover:underline">Billing Terms</Link> and recurring charges on your selected billing schedule until cancellation.</p>
             </form>
-          ) : !complimentary ? (
+          ) : !adminGranted ? (
             <span className="inline-flex items-center justify-center rounded-full bg-slate-100 px-6 py-3 text-sm font-semibold text-slate-500">
               New subscriptions paused
             </span>

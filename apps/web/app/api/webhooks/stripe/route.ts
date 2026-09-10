@@ -31,6 +31,20 @@ async function processStripeEvent(event: Stripe.Event) {
     userId = record?.userId ?? null;
   }
 
+  if (event.type === "invoice.paid" || event.type === "invoice.payment_failed") {
+    const subscriptionReference = event.data.object.parent?.subscription_details?.subscription;
+    const subscriptionId =
+      typeof subscriptionReference === "string"
+        ? subscriptionReference
+        : subscriptionReference?.id;
+
+    if (subscriptionId) {
+      const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+      const record = await syncFloorplannerSubscription(subscription);
+      userId = record?.userId ?? null;
+    }
+  }
+
   await db.billingWebhookEvent.create({
     data: {
       id: event.id,

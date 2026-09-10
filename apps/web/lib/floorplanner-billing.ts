@@ -4,8 +4,10 @@ import { db } from "@/lib/db";
 import { isFloorplannerSubscriptionActive } from "@/lib/floorplanner-access";
 import {
   FLOORPLANNER_MONTHLY_PRICE_CENTS,
-  getFloorplannerMonthlyPriceId,
+  FLOORPLANNER_YEARLY_PRICE_CENTS,
+  getFloorplannerPriceId,
   getStripe,
+  type FloorplannerBillingInterval,
 } from "@/lib/stripe";
 
 export { isFloorplannerSubscriptionActive } from "@/lib/floorplanner-access";
@@ -53,11 +55,16 @@ export async function syncFloorplannerSubscription(
     null;
   const stripeCustomerId = readStripeId(subscription.customer);
   const stripePriceId = getSubscriptionPriceId(subscription);
-  const configuredPriceId = process.env.STRIPE_FLOORPLANNER_MONTHLY_PRICE_ID?.trim();
+  const configuredPriceIds = new Set(
+    [
+      process.env.STRIPE_FLOORPLANNER_MONTHLY_PRICE_ID?.trim(),
+      process.env.STRIPE_FLOORPLANNER_YEARLY_PRICE_ID?.trim(),
+    ].filter((value): value is string => Boolean(value)),
+  );
   const isFloorplannerSubscription =
     subscription.metadata.csnProduct === "floorplanner" ||
     Boolean(existing) ||
-    (Boolean(configuredPriceId) && stripePriceId === configuredPriceId);
+    (Boolean(stripePriceId) && configuredPriceIds.has(stripePriceId));
 
   if (!isFloorplannerSubscription || !userId || !stripeCustomerId || !stripePriceId) {
     return null;
@@ -118,18 +125,24 @@ export async function syncFloorplannerCheckoutSession(
   return syncFloorplannerSubscription(subscription, checkoutUserId);
 }
 
-export async function validateConfiguredFloorplannerPrice() {
-  const price = await getStripe().prices.retrieve(getFloorplannerMonthlyPriceId());
-  const isMonthly =
+export async function validateConfiguredFloorplannerPrice(
+  interval: FloorplannerBillingInterval,
+) {
+  const expectedAmount =
+    interval === "year"
+      ? FLOORPLANNER_YEARLY_PRICE_CENTS
+      : FLOORPLANNER_MONTHLY_PRICE_CENTS;
+  const price = await getStripe().prices.retrieve(getFloorplannerPriceId(interval));
+  const isExpectedPrice =
     price.active &&
     price.currency.toLowerCase() === "usd" &&
-    price.unit_amount === FLOORPLANNER_MONTHLY_PRICE_CENTS &&
-    price.recurring?.interval === "month" &&
+    price.unit_amount === expectedAmount &&
+    price.recurring?.interval === interval &&
     price.recurring.interval_count === 1;
 
-  if (!isMonthly) {
+  if (!isExpectedPrice) {
     throw new Error(
-      "The configured Stripe price must be an active $19.99 USD monthly recurring price.",
+      `The configured Stripe price does not match the ${interval}ly Floor Planner plan.`,
     );
   }
 

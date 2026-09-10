@@ -9,8 +9,9 @@ import {
 import { getFloorplannerCustomerSession } from "@/lib/floorplanner-workspace-auth";
 import {
   getAppUrl,
-  getFloorplannerMonthlyPriceId,
+  getFloorplannerPriceId,
   getStripe,
+  type FloorplannerBillingInterval,
 } from "@/lib/stripe";
 import { isPurchasingEnabled } from "@/lib/purchasing";
 
@@ -21,7 +22,7 @@ const REUSABLE_SUBSCRIPTION_STATUSES = new Set([
   "paused",
 ]);
 
-export async function startFloorplannerCheckout() {
+export async function startFloorplannerCheckout(formData: FormData) {
   if (!isPurchasingEnabled()) {
     redirect("/floorplanner?billing=paused");
   }
@@ -53,7 +54,9 @@ export async function startFloorplannerCheckout() {
 
   let checkoutUrl: string | null;
   try {
-    await validateConfiguredFloorplannerPrice();
+    const billingInterval: FloorplannerBillingInterval =
+      formData.get("billingInterval") === "year" ? "year" : "month";
+    await validateConfiguredFloorplannerPrice(billingInterval);
 
     const checkout = await getStripe().checkout.sessions.create({
       mode: "subscription",
@@ -62,18 +65,20 @@ export async function startFloorplannerCheckout() {
       client_reference_id: customerSession.user.id,
       line_items: [
         {
-          price: getFloorplannerMonthlyPriceId(),
+          price: getFloorplannerPriceId(billingInterval),
           quantity: 1,
         },
       ],
       metadata: {
         csnUserId: customerSession.user.id,
         csnProduct: "floorplanner",
+        csnBillingInterval: billingInterval,
       },
       subscription_data: {
         metadata: {
           csnUserId: customerSession.user.id,
           csnProduct: "floorplanner",
+          csnBillingInterval: billingInterval,
         },
       },
       allow_promotion_codes: true,
