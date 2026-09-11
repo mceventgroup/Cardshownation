@@ -6,6 +6,8 @@ import { getPublicImportSourceKey } from "@/lib/import-source-keys";
 import { runPublicSourceImports } from "@/lib/public-show-import";
 import { recordImportFailure, type ImportSourceSummary } from "@/lib/show-import-ingest";
 import { db } from "@/lib/db";
+import { runKansasCardShowImport } from "@/lib/kansas-card-show-import";
+import { KANSAS_SHEET_LABEL, KANSAS_SHEET_SOURCE, KANSAS_SHEET_URL } from "@/lib/kansas-card-show-sheet";
 
 export type ScheduledImportRunResult = {
   sources: ImportSourceSummary[];
@@ -127,6 +129,15 @@ export async function getAutoImportSourceSummaries() {
 
   const listedSources = [
       {
+        key: KANSAS_SHEET_SOURCE,
+        label: KANSAS_SHEET_LABEL,
+        type: "Google Sheet · Published tab · all states",
+        scheduleLabel: "Mondays 6:15 AM UTC",
+        url: KANSAS_SHEET_URL,
+        origin: "environment" as const,
+        active: true,
+      },
+      {
         key: "tcdb",
         label: "Trading Card Database",
         type: `State calendar scrape (${getTcdbImportStateLabels().length} states)`,
@@ -170,11 +181,17 @@ function combineResults(results: ImportSourceSummary[]): ScheduledImportRunResul
 }
 
 export async function runScheduledImports() {
-  return runScheduledImportsForSource("all");
+  // The spreadsheet has its own weekly invocation so slower website crawls
+  // cannot consume its execution budget. Manual Run All still includes it.
+  return runScheduledImportsForSource("all", { includeKansasSheet: false });
 }
 
-export async function runScheduledImportsForSource(selectedSource: string) {
+export async function runScheduledImportsForSource(selectedSource: string, options: { includeKansasSheet?: boolean } = {}) {
   const results: ImportSourceSummary[] = [];
+  if (selectedSource === KANSAS_SHEET_SOURCE || (selectedSource === "all" && options.includeKansasSheet !== false)) {
+    results.push(await runKansasCardShowImport());
+    if (selectedSource === KANSAS_SHEET_SOURCE) return combineResults(results);
+  }
   const requestedState = selectedSource.startsWith("tcdb:") ? selectedSource.slice("tcdb:".length).toUpperCase() : null;
 
   if (selectedSource === "all" || selectedSource === "tcdb" || selectedSource.startsWith("tcdb:")) {

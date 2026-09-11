@@ -77,6 +77,32 @@ Notes:
 - Structured pages with JSON-LD `Event` data import best.
 - For looser pages, set fallback `city` and `state` so the importer can create a reviewable pending submission.
 
+## Kansas Card Show Database weekly import
+
+The **Kansas Card Show Database** source in `/admin/imports` reads every listing
+from the spreadsheet's [Published tab](https://docs.google.com/spreadsheets/d/1_hjAwVfAQE03i9tH9be9DHlmQbjEnEl-XEL0YG91UJc/edit#gid=1567922315),
+including all states and dates in that tab. State tabs are overlapping views and
+are not imported separately. The source spreadsheet is read-only.
+
+New listings enter the existing **Pending** review queue. Repeat pulls skip
+duplicates and fill missing details using the existing enrichment rules; they do
+not overwrite reviewed details or remove shows deleted from the spreadsheet.
+Invalid rows are reported with sheet row numbers in the source's import history
+while valid listings continue. Blank end dates mean a one-day show. Dates use the
+sheet's US month/day/year format, including two-digit years. Unknown admission,
+addresses, organizer details, and links are left unset.
+
+`apps/web/vercel.json` schedules `/api/cron/kansas-card-shows` every Monday at
+**06:15 UTC** (1:15 AM Central daylight time / 12:15 AM Central standard time).
+It runs separately from website crawls with a five-minute execution budget.
+The schedule takes effect after production deployment and requires the existing
+`CRON_SECRET` and live `DATABASE_URL`. No Google API key is needed while the sheet
+remains public. Manual **Run** for this source and **Run All** include the sheet.
+
+For a read-only connection and parsing check, run `npm run verify:kansas-shows`
+from the repository root. It prints row totals, counts by state, and validation
+issues without touching the database. Unit tests run with `npm run test:web`.
+
 ## Live database mode
 
 When you are ready to switch to a real database:

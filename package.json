@@ -16,6 +16,7 @@
     "secrets:scan": "powershell -ExecutionPolicy Bypass -File ./scripts/scan-secrets.ps1",
     "verify:tcdb-links": "tsx scripts/verify-tcdb-links.ts",
     "verify:import-sources": "tsx --tsconfig apps/web/tsconfig.json scripts/verify-import-sources.ts",
+    "verify:kansas-shows": "tsx --tsconfig apps/web/tsconfig.json scripts/verify-kansas-card-shows.ts",
     "db:generate": "turbo run db:generate",
     "db:push": "turbo run db:push",
     "db:migrate": "turbo run db:migrate",

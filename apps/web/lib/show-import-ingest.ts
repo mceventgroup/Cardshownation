@@ -218,12 +218,13 @@ export async function ingestImportedShows(input: {
   submitterName: string;
   submitterEmail: string;
   shows: ImportedShow[];
+  sourceErrors?: string[];
 }) {
   const suppressSourceLinks = input.source.toLowerCase() === "tcdb";
   let imported = 0;
   let enriched = 0;
   let skipped = 0;
-  const errors: string[] = [];
+  const errors: string[] = [...(input.sourceErrors ?? [])];
   const uniqueShows = new Map<string, ImportedShow>();
 
   for (const show of input.shows) {
