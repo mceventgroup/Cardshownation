@@ -30,6 +30,7 @@ function warningTableIds(w: LayoutWarning): string[] {
     case 'unassigned-table':
     case 'out-of-bounds':
     case 'wall-setback':
+    case 'structure-overlap':
       return [w.tableId]
   }
 }

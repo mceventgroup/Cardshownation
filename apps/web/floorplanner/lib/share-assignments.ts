@@ -119,12 +119,12 @@ async function render(document: ExportDocument) {
 
 export function shareFilename(title: string) { return title.replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 100) || 'table-assignment' }
 
-export async function downloadShareImage(document: ExportDocument, title: string) {
+export async function downloadShareImage(document: ExportDocument, title: string, format: 'jpg' | 'png' = 'png') {
   const canvas = await render(document)
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Image could not be created.')), 'image/png'))
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Image could not be created.')), format === 'jpg' ? 'image/jpeg' : 'image/png', .94))
   const url = URL.createObjectURL(blob)
   const link = window.document.createElement('a')
-  link.href = url; link.download = shareFilename(title) + '.png'; link.click()
+  link.href = url; link.download = shareFilename(title) + '.' + format; link.click()
   setTimeout(() => URL.revokeObjectURL(url), 30000)
 }
 

@@ -20,6 +20,7 @@ import type { LayoutCommand } from '@floorplanner/domain/commands'
 
 function cloneRoom(room: CompositeRoom): CompositeRoom {
   return {
+    importedPolygons: room.importedPolygons?.map(p => ({ ...p, vertices: p.vertices.map(v => ({ ...v })) })),
     segments: room.segments.map(s => ({ ...s })),
     circles: room.circles?.map(circle => ({ ...circle })) ?? [],
     freehandVertices: room.freehandVertices ? room.freehandVertices.map(v => ({ ...v })) : null,
@@ -271,7 +272,7 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
         if (
           state.room.segments.length === 0 &&
           (state.room.circles?.length ?? 0) === 0 &&
-          !state.room.freehandVertices
+          !state.room.freehandVertices && !(state.room.importedPolygons?.length)
         ) {
           state.room = null
         }
@@ -300,6 +301,7 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
         segments: [],
         circles: [],
         freehandVertices: command.vertices.map(v => ({ ...v })),
+        importedPolygons: command.prevRoom?.importedPolygons,
         roomLabels: command.prevRoom?.roomLabels ? { ...command.prevRoom.roomLabels } : {},
       }
       break

@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import ExportModal from './ExportModal'
 import type { ShowInventoryOption } from '@floorplanner/lib/show-inventory'
 
 interface ShowModeSidebarProps {
@@ -100,6 +102,7 @@ export default function ShowModeSidebar({
   onSelectInventoryKey,
   onExitShowMode,
 }: ShowModeSidebarProps) {
+  const [showExports, setShowExports] = useState(false)
   const actionRows = [
     {
       label: 'Print / Save PDF',
@@ -141,7 +144,10 @@ export default function ShowModeSidebar({
   return (
     <aside className="flex h-full w-[340px] shrink-0 flex-col border-r border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]">
       <div className="border-b border-slate-200 bg-white/80 px-4 py-4">
-        <SectionHeader title="Print" description="Exports and display controls for the live floor." />
+        <SectionHeader title="Show day" description="Display controls and classic print layouts." />
+        <button onClick={() => setShowExports(true)} className="mt-3 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white">Print &amp; share</button>
+        <p className="mt-2 text-xs text-slate-500">Floor JPEG, vendor list, table signs, and social images.</p>
+        {showExports && <ExportModal onClose={() => setShowExports(false)} />}
         <div className="mt-4 rounded-3xl bg-slate-950 px-4 py-3 text-white shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div>

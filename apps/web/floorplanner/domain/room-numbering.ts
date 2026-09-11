@@ -75,7 +75,7 @@ function compareZones(a: RoomZone, b: RoomZone): number {
 export function getRoomZones(room: CompositeRoom | null): RoomZone[] {
   if (!room) return []
 
-  return computeRoomContour(room)
+  const native = computeRoomContour({ ...room, importedPolygons: [] })
     .map(polygon => {
       const bounds = computeBounds(polygon)
       return {
@@ -95,6 +95,7 @@ export function getRoomZones(room: CompositeRoom | null): RoomZone[] {
         label: roomLabel,
       }
     })
+  return [...native, ...(room.importedPolygons || []).map(p => ({ id: p.id, label: room.roomLabels?.[p.id] || p.label, polygon: p.vertices, bounds: computeBounds(p.vertices) }))]
 }
 
 export function getDefaultRoomId(room: CompositeRoom | null): string | null {

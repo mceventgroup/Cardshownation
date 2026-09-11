@@ -198,7 +198,7 @@ export default function RoomPanel() {
     const radiusX = width / 2
     const radiusY = height / 2
 
-    if (!room || (room.segments.length === 0 && (room.circles?.length ?? 0) === 0 && !room.freehandVertices)) {
+    if (!room || (room.segments.length === 0 && (room.circles?.length ?? 0) === 0 && !room.freehandVertices && !(room.importedPolygons?.length))) {
       const padding = 0.2
       const canvasW = Math.round(width * (1 + padding * 2))
       const canvasH = Math.round(height * (1 + padding * 2))
@@ -652,6 +652,7 @@ export default function RoomPanel() {
         </div>
       )}
 
+      {!!room?.importedPolygons?.length && <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-800">{room.importedPolygons.length} imported room boundaries. Edit their corners and scale in Space → Plan → Edit walls, pillars &amp; scale.</p>}
       {room && room.freehandVertices && (
         <div>
           <div className="font-medium text-gray-700 mb-1">Freehand Room</div>

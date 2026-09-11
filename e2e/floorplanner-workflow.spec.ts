@@ -116,7 +116,7 @@ test("vertical rows place the requested count and measurements survive reload", 
   await page.screenshot({ path: 'test-results/floorplanner-measurements.png' });
   await page.getByRole('button', { name: 'Print & share', exact: true }).click();
   const imageDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download image' }).click();
+  await page.getByRole('button', { name: 'Download PNG' }).click();
   await (await imageDownload).saveAs('test-results/floorplanner-measurements-export.png');
   await page.getByRole('button', { name: 'Close print and share' }).click();
   await page.getByRole('button', { name: 'Remove measurement 1' }).click();
@@ -289,7 +289,8 @@ test('vendor sharing downloads real PDFs and images and prints one page per vend
   await page.getByRole('button', { name: 'Auto-assign open booths' }).click();
   await page.getByRole('button', { name: 'Print & share', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Print & share' });
-  await expect(dialog.getByRole('combobox', { name: 'What to print or share' })).toHaveValue('vendor');
+  await expect(dialog.getByRole('combobox', { name: 'What to print or share' })).toHaveValue('floor');
+  await dialog.getByRole('combobox', { name: 'What to print or share' }).selectOption('vendor');
   await dialog.getByRole('combobox', { name: 'Vendor to share' }).selectOption({ label: 'Alpha Cards (1 tables)' });
   await expect(dialog.getByRole('textbox', { name: 'Message for email or Facebook' })).toHaveValue(/Alpha Cards.*River City Show/s);
   const previewSvg = decodeURIComponent((await dialog.getByAltText('Assignment map preview').getAttribute('src'))!.split(',').slice(1).join(','));
@@ -307,10 +308,16 @@ test('vendor sharing downloads real PDFs and images and prints one page per vend
   expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
   expect(bytes.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
   const imageDownload = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Download image', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Download PNG', exact: true }).click();
   const image = await imageDownload;
   await image.saveAs('test-results/vendor-assignment.png');
   expect((await readFile((await image.path())!)).subarray(1, 4).toString()).toBe('PNG');
+  expect(image.suggestedFilename()).toMatch(/\.png$/);
+  const jpgDownload = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download JPG', exact: true }).click();
+  const jpg = await jpgDownload;
+  expect(jpg.suggestedFilename()).toMatch(/\.jpg$/);
+  expect((await readFile((await jpg.path())!)).subarray(0, 3).toString('hex')).toBe('ffd8ff');
   await dialog.getByRole('combobox', { name: 'What to print or share' }).selectOption('all');
   const batchDownload = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download PDF', exact: true }).click();
@@ -335,11 +342,49 @@ test('vendor sharing downloads real PDFs and images and prints one page per vend
   expect(fullSvg).toContain('Alpha Cards');
   expect(fullSvg).toContain('Beta Collectibles');
   const fullImage = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Download image' }).click();
+  await dialog.getByRole('button', { name: 'Download PNG' }).click();
   await (await fullImage).saveAs('test-results/full-map-directory.png');
   const fullPdf = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download PDF' }).click();
   const fullDownload = await fullPdf;
   expect((await readFile((await fullDownload.path())!)).toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
 
+});
+
+test('show preparation offers separate JPEGs, table signs, social graphics, and case rentals', async ({ page }) => {
+  await openEditor(page);
+  await page.getByRole('textbox', { name: 'Floor plan title' }).fill('River City Card Show');
+  await page.getByRole('button', { name: /^Add row/ }).click();
+  await page.getByRole('spinbutton', { name: 'Tables', exact: true }).fill('3');
+  await page.locator('.konvajs-content').click({ position: { x: 400, y: 250 } });
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Next: assign vendors' }).click();
+  await page.getByRole('textbox', { name: 'Vendor name' }).fill('River City Cards');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Auto-assign open booths' }).click();
+  await page.getByRole('button', { name: 'Next: case rentals' }).click();
+  await page.getByRole('spinbutton', { name: 'Cases for River City Cards' }).fill('3');
+  await expect(page.getByText('3 cases reserved')).toBeVisible();
+  await page.getByRole('button', { name: 'Next: print & share' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Print & share' });
+  const choice = dialog.getByRole('combobox', { name: 'What to print or share' });
+  const { readFile } = await import('node:fs/promises');
+  for (const mode of ['floor', 'directory', 'social']) {
+    await choice.selectOption(mode);
+    if (mode === 'social') await dialog.getByRole('textbox', { name: 'Headline' }).fill('Meet us at River City');
+    const downloaded = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Download JPG', exact: true }).click();
+    const file = await downloaded;
+    expect((await readFile((await file.path())!)).subarray(0, 3).toString('hex')).toBe('ffd8ff');
+    await file.saveAs(`test-results/show-kit-${mode}.jpg`);
+  }
+  await page.screenshot({ path: 'test-results/show-kit-social-preview.png' });
+  await choice.selectOption('flyers');
+  await expect(dialog.getByRole('button', { name: 'Print classic vendor flyers' })).toBeVisible();
+  const downloaded = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download PDF', exact: true }).click();
+  expect((await readFile((await (await downloaded).path())!)).toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
+  await dialog.getByRole('button', { name: 'Close print and share' }).click();
+  await expect(page.getByRole('spinbutton', { name: 'Cases for River City Cards' })).toHaveValue('3');
 });

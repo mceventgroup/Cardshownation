@@ -7,7 +7,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useEffect, useRef, useState } from 'react'
-import { Layer, Image as KonvaImage } from 'react-konva/lib/ReactKonvaCore'
+import { Layer, Group, Line, Image as KonvaImage } from 'react-konva/lib/ReactKonvaCore'
+import { openingLines, planPoint } from '@floorplanner/lib/plan-editing'
+import { structurePolygon } from '@floorplanner/lib/plan-structure'
 import type { BackgroundImage, BackgroundImageId } from '@floorplanner/domain/types'
 
 interface Props {
@@ -57,17 +59,17 @@ function BGImageNode({
   if (!htmlImage) return null
 
   return (
+    <Group x={bgImage.x} y={bgImage.y} draggable={!bgImage.locked} onDragEnd={e => onDragEnd(bgImage.id, e.target.x(), e.target.y())}>
     <KonvaImage
       image={htmlImage}
-      x={bgImage.x}
-      y={bgImage.y}
+      x={0}
+      y={0}
       width={bgImage.width}
       height={bgImage.height}
       opacity={bgImage.opacity}
-      draggable={!bgImage.locked}
-      onDragEnd={e => {
-        onDragEnd(bgImage.id, e.target.x(), e.target.y())
-      }}
     />
+    {bgImage.plan?.structures.map(s => <Line key={s.id} points={structurePolygon({ ...bgImage, x: 0, y: 0 }, s).flatMap(p => [p.x, p.y])} closed fill={s.kind === 'wall' ? '#334155' : '#92400e'} stroke={s.kind === 'wall' ? '#0f172a' : '#78350f'} strokeWidth={1} listening={false} />)}
+    {bgImage.plan?.openings?.flatMap(o => openingLines(o).map((line, i) => <Line key={o.id + i} points={line.map(p => planPoint({ ...bgImage, x: 0, y: 0 }, p)).flatMap(p => [p.x, p.y])} stroke={o.kind === 'exit' ? '#dc2626' : '#2563eb'} strokeWidth={2} listening={false} />))}
+    </Group>
   )
 }

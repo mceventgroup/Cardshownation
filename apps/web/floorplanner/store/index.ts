@@ -1,3 +1,4 @@
+import { syncImportedRooms } from '@floorplanner/lib/plan-editing'
 import type { Measurement } from '@floorplanner/domain/types'
 // ─────────────────────────────────────────────────────────────────────────────
 // EDITOR STORE
@@ -588,7 +589,7 @@ export const useEditorStore = create<EditorState>()(
     // ── Background image actions ─────────────────────────────────────────
 
     addBackgroundImage(image) {
-      set(state => { state.backgroundImages[image.id] = image })
+      set(state => { state.backgroundImages[image.id] = image; state.room = syncImportedRooms(state.room, state.backgroundImages) })
     },
 
     updateBackgroundImage(id, updates) {
@@ -596,12 +597,13 @@ export const useEditorStore = create<EditorState>()(
         const img = state.backgroundImages[id]
         if (img) {
           safeAssignDefined(img, updates)
+          state.room = syncImportedRooms(state.room, state.backgroundImages)
         }
       })
     },
 
     removeBackgroundImage(id) {
-      set(state => { delete state.backgroundImages[id] })
+      set(state => { delete state.backgroundImages[id]; state.room = syncImportedRooms(state.room, state.backgroundImages) })
     },
 
     // ── CSV Import actions ────────────────────────────────────────────────

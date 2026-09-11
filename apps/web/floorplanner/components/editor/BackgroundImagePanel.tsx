@@ -8,20 +8,24 @@
 
 import { useEditorStore, selectBackgroundImages } from '@floorplanner/store/index'
 import type { BackgroundImageId } from '@floorplanner/domain/types'
+import { useState } from 'react'
+import BackgroundImageModal from './BackgroundImageModal'
 
 export default function BackgroundImagePanel() {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
   const bgImages = useEditorStore(selectBackgroundImages)
   const updateBg = useEditorStore(s => s.updateBackgroundImage)
   const removeBg = useEditorStore(s => s.removeBackgroundImage)
 
   const images = Object.values(bgImages).sort((a, b) => a.order - b.order)
 
-  if (images.length === 0) return null
-
   return (
     <div className="space-y-2">
+      <button onClick={() => setImporting(true)} className="w-full rounded-xl bg-blue-600 p-3 text-sm font-semibold text-white">Import building drawing</button>
+      {importing && <BackgroundImageModal onClose={() => setImporting(false)} />}
       <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-        Background Images ({images.length})
+        Building drawings ({images.length})
       </h3>
       {images.map(img => (
         <div key={img.id} className="p-2 bg-gray-50 rounded-lg space-y-1.5">
@@ -57,7 +61,7 @@ export default function BackgroundImagePanel() {
             <label className="text-xs text-gray-500 w-14">Opacity</label>
             <input
               type="range"
-              min={0.05}
+              min={0}
               max={1}
               step={0.05}
               value={img.opacity}
@@ -66,8 +70,11 @@ export default function BackgroundImagePanel() {
             />
             <span className="text-xs text-gray-400 w-8 text-right">{Math.round(img.opacity * 100)}%</span>
           </div>
+          <p className="text-xs text-slate-500">{img.plan?.calibrated ? `Scaled drawing · ${(img.width / 12).toFixed(1)} × ${(img.height / 12).toFixed(1)} ft` : 'Scale not confirmed'}</p>
+          <button onClick={() => setEditingId(img.id)} className="w-full rounded-lg border bg-white p-2 text-xs font-semibold">Edit walls, pillars &amp; scale</button>
         </div>
       ))}
+      {editingId && bgImages[editingId] && <BackgroundImageModal existingImage={bgImages[editingId]} onClose={() => setEditingId(null)} />}
     </div>
   )
 }

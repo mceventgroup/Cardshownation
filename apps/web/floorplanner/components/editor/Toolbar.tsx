@@ -367,7 +367,7 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
             <span className="block text-xs text-slate-500">Save an editable copy to your computer</span>
           </button>
           <button role="menuitem" onClick={() => { setShowFloorPlanImport(true); setOpenMenu(null) }} className="w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50">
-            <span className="block text-sm font-medium text-slate-800">Import floor plan image</span>
+            <span className="block text-sm font-medium text-slate-800">Import building drawing</span>
             <span className="block text-xs text-slate-500">Trace over an existing map</span>
           </button>
         </div>

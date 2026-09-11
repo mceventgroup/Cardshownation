@@ -219,6 +219,7 @@ export interface RoomCircle {
 }
 
 export interface CompositeRoom {
+  importedPolygons?: Array<PlanRoom & { sourceImageId: string }>
   segments: RoomSegment[]
   circles?: RoomCircle[]
   freehandVertices: Point[] | null  // null = use segments; non-null = freehand polygon
@@ -277,6 +278,32 @@ export interface ResolvedTableColor {
 // dataUrl stores the image as a base64 data URL so it persists with the layout.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface PlanStructure {
+  shape?: 'rectangle' | 'ellipse'
+  id: string
+  kind: 'wall' | 'pillar'
+  x: number
+  y: number
+  width: number
+  height: number
+  rotation: number
+  source: 'auto' | 'manual'
+}
+
+export interface PlanReference { start: Point; end: Point; inches: number }
+export interface PlanRoom { id: string; label: string; vertices: Point[] }
+export interface PlanOpening { id: string; kind: 'door' | 'exit' | 'opening'; start: Point; end: Point; swing: 'left' | 'right' }
+export interface PlanReviewMetadata {
+  calibration?: PlanReference
+  verification?: PlanReference
+  dimensionLabels?: string[]
+  detectionArea?: Rect
+  contrast?: 'standard' | 'faint'
+  rejected?: PlanStructure[]
+  rooms?: PlanRoom[]
+  openings?: PlanOpening[]
+}
+
 export interface BackgroundImage {
   id: BackgroundImageId
   name: string              // original file name
@@ -289,6 +316,7 @@ export interface BackgroundImage {
   locked: boolean           // when true, image can't be moved
   visible: boolean
   order: number             // z-order for multiple images (lower = behind)
+  plan?: PlanReviewMetadata & { sourceWidth: number; sourceHeight: number; calibrated: boolean; structures: PlanStructure[] }
 }
 
 /** Fixed map annotations, in inches. Moving a table does not move these reference marks. */

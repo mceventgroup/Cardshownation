@@ -12,7 +12,8 @@ const STEPS = [
   { title: 'Set your defaults', detail: 'Open Setup to choose grid spacing, wall setback, and default table size.' },
   { title: 'Place tables', detail: 'Open Tables and choose Table or Row. Select anything on the canvas to edit it.' },
   { title: 'Add vendors', detail: 'Open Vendors after table labels are in place, then assign booths from the roster.' },
-  { title: 'Save or print', detail: 'Use Save for cloud layouts, Export for finished files, or Print for show day.' },
+  { title: 'Reserve cases', detail: 'Open Cases to set rental quantities and print your case checklist.' },
+  { title: 'Save, print & share', detail: 'Save your show, then open Print & share for separate floor and vendor JPEGs, table flyers, and social images.' },
 ]
 
 export default function FirstRunModal({ onStart, onOpenHelp }: Props) {

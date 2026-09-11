@@ -20,7 +20,7 @@
 // it creates noise for every table placed during layout design.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Door, CompositeRoom, LayoutSettings } from './types'
+import type { TableObject, Door, CompositeRoom, LayoutSettings, BackgroundImage } from './types'
 import type { VendorAssignment } from './types'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +93,7 @@ export interface WallSetbackWarning {
 }
 
 export type LayoutWarning =
+  | { type: 'structure-overlap'; severity: 'error'; tableId: string; message: string }
   | OverlapWarning
   | NarrowAisleWarning
   | DoorBlockedWarning
@@ -147,6 +148,7 @@ export interface WarningsModule {
     settings: LayoutSettings,
     checkUnassigned: boolean,
     room?: CompositeRoom | null,
+    buildings?: ReadonlyArray<BackgroundImage>,
   ): WarningResult
 
   /**

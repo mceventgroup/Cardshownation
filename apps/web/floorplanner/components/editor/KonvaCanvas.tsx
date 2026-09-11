@@ -83,6 +83,7 @@ function getWarningTableIds(warning: LayoutWarning): string[] {
     case 'unassigned-table':
     case 'out-of-bounds':
     case 'wall-setback':
+    case 'structure-overlap':
       return [warning.tableId]
   }
 }
@@ -1825,11 +1826,6 @@ export default function KonvaCanvas() {
           />
         )}
 
-        {/* Background images — behind everything */}
-        {bgImageList.length > 0 && (
-          <BackgroundImageLayer images={bgImageList} onDragEnd={handleBgImageDragEnd} />
-        )}
-
         {/* Room boundary, doors, and clearance zones */}
         <Layer listening={false}>
           <RoomLayer
@@ -1843,6 +1839,9 @@ export default function KonvaCanvas() {
             selectedSegmentId={selectedSegmentId}
           />
         </Layer>
+
+        {/* Building drawings stay above room fill and below tables. */}
+        {bgImageList.length > 0 && <BackgroundImageLayer images={bgImageList} onDragEnd={handleBgImageDragEnd} />}
 
         {/* Tables */}
         <Layer>
@@ -2301,4 +2300,3 @@ function selectRangeBetweenTables(
   const hi = Math.max(fallbackAnchorIdx, fallbackClickedIdx)
   return fallback.slice(lo, hi + 1)
 }
-

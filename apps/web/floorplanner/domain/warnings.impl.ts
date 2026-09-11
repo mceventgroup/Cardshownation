@@ -1,3 +1,4 @@
+import { planPoint } from '@floorplanner/lib/plan-editing'
 // ─────────────────────────────────────────────────────────────────────────────
 // WARNINGS MODULE IMPLEMENTATION
 //
@@ -5,7 +6,8 @@
 // Pure functions — same input always produces the same output.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { TableObject, Door, CompositeRoom, LayoutSettings, VendorAssignment } from './types'
+import type { TableObject, Door, CompositeRoom, LayoutSettings, VendorAssignment, BackgroundImage } from './types'
+import { polygonsOverlap, structurePolygon } from '../lib/plan-structure'
 import type {
   WarningsModule,
   WarningResult,
@@ -29,9 +31,25 @@ function computeWarnings(
   settings: LayoutSettings,
   checkUnassigned: boolean,
   room?: CompositeRoom | null,
+  buildings: ReadonlyArray<BackgroundImage> = [],
 ): WarningResult {
   const warnings: LayoutWarning[] = []
+  const structures = buildings.flatMap(image => (image.plan?.structures ?? []).map(item => ({ kind: item.kind, polygon: structurePolygon(image, item) })))
+  for (const table of tables) {
+    const corners = geometry.getBounds(table).rotatedCorners
+    const hit = structures.find(item => polygonsOverlap(corners, item.polygon))
+    if (hit) warnings.push({ type: 'structure-overlap', severity: 'error', tableId: table.id, message: `Table ${table.label} overlaps an imported ${hit.kind}.` })
+  }
 
+  for (const image of buildings) for (const opening of image.plan?.openings || []) {
+    const a = planPoint(image, opening.start), b = planPoint(image, opening.end), length = Math.hypot(b.x - a.x, b.y - a.y)
+    const depth = Math.max(settings.doorClearance, opening.kind === 'opening' ? 0 : length)
+    if (!length || !depth) continue
+    const nx = -(b.y - a.y) / length * depth, ny = (b.x - a.x) / length * depth
+    const polygon = [{ x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny }, { x: b.x - nx, y: b.y - ny }, { x: a.x - nx, y: a.y - ny }]
+    const blocking = tables.filter(t => polygonsOverlap(geometry.getBounds(t).rotatedCorners, polygon))
+    if (blocking.length) warnings.push({ type: 'door-blocked', severity: 'error', doorId: opening.id, blockingTableIds: blocking.map(t => t.id), message: 'Imported ' + opening.kind + ' clearance is blocked by ' + blocking.map(t => t.label).join(', ') + '.' })
+  }
   // 1. Overlaps
   const overlaps = geometry.findAllOverlaps([...tables])
   for (const [a, b] of overlaps) {
@@ -104,7 +122,7 @@ function computeWarnings(
   }
 
   // 6. Out-of-bounds (only when a room is defined)
-  if (room && (room.segments.length > 0 || (room.circles?.length ?? 0) > 0 || room.freehandVertices)) {
+  if (room && (room.segments.length > 0 || (room.circles?.length ?? 0) > 0 || room.freehandVertices || (room.importedPolygons?.length ?? 0) > 0)) {
     for (const t of tables) {
       const b = geometry.getBounds(t).bounds
       if (!isRectInRoom(room, b)) {
@@ -164,6 +182,7 @@ function computeWarnings(
       case 'unassigned-table':
       case 'out-of-bounds':
       case 'wall-setback':
+      case 'structure-overlap':
         affectedTableIds.add(w.tableId)
         break
     }
@@ -189,6 +208,7 @@ function warningsForTable(result: WarningResult, tableId: string): LayoutWarning
       case 'unassigned-table':
       case 'out-of-bounds':
       case 'wall-setback':
+      case 'structure-overlap':
         return w.tableId === tableId
     }
   })

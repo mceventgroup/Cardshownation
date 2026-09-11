@@ -1,5 +1,7 @@
+import { openingLines, planPoint } from './plan-editing'
 import type { Measurement } from '@floorplanner/domain/types'
 import { formatMeasurement } from '@floorplanner/domain/measurements'
+import { structurePolygon } from './plan-structure'
 import type {
   BackgroundImage,
   CompositeRoom,
@@ -427,6 +429,11 @@ function getRoomSections(
     }
   }
 
+  for (const image of images) {
+    if ([...sectionMap.values()].some(section => section.backgroundImages.includes(image))) continue
+    const bounds = boundsFromImage(image)
+    sectionMap.set(`drawing-${image.id}`, { roomId: `drawing-${image.id}`, roomLabel: image.name, bounds, polygon: buildRectPolygon(bounds), tables: [], backgroundImages: [image] })
+  }
   return [...sectionMap.values()]
     .filter(section => section.tables.length > 0 || section.polygon.length > 0)
     .sort((a, b) => a.roomLabel.localeCompare(b.roomLabel, undefined, { numeric: true, sensitivity: 'base' }))
@@ -1132,13 +1139,19 @@ export function buildSVG(
 
     parts.push(`<rect x="${roomBounds.x.toFixed(2)}" y="${roomBounds.y.toFixed(2)}" width="${roomBounds.width.toFixed(2)}" height="${roomBounds.height.toFixed(2)}" rx="12" fill="none" stroke="#cbd5e1" stroke-width="1.5" />`)
     const boundary = section.polygon.length > 2 ? section.polygon : buildRectPolygon(section.bounds)
-    parts.push(`<path d="${polygonToPath(boundary, context)}" fill="#f1f5f9" stroke="#1e293b" stroke-width="3" />`)
+    parts.push(`<path d="${polygonToPath(boundary, context)}" fill="#f1f5f9" stroke="${room?.importedPolygons?.some(p => p.id === section.roomId) ? 'none' : '#1e293b'}" stroke-width="3" />`)
 
+  }
+
+  for (const image of [...new Map(roomSections.flatMap(section => section.backgroundImages).map(image => [image.id, image])).values()]) {
     if (colorMode === 'color') {
-      for (const image of section.backgroundImages) {
-        const imageRect = transformRect(context, boundsFromImage(image))
-        parts.push(`<image href="${esc(image.dataUrl)}" x="${imageRect.x.toFixed(2)}" y="${imageRect.y.toFixed(2)}" width="${imageRect.width.toFixed(2)}" height="${imageRect.height.toFixed(2)}" opacity="${Math.min(image.opacity, 0.5)}" />`)
-      }
+      const rect = transformRect(context, boundsFromImage(image))
+      parts.push('<image href="' + esc(image.dataUrl) + '" x="' + rect.x + '" y="' + rect.y + '" width="' + rect.width + '" height="' + rect.height + '" opacity="' + Math.min(image.opacity, .5) + '" />')
+    }
+    for (const structure of image.plan?.structures || []) parts.push('<path d="' + polygonToPath(structurePolygon(image, structure), context) + '" fill="' + (colorMode === 'bw' ? '#333333' : structure.kind === 'wall' ? '#334155' : '#92400e') + '" />')
+    for (const opening of image.plan?.openings || []) for (const line of openingLines(opening)) {
+      const points = line.map(p => { const world = planPoint(image, p); return { x: transformX(context, world.x), y: transformY(context, world.y) } })
+      parts.push('<polyline points="' + points.map(p => p.x + ',' + p.y).join(' ') + '" fill="none" stroke="' + (colorMode === 'bw' ? '#333333' : opening.kind === 'exit' ? '#dc2626' : '#2563eb') + '" stroke-width="2" />')
     }
   }
 

@@ -18,10 +18,12 @@ import WarningsPanel from './WarningsPanel'
 import SettingsPanel from './SettingsPanel'
 import VendorQuickAdd from './VendorQuickAdd'
 import BackgroundImagePanel from './BackgroundImagePanel'
+import CaseRentalsPanel from './CaseRentalsPanel'
+import ExportModal from './ExportModal'
 
 const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
 
-export type FloorplannerSidebarTab = 'tables' | 'space' | 'vendors' | 'setup'
+export type FloorplannerSidebarTab = 'tables' | 'space' | 'vendors' | 'cases' | 'setup'
 type SpaceTab = 'room' | 'doors' | 'sections' | 'plan'
 type SetupTab = 'settings' | 'checks'
 
@@ -49,6 +51,7 @@ const NAV_ITEMS: { value: FloorplannerSidebarTab; label: string; hint: string }[
   { value: 'tables', label: 'Tables', hint: 'Place and edit tables' },
   { value: 'space', label: 'Space', hint: 'Rooms and zones' },
   { value: 'vendors', label: 'Vendors', hint: 'Assign booths' },
+  { value: 'cases', label: 'Cases', hint: 'Manage case rentals' },
   { value: 'setup', label: 'Setup', hint: 'Defaults and checks' },
 ]
 
@@ -143,8 +146,8 @@ function SegmentedTabs<T extends string>({ items, value, onChange }: {
 }
 
 export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: LeftSidebarProps) {
+  const [showExports, setShowExports] = useState(false)
   const clearVendors = useEditorStore(s => s.clearVendors)
-  const hasImportedPlan = useEditorStore(s => Object.keys(s.backgroundImages).length > 0)
   const warningCount = useWarnings().warnings.length
   const [spaceTab, setSpaceTab] = useState<SpaceTab>('room')
   const [setupTab, setSetupTab] = useState<SetupTab>('settings')
@@ -153,7 +156,7 @@ export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: 
     { value: 'room', label: 'Room' },
     { value: 'doors', label: 'Doors' },
     { value: 'sections', label: 'Zones' },
-    ...(hasImportedPlan ? [{ value: 'plan' as const, label: 'Plan' }] : []),
+    { value: 'plan', label: 'Plan' },
   ]
 
   return (
@@ -162,7 +165,7 @@ export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: 
         <span className="text-sm font-semibold text-slate-800">Editor tools</span>
         <button onClick={onRequestClose} aria-label="Close editor tools" className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100">&times;</button>
       </div>
-      <nav aria-label="Floor planner tasks" className="grid grid-cols-4 gap-1 border-b border-slate-200 bg-white p-2">
+      <nav aria-label="Floor planner tasks" className="grid grid-cols-5 gap-1 border-b border-slate-200 bg-white p-2">
         {NAV_ITEMS.map(item => (
           <button
             key={item.value}
@@ -181,6 +184,7 @@ export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: 
       </nav>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {activeTab === 'cases' && <><PanelHeading title="Case rentals" description="Reserve cases, review totals, and print the show-day checklist." /><CaseRentalsPanel /></>}
         {activeTab === 'tables' && (
           <div>
             <PanelHeading title="Build tables" description="Choose what to place, or select existing tables to edit them." />
@@ -247,6 +251,11 @@ export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: 
           </div>
         )}
       </div>
+      <div className="border-t bg-white p-3">
+        <p className="mb-2 text-xs text-slate-500">Room &amp; setup → tables → vendors → cases → share</p>
+        {activeTab === 'space' || activeTab === 'setup' ? <button onClick={() => onTabChange('tables')} className="w-full rounded-xl bg-slate-900 p-2.5 text-sm font-semibold text-white">Next: place tables</button> : activeTab === 'tables' ? <button onClick={() => onTabChange('vendors')} className="w-full rounded-xl bg-slate-900 p-2.5 text-sm font-semibold text-white">Next: assign vendors</button> : activeTab === 'vendors' ? <button onClick={() => onTabChange('cases')} className="w-full rounded-xl bg-slate-900 p-2.5 text-sm font-semibold text-white">Next: case rentals</button> : <button onClick={() => setShowExports(true)} className="w-full rounded-xl bg-blue-600 p-2.5 text-sm font-semibold text-white">Next: print &amp; share</button>}
+      </div>
+      {showExports && <ExportModal onClose={() => setShowExports(false)} />}
     </aside>
   )
 }

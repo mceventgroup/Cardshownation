@@ -59,19 +59,20 @@ type Dir = 0 | 1 | 2 | 3
  */
 export function computeRoomContour(room: CompositeRoom): Point[][] {
   if (room.freehandVertices && room.freehandVertices.length >= 3) {
-    return [room.freehandVertices]
+    return [room.freehandVertices, ...(room.importedPolygons || []).map(p => p.vertices)]
   }
   const contours = computeSegmentContour(room.segments)
   const circleContours = (room.circles ?? [])
     .filter(circle => circle.radiusX > 0 && circle.radiusY > 0)
     .map(circle => buildEllipseVertices(circle))
-  return [...contours, ...circleContours]
+  return [...contours, ...circleContours, ...(room.importedPolygons || []).map(p => p.vertices)]
 }
 
 /**
  * Compute the bounding box of the entire composite room.
  */
 export function computeRoomBounds(room: CompositeRoom): Rect | null {
+  if (room.importedPolygons?.length) { const points = computeRoomContour(room).flat(); const xs = points.map(p => p.x), ys = points.map(p => p.y); return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) } }
   if (room.freehandVertices && room.freehandVertices.length >= 3) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     for (const p of room.freehandVertices) {
@@ -162,6 +163,7 @@ export function findBoundaryEdgeForDoor(
  * Uses bounding box of each segment (fast) or point-in-polygon for freehand.
  */
 export function isPointInRoom(room: CompositeRoom, p: Point): boolean {
+  if (room.importedPolygons?.some(r => pointInPolygon(p, r.vertices))) return true
   if (room.freehandVertices && room.freehandVertices.length >= 3) {
     return pointInPolygon(p, room.freehandVertices)
   }
@@ -183,7 +185,7 @@ export function isPointInRoom(room: CompositeRoom, p: Point): boolean {
  */
 export function isRectInRoom(room: CompositeRoom, rect: RoomRect): boolean {
   const corners = getRectCorners(rect)
-  if (room.freehandVertices && room.freehandVertices.length >= 3) {
+  if (!room.importedPolygons?.length && room.freehandVertices && room.freehandVertices.length >= 3) {
     return corners.every(c => pointInPolygon(c, room.freehandVertices!))
   }
   return corners.every(c => isPointInRoom(room, c))
@@ -193,6 +195,7 @@ export function findNearestBoundarySample(room: CompositeRoom, point: Point): Ro
   const contours = room.freehandVertices && room.freehandVertices.length >= 3
     ? [room.freehandVertices]
     : computeSegmentContour(room.segments)
+  contours.push(...(room.importedPolygons || []).map(p => p.vertices))
   let nearest: RoomBoundarySample | null = null
 
   for (const polygon of contours) {

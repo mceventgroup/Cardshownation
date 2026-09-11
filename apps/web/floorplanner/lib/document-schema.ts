@@ -1,3 +1,4 @@
+import { parsePlanMetadata, parsePlanRoom } from './plan-metadata'
 import type {
   BackgroundImage,
   CompositeRoom,
@@ -190,7 +191,22 @@ function parseDoor(value: unknown, label: string): Door {
 
 function parseBackgroundImage(value: unknown, label: string): BackgroundImage {
   const record = asRecord(value, label)
+  let plan: BackgroundImage['plan']
+  if (record.plan !== undefined) {
+    const p = asRecord(record.plan, `${label}.plan`)
+    const sourceWidth = expectNumber(p.sourceWidth, `${label}.plan.sourceWidth`), sourceHeight = expectNumber(p.sourceHeight, `${label}.plan.sourceHeight`)
+    if (sourceWidth <= 0 || sourceHeight <= 0 || !Array.isArray(p.structures) || p.structures.length > 2000) throw new Error('Invalid building geometry.')
+    plan = { ...parsePlanMetadata(p), sourceWidth, sourceHeight, calibrated: expectBoolean(p.calibrated, `${label}.plan.calibrated`), structures: p.structures.map((value, index) => {
+      const item = asRecord(value, `${label}.plan.structures[${index}]`)
+      if ((item.kind !== 'wall' && item.kind !== 'pillar') || (item.source !== 'auto' && item.source !== 'manual')) throw new Error('Invalid building structure kind.')
+      const width = expectNumber(item.width, 'Structure width'), height = expectNumber(item.height, 'Structure height')
+      if (width <= 0 || height <= 0) throw new Error('Structure dimensions must be positive.')
+      if (item.shape !== undefined && item.shape !== 'rectangle' && item.shape !== 'ellipse') throw new Error('Invalid structure shape.')
+      return { ...(item.shape ? { shape: item.shape as 'rectangle' | 'ellipse' } : {}), id: expectString(item.id, 'Structure id'), kind: item.kind, source: item.source, x: expectNumber(item.x, 'Structure x'), y: expectNumber(item.y, 'Structure y'), width, height, rotation: expectNumber(item.rotation, 'Structure rotation') }
+    }) }
+  }
   return {
+    ...(plan ? { plan } : {}),
     id: expectString(record.id, `${label}.id`) as BackgroundImage['id'],
     name: expectString(record.name, `${label}.name`),
     dataUrl: expectBackgroundImageDataUrl(record.dataUrl, `${label}.dataUrl`),
@@ -253,6 +269,7 @@ function parseRoom(value: unknown, label: string): CompositeRoom | null {
   }
 
   return {
+    importedPolygons: record.importedPolygons === undefined ? undefined : (Array.isArray(record.importedPolygons) && record.importedPolygons.length <= 2500 ? record.importedPolygons.map(value => { const p = asRecord(value, 'Imported room'); return { ...parsePlanRoom(p), sourceImageId: expectString(p.sourceImageId, 'Source image') } }) : (() => { throw new Error('Invalid imported rooms.') })()),
     segments,
     circles,
     freehandVertices,

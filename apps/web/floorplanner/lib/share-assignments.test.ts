@@ -4,6 +4,48 @@ import type { DocumentSlice } from './persistence'
 import { DEFAULT_SETTINGS } from './defaults'
 import type { TableId, VendorId, VendorAssignmentId, LayoutId } from '../domain/types'
 import { buildShareDocument, assignedVendors, assignmentText } from './share-assignments'
+import { buildDirectoryPages, buildFloorImage, buildSocialImage, buildTableFlyers } from './show-kit'
+
+test('show kit separates public floor and vendor images and creates one sign per table', () => {
+  const data = makeProject()
+  const original = Object.values(data.tables)[0]
+  const assignment = Object.values(data.vendorAssignments)[0]
+  const secondId = 'table-2' as TableId
+  data.tables[secondId] = { ...original, id: secondId, tableNumber: 2, displayId: '2' }
+  data.vendorAssignments['assignment-2'] = { ...assignment, id: 'assignment-2' as VendorAssignmentId, tableId: secondId }
+  const floor = buildFloorImage(data)
+  assert.ok(!floor.svg.includes('Vendor directory'))
+  const directory = buildDirectoryPages(data)
+  assert.equal(directory.length, 1)
+  assert.ok(directory[0].svg.includes('Test Vendor'))
+  const flyers = buildTableFlyers(data)
+  assert.equal(flyers.length, 2)
+  assert.ok(flyers.every(f => f.svg.includes('THIS TABLE BELONGS TO')))
+  const social = buildSocialImage(data, '<Show & shop>', 'Come visit')
+  assert.equal(social.width / social.height, 4 / 5)
+  assert.ok(social.svg.includes('&lt;Show &amp; shop&gt;'))
+  for (const doc of [floor, ...directory, ...flyers, social]) {
+    assert.ok(!doc.svg.includes('private-note'))
+    assert.ok(!doc.svg.includes('private@example.com'))
+  }
+})
+
+test('large vendor directories paginate instead of shrinking onto one page', () => {
+  const data = makeProject()
+  const vendor = Object.values(data.vendors)[0]
+  const assignment = Object.values(data.vendorAssignments)[0]
+  const table = Object.values(data.tables)[0]
+  for (let i = 2; i <= 80; i++) {
+    const id = `vendor-${i}` as VendorId, tid = `table-${i}` as TableId
+    data.vendors[id] = { ...vendor, id, name: `Vendor ${i}`, companyName: null }
+    data.tables[tid] = { ...table, id: tid, displayId: String(i) }
+    data.vendorAssignments[`a-${i}`] = { ...assignment, id: `a-${i}` as VendorAssignmentId, vendorId: id, tableId: tid, vendorName: `Vendor ${i}` }
+  }
+  const pages = buildDirectoryPages(data)
+  assert.ok(pages.length > 1)
+  assert.ok(pages.every(p => p.height <= 1294))
+  assert.ok(pages.some(p => p.svg.includes('Vendor 80')))
+})
 function makeProject(): DocumentSlice {
   const tableId = 'table-1' as TableId
   const vendorId = 'vendor-1' as VendorId
@@ -48,7 +90,11 @@ function makeProject(): DocumentSlice {
         cases: 0,
       },
     },
-    vendorAssignments: {},
+    vendorAssignments: { 'table-1': {
+      id: 'a1' as VendorAssignmentId, layoutId: 'layout' as LayoutId, tableId,
+      vendorId, vendorName: 'Test Vendor', vendorCategory: null,
+      importSessionId: null, paymentStatus: 'paid', notes: 'private-note', colorOverride: null,
+    } },
     room: null,
     doors: {},
     settings: { ...DEFAULT_SETTINGS, eventName: 'Workflow Test Show' },

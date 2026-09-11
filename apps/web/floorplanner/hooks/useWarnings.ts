@@ -26,6 +26,7 @@ export function useWarnings(checkUnassigned?: boolean): WarningResult {
   const settings = useEditorStore(selectSettings)
   const doors = useEditorStore(selectDoors)
   const room = useEditorStore(selectRoom)
+  const buildings = useEditorStore(s => s.backgroundImages)
   const reviewUnassignedTables = useEditorStore(selectReviewUnassignedTables)
   const effectiveCheckUnassigned = checkUnassigned ?? reviewUnassignedTables
 
@@ -43,6 +44,7 @@ export function useWarnings(checkUnassigned?: boolean): WarningResult {
       settings,
       effectiveCheckUnassigned,
       room,
+      Object.values(buildings),
     )
-  }, [tables, vendorAssignments, settings, doors, room, effectiveCheckUnassigned])
+  }, [tables, vendorAssignments, settings, doors, room, buildings, effectiveCheckUnassigned])
 }
