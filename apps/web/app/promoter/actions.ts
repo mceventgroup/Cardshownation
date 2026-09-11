@@ -1,10 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { endPromoterSession } from "@/lib/promoter-auth";
-import { endUserSession } from "@/lib/user-auth";
+import { endAllSessions } from "@/lib/logout";
 
 export async function logoutPromoter() {
-  await Promise.all([endPromoterSession(), endUserSession()]);
+  await endAllSessions();
   redirect("/login");
 }

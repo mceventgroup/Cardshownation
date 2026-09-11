@@ -1,9 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { endAdminSession } from "@/lib/admin-auth";
+import { endAllSessions } from "@/lib/logout";
 
 export async function logoutAdmin() {
-  await endAdminSession();
+  await endAllSessions();
   redirect("/admin/login");
 }

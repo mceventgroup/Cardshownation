@@ -2,14 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { endUserSession, requireUserSession } from "@/lib/user-auth";
-import { endPromoterSession } from "@/lib/promoter-auth";
+import { endAllSessions } from "@/lib/logout";
 import { db } from "@/lib/db";
 import { isFloorplannerSubscriptionTerminal } from "@/lib/floorplanner-access";
 import { verifyPassword } from "@/lib/passwords";
 import { deleteCloudLayoutsForUser } from "@floorplanner/lib/server/cloud-layout-store";
 
 export async function logoutUser() {
-  await Promise.all([endUserSession(), endPromoterSession()]);
+  await endAllSessions();
   redirect("/login");
 }
 

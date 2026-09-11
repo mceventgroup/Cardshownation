@@ -1,10 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { endModeratorSession } from "@/lib/moderator-auth";
+import { endAllSessions } from "@/lib/logout";
 
 export async function logoutModerator() {
-  await endModeratorSession();
+  await endAllSessions();
   redirect("/moderator/login");
 }
 
