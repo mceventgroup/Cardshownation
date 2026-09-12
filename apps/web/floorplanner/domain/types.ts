@@ -103,7 +103,11 @@ export interface Row {
 // Color is applied to all member tables unless overridden by a VendorAssignment.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type TableNumberingDirection = 'ltr' | 'rtl' | 'ttb' | 'btt' | 'cw' | 'ccw'
+
 export interface Section {
+  numberingStartTableId?: TableId | null
+  numberingDirection?: TableNumberingDirection
   id: SectionId
   name: string
   color: string             // hex, e.g. "#3B82F6"
@@ -236,6 +240,9 @@ export type Room = CompositeRoom
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface LayoutSettings {
+  numberingLocked?: boolean
+  numberingStartTableId?: TableId | null
+  numberingDirection?: TableNumberingDirection
   canvasWidth: number
   canvasHeight: number
   gridSize: number              // canvas units per grid cell

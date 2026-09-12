@@ -1,7 +1,8 @@
 import { computeRoomContour } from '@floorplanner/domain/room-contour'
-import type { CompositeRoom, Point, Rect, Section, TableId, TableObject } from '@floorplanner/domain/types'
+import type { CompositeRoom, Point, Rect, Section, TableId, TableObject, TableNumberingDirection } from '@floorplanner/domain/types'
 
-export type TableNumberingDirection = 'ltr' | 'rtl' | 'ttb' | 'btt' | 'cw' | 'ccw'
+export type { TableNumberingDirection } from '@floorplanner/domain/types'
+type TableGeometry = Pick<TableObject, 'x' | 'y' | 'width' | 'height'> & Partial<Pick<TableObject, 'rotation'>>
 
 export interface TableRenumberChange {
   tableId: TableId
@@ -17,6 +18,7 @@ export interface RoomZone {
 }
 
 function pointOnSegment(point: Point, a: Point, b: Point, epsilon = 0.5): boolean {
+  if (a.x === b.x && a.y === b.y) return Math.hypot(point.x - a.x, point.y - a.y) <= epsilon
   const cross = (point.y - a.y) * (b.x - a.x) - (point.x - a.x) * (b.y - a.y)
   if (Math.abs(cross) > epsilon) return false
 
@@ -114,7 +116,7 @@ export function getSectionPrefix(sectionName: string): string {
   const singleToken = meaningful.find(token => token.length === 1)
   if (singleToken) return singleToken
 
-  if (tokens[0] === 'SECTION' && meaningful[0]) return meaningful[0][0]
+  if (tokens[0] === 'SECTION' && meaningful[0]) return meaningful[0]
   return (meaningful[0] ?? tokens[0])[0]
 }
 
@@ -123,14 +125,50 @@ export function formatScopedDisplayId(prefix: string, tableNumber: number, padTo
   return prefix ? `${prefix}${numberText}` : numberText
 }
 
+export function getNextSectionName(sections: Record<string, Section>): string {
+  const used = new Set(Object.values(sections).map(section => getSectionPrefix(section.name)))
+  for (let index = 0; ; index++) {
+    let number = index + 1
+    let suffix = ''
+    while (number > 0) {
+      number--
+      suffix = String.fromCharCode(65 + number % 26) + suffix
+      number = Math.floor(number / 26)
+    }
+    if (!used.has(suffix)) return `Section ${suffix}`
+  }
+}
+
+/** Reserve natural prefixes before resolving collisions, keeping IDs distinct. */
+export function getSectionPrefixes(sections: Record<string, Section>): Map<string, string> {
+  const ordered = Object.values(sections).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  const basePrefix = (section: Section) => {
+    const prefix = getSectionPrefix(section.name)
+    return /\d$/.test(prefix) ? `${prefix}-` : prefix
+  }
+  const reserved = new Set(ordered.map(basePrefix))
+  const used = new Set<string>()
+  return new Map(ordered.map(section => {
+    const base = basePrefix(section)
+    let prefix = base
+    if (used.has(prefix)) {
+      let suffix = 2
+      do { prefix = `${base}${suffix++}-` } while (used.has(prefix) || reserved.has(prefix))
+    }
+    used.add(prefix)
+    return [section.id, prefix]
+  }))
+}
+
 export function getRoomLabel(room: CompositeRoom | null, roomId: string): string {
   return getRoomZones(room).find(zone => zone.id === roomId)?.label ?? roomId
 }
 
-export function getTableCenter(table: Pick<TableObject, 'x' | 'y' | 'width' | 'height'>): Point {
+export function getTableCenter(table: TableGeometry): Point {
+  const angle = (table.rotation ?? 0) * Math.PI / 180
   return {
-    x: table.x + table.width / 2,
-    y: table.y + table.height / 2,
+    x: table.x + table.width / 2 * Math.cos(angle) - table.height / 2 * Math.sin(angle),
+    y: table.y + table.width / 2 * Math.sin(angle) + table.height / 2 * Math.cos(angle),
   }
 }
 
@@ -141,7 +179,7 @@ export function getRoomIdForPoint(room: CompositeRoom | null, point: Point): str
   return null
 }
 
-export function getRoomIdForTable(table: Pick<TableObject, 'x' | 'y' | 'width' | 'height'>, room: CompositeRoom | null): string | null {
+export function getRoomIdForTable(table: TableGeometry, room: CompositeRoom | null): string | null {
   return getRoomIdForPoint(room, getTableCenter(table))
 }
 
@@ -161,17 +199,21 @@ function getDistanceBetweenPoints(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y)
 }
 
-function getTableBounds(tables: Array<Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>): Rect {
+function getTableBounds(tables: TableGeometry[]): Rect {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity
   let maxY = -Infinity
 
   for (const table of tables) {
-    minX = Math.min(minX, table.x)
-    minY = Math.min(minY, table.y)
-    maxX = Math.max(maxX, table.x + table.width)
-    maxY = Math.max(maxY, table.y + table.height)
+    const center = getTableCenter(table)
+    const angle = (table.rotation ?? 0) * Math.PI / 180
+    const halfWidth = (Math.abs(table.width * Math.cos(angle)) + Math.abs(table.height * Math.sin(angle))) / 2
+    const halfHeight = (Math.abs(table.width * Math.sin(angle)) + Math.abs(table.height * Math.cos(angle))) / 2
+    minX = Math.min(minX, center.x - halfWidth)
+    minY = Math.min(minY, center.y - halfHeight)
+    maxX = Math.max(maxX, center.x + halfWidth)
+    maxY = Math.max(maxY, center.y + halfHeight)
   }
 
   return {
@@ -196,22 +238,6 @@ function projectPointToSegment(point: Point, a: Point, b: Point): { distance: nu
   }
 }
 
-function compareClockwiseAroundCenter(
-  a: Pick<TableObject, 'x' | 'y' | 'width' | 'height'>,
-  b: Pick<TableObject, 'x' | 'y' | 'width' | 'height'>,
-  center: Point,
-): number {
-  const angleA = Math.atan2(a.y + a.height / 2 - center.y, a.x + a.width / 2 - center.x)
-  const angleB = Math.atan2(b.y + b.height / 2 - center.y, b.x + b.width / 2 - center.x)
-  const normalizedA = angleA < -Math.PI / 2 ? angleA + Math.PI * 2 : angleA
-  const normalizedB = angleB < -Math.PI / 2 ? angleB + Math.PI * 2 : angleB
-  if (normalizedA !== normalizedB) return normalizedA - normalizedB
-
-  const distA = Math.hypot(a.x + a.width / 2 - center.x, a.y + a.height / 2 - center.y)
-  const distB = Math.hypot(b.x + b.width / 2 - center.x, b.y + b.height / 2 - center.y)
-  return distA - distB
-}
-
 function getPolygonStartIndex(polygon: Point[]): number {
   let startIndex = 0
   for (let i = 1; i < polygon.length; i++) {
@@ -227,7 +253,7 @@ function getPolygonStartIndex(polygon: Point[]): number {
 }
 
 function getPerimeterMetrics(
-  table: Pick<TableObject, 'x' | 'y' | 'width' | 'height'>,
+  table: TableGeometry,
   polygon: Point[],
 ): { distance: number; perimeterOffset: number } {
   const center = getTableCenter(table)
@@ -243,7 +269,7 @@ function getPerimeterMetrics(
     const b = ordered[i + 1]
     const segmentLength = getDistanceBetweenPoints(a, b)
     const projection = projectPointToSegment(center, a, b)
-    if (projection.distance < bestDistance) {
+    if (projection.distance < bestDistance - 1e-7) {
       bestDistance = projection.distance
       bestOffset = total + projection.progress * segmentLength
     }
@@ -256,7 +282,7 @@ function getPerimeterMetrics(
   }
 }
 
-export function sortTablesInSnakeOrder<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+export function sortTablesInSnakeOrder<T extends TableGeometry>(
   tables: T[],
 ): T[] {
   if (tables.length === 0) return []
@@ -286,7 +312,7 @@ export function sortTablesInSnakeOrder<T extends Pick<TableObject, 'x' | 'y' | '
   })
 }
 
-function sortTablesHorizontally<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+function sortTablesHorizontally<T extends TableGeometry>(
   tables: T[],
   rowDirection: 'asc' | 'desc',
 ): T[] {
@@ -315,7 +341,7 @@ function sortTablesHorizontally<T extends Pick<TableObject, 'x' | 'y' | 'width' 
   )))
 }
 
-function sortTablesVertically<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+function sortTablesVertically<T extends TableGeometry>(
   tables: T[],
   columnDirection: 'asc' | 'desc',
 ): T[] {
@@ -344,14 +370,7 @@ function sortTablesVertically<T extends Pick<TableObject, 'x' | 'y' | 'width' | 
   )))
 }
 
-function normalizeAngleFromTop(angle: number): number {
-  let normalized = angle + Math.PI / 2
-  while (normalized < 0) normalized += Math.PI * 2
-  while (normalized >= Math.PI * 2) normalized -= Math.PI * 2
-  return normalized
-}
-
-export function sortTablesByDirection<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+export function sortTablesByDirection<T extends TableGeometry>(
   tables: T[],
   direction: TableNumberingDirection,
 ): T[] {
@@ -365,76 +384,131 @@ export function sortTablesByDirection<T extends Pick<TableObject, 'x' | 'y' | 'w
     case 'btt':
       return sortTablesVertically(tables, 'desc')
     case 'cw':
-    case 'ccw': {
-      const bounds = getTableBounds(tables)
-      const center = {
-        x: bounds.x + bounds.width / 2,
-        y: bounds.y + bounds.height / 2,
-      }
-      return [...tables].sort((a, b) => {
-        const angleA = normalizeAngleFromTop(Math.atan2(a.y + a.height / 2 - center.y, a.x + a.width / 2 - center.x))
-        const angleB = normalizeAngleFromTop(Math.atan2(b.y + b.height / 2 - center.y, b.x + b.width / 2 - center.x))
-        const metricA = direction === 'cw' ? angleA : (Math.PI * 2 - angleA) % (Math.PI * 2)
-        const metricB = direction === 'cw' ? angleB : (Math.PI * 2 - angleB) % (Math.PI * 2)
-        if (metricA !== metricB) return metricA - metricB
-
-        const distA = Math.hypot(a.x + a.width / 2 - center.x, a.y + a.height / 2 - center.y)
-        const distB = Math.hypot(b.x + b.width / 2 - center.x, b.y + b.height / 2 - center.y)
-        return distA - distB
-      })
-    }
+    case 'ccw':
+      return sortTablesForRoom(tables, null, direction)
     case 'ltr':
     default:
       return sortTablesHorizontally(tables, 'asc')
   }
 }
 
-export function sortTablesForRoom<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
-  tables: T[],
-  zone?: Pick<RoomZone, 'bounds' | 'polygon'> | null,
-): T[] {
-  if (tables.length === 0) return []
-  if (!zone) return sortTablesInSnakeOrder(tables)
-
-  const polygon = ('polygon' in zone && Array.isArray(zone.polygon) ? zone.polygon : null) ?? [
-    { x: zone.bounds.x, y: zone.bounds.y },
-    { x: zone.bounds.x + zone.bounds.width, y: zone.bounds.y },
-    { x: zone.bounds.x + zone.bounds.width, y: zone.bounds.y + zone.bounds.height },
-    { x: zone.bounds.x, y: zone.bounds.y + zone.bounds.height },
-  ]
-  const edgeThreshold = Math.max(36, Math.min(zone.bounds.width, zone.bounds.height) * 0.1)
-
-  const perimeter: Array<{ table: T; distance: number; perimeterOffset: number }> = []
-  const interior: Array<{ table: T; distance: number; perimeterOffset: number }> = []
-
-  for (const table of tables) {
-    const metrics = getPerimeterMetrics(table, polygon)
-    if (metrics.distance <= edgeThreshold) {
-      perimeter.push({ table, ...metrics })
-    } else {
-      interior.push({ table, ...metrics })
-    }
-  }
-
-  const clockwisePerimeter = [...perimeter]
-    .sort((a, b) => a.perimeterOffset - b.perimeterOffset || a.distance - b.distance)
-    .map(entry => entry.table)
-
-  const center = {
-    x: zone.bounds.x + zone.bounds.width / 2,
-    y: zone.bounds.y + zone.bounds.height / 2,
-  }
-  const clockwiseInterior = [...interior]
-    .sort((a, b) => {
-      if (a.distance !== b.distance) return a.distance - b.distance
-      return compareClockwiseAroundCenter(a.table, b.table, center)
-    })
-    .map(entry => entry.table)
-
-  return [...clockwisePerimeter, ...clockwiseInterior]
+function simplifyNumberingOutline(polygon: Point[]): Point[] {
+  const distinct = polygon.filter((point, index, points) => {
+    const previous = points[(index + points.length - 1) % points.length]
+    return point.x !== previous.x || point.y !== previous.y
+  })
+  // A vertex on a straight wall does not change the room's geometry. Remove
+  // only points between their neighbors, preserving corners and indentations.
+  return distinct.filter((point, index, points) => {
+    const previous = points[(index + points.length - 1) % points.length]
+    const next = points[(index + 1) % points.length]
+    return projectPointToSegment(point, previous, next).distance > 1e-7
+  })
 }
 
-function buildRectZoneFromTables<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+/** Clockwise convex boundary of the occupied table centers. */
+function getTableCenterHull(tables: TableGeometry[]): Point[] {
+  const sorted = tables.map(getTableCenter).sort((a, b) => a.x - b.x || a.y - b.y)
+    .filter((point, index, points) => index === 0 || point.x !== points[index - 1].x || point.y !== points[index - 1].y)
+  if (sorted.length <= 2) return sorted
+  const cross = (a: Point, b: Point, c: Point) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+  const halfHull = (points: Point[]) => {
+    const half: Point[] = []
+    for (const point of points) {
+      while (half.length >= 2 && cross(half[half.length - 2], half[half.length - 1], point) <= 0) half.pop()
+      half.push(point)
+    }
+    return half.slice(0, -1)
+  }
+  return [...halfHull(sorted), ...halfHull([...sorted].reverse())]
+}
+
+/** Finish each outer ring before moving inward, retaining concave room contours. */
+export function sortTablesForRoom<T extends TableGeometry>(
+  tables: T[],
+  zone?: Pick<RoomZone, 'bounds' | 'polygon'> | null,
+  direction: 'cw' | 'ccw' = 'cw',
+  startTable: T | null = null,
+  outerRingOnly = false,
+): T[] {
+  if (tables.length === 0) return []
+  const resolvedZone = zone ?? buildRectZoneFromTables(tables)!
+  const polygon = simplifyNumberingOutline(resolvedZone.polygon)
+  // Freehand and imported outlines can have either winding. Positive signed
+  // area means clockwise in canvas coordinates.
+  const signedArea = polygon.reduce((area, point, index) => {
+    const next = polygon[(index + 1) % polygon.length]
+    return area + point.x * next.y - next.x * point.y
+  }, 0)
+  if (signedArea < 0) polygon.reverse()
+
+  const tolerance = Math.max(1, Math.min(...tables.map(table => Math.min(table.width, table.height))) * 0.75)
+  const walkRing = (ring: T[], firstRing: boolean) => {
+    const ordered = direction === 'ccw' ? [ring[0], ...ring.slice(1).reverse()] : ring
+    const start = firstRing && startTable ? ordered.indexOf(startTable) : -1
+    return start > 0 ? [...ordered.slice(start), ...ordered.slice(0, start)] : ordered
+  }
+  const isRectangle = polygon.length === 4 && polygon.every((point, index) => {
+    const next = polygon[(index + 1) % polygon.length]
+    return point.x === next.x || point.y === next.y
+  })
+  if (isRectangle) {
+    // Follow the occupied boundary, which can be rectangular, circular or a
+    // mixture of straight and curved rows, independently of the room's walls.
+    let remaining = [...tables]
+    const ordered: T[] = []
+    while (remaining.length) {
+      const ringPolygon = getTableCenterHull(remaining)
+      if (ringPolygon.length <= 2) {
+        const line = remaining.sort((a, b) => getTableCenter(a).y - getTableCenter(b).y || getTableCenter(a).x - getTableCenter(b).x)
+        // A straight row can start at either endpoint without jumping mid-row.
+        if (ordered.length === 0 && startTable === line[line.length - 1]) line.reverse()
+        ordered.push(...line)
+        break
+      }
+      const ring: T[] = []
+      const interior: T[] = []
+      const offsets = new Map<T, number>()
+      for (const table of remaining) {
+        const metrics = getPerimeterMetrics(table, ringPolygon)
+        if (metrics.distance <= tolerance) {
+          ring.push(table)
+          offsets.set(table, metrics.perimeterOffset)
+        } else {
+          interior.push(table)
+        }
+      }
+      ring.sort((a, b) => offsets.get(a)! - offsets.get(b)! ||
+        getTableCenter(a).y - getTableCenter(b).y || getTableCenter(a).x - getTableCenter(b).x)
+      ordered.push(...walkRing(ring, ordered.length === 0))
+      if (outerRingOnly) return ordered
+      remaining = interior
+    }
+    return ordered
+  }
+
+  const entries = tables.map(table => ({ table, ...getPerimeterMetrics(table, polygon) }))
+    .sort((a, b) => a.distance - b.distance)
+  // Anchor each band at its shallowest table so small differences cannot chain
+  // together and accidentally pull an inner row into the outer ring.
+  const ordered: T[] = []
+  for (let start = 0; start < entries.length;) {
+    let end = start + 1
+    while (end < entries.length && entries[end].distance - entries[start].distance <= tolerance) end++
+    const ring = entries.slice(start, end).sort((a, b) => (
+      a.perimeterOffset - b.perimeterOffset || a.distance - b.distance ||
+      getTableCenter(a.table).y - getTableCenter(b.table).y ||
+      getTableCenter(a.table).x - getTableCenter(b.table).x
+    )).map(entry => entry.table)
+    // Reverse only this ring, keeping its starting table and outside-in order.
+    ordered.push(...walkRing(ring, ordered.length === 0))
+    if (outerRingOnly) return ordered
+    start = end
+  }
+  return ordered
+}
+
+function buildRectZoneFromTables<T extends TableGeometry>(
   tables: T[],
 ): Pick<RoomZone, 'bounds' | 'polygon'> | null {
   if (tables.length === 0) return null
@@ -451,19 +525,14 @@ function buildRectZoneFromTables<T extends Pick<TableObject, 'x' | 'y' | 'width'
   }
 }
 
-function sortTablesForRenumbering<T extends Pick<TableObject, 'x' | 'y' | 'width' | 'height'>>(
+function sortTablesForRenumbering<T extends TableGeometry>(
   tables: T[],
   direction: TableNumberingDirection,
   zone?: Pick<RoomZone, 'bounds' | 'polygon'> | null,
+  startTable: T | null = null,
 ): T[] {
-  if (direction === 'cw') {
-    return sortTablesForRoom(tables, zone ?? buildRectZoneFromTables(tables))
-  }
-
-  if (direction === 'ccw') {
-    const clockwise = sortTablesForRoom(tables, zone ?? buildRectZoneFromTables(tables))
-    if (clockwise.length <= 1) return clockwise
-    return [clockwise[0], ...clockwise.slice(1).reverse()]
+  if (direction === 'cw' || direction === 'ccw') {
+    return sortTablesForRoom(tables, zone, direction, startTable)
   }
 
   return sortTablesByDirection(tables, direction)
@@ -507,8 +576,8 @@ function getRoomBuckets(
 
   for (const table of tables) {
     const resolvedRoomId =
-      (table.roomId && grouped.has(table.roomId) ? table.roomId : null) ??
       getRoomIdForTable(table, room) ??
+      (table.roomId && grouped.has(table.roomId) ? table.roomId : null) ??
       firstRoomId
     const bucket = grouped.get(resolvedRoomId) ?? []
     bucket.push(table)
@@ -529,12 +598,13 @@ export function buildSectionRenumberChanges(
   sectionId: string,
   direction: TableNumberingDirection,
   room: CompositeRoom | null = null,
+  startTableId: TableId | null | undefined = sections[sectionId]?.numberingStartTableId,
 ): TableRenumberChange[] {
   const section = sections[sectionId]
   if (!section) return []
 
   const sectionTables = Object.values(tables).filter(table => table.sectionId === sectionId)
-  const prefix = getSectionPrefix(section.name)
+  const prefix = getSectionPrefixes(sections).get(section.id)!
   const changes: TableRenumberChange[] = []
   let nextTableNumber = 1
 
@@ -543,6 +613,7 @@ export function buildSectionRenumberChanges(
       bucket.tables,
       direction,
       bucket.zone ?? buildRectZoneFromTables(bucket.tables),
+      nextTableNumber === 1 ? bucket.tables.find(table => table.id === startTableId) ?? null : null,
     )
     ordered.forEach(table => {
       changes.push(
@@ -566,21 +637,25 @@ export function buildAllSectionRenumberChanges(
   room: CompositeRoom | null,
   direction: TableNumberingDirection,
   preserveLabelOverride = false,
+  useSavedDirections = false,
+  startTableId?: TableId | null,
 ): TableRenumberChange[] {
   const changes: TableRenumberChange[] = []
   const allTables = Object.values(tables)
   const sectionList = Object.values(sections).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
   const sectionIds = new Set(sectionList.map(section => section.id))
+  const prefixes = getSectionPrefixes(sections)
 
   for (const section of sectionList) {
     const sectionTables = allTables.filter(table => table.sectionId === section.id)
-    const prefix = getSectionPrefix(section.name)
+    const prefix = prefixes.get(section.id)!
     let nextTableNumber = 1
     for (const bucket of getRoomBuckets(sectionTables, room)) {
       const ordered = sortTablesForRenumbering(
         bucket.tables,
-        direction,
+        useSavedDirections ? section.numberingDirection ?? direction : direction,
         bucket.zone ?? buildRectZoneFromTables(bucket.tables),
+        nextTableNumber === 1 ? bucket.tables.find(table => table.id === (useSavedDirections || startTableId === undefined ? section.numberingStartTableId : startTableId)) ?? null : null,
       )
       ordered.forEach(table => {
         changes.push(
@@ -599,7 +674,8 @@ export function buildAllSectionRenumberChanges(
   const unsectioned = allTables.filter(table => !table.sectionId || !sectionIds.has(table.sectionId))
   let nextUnsectionedNumber = 1
   for (const bucket of getRoomBuckets(unsectioned, room)) {
-    const ordered = sortTablesForRenumbering(bucket.tables, direction, bucket.zone)
+    const ordered = sortTablesForRenumbering(bucket.tables, direction, bucket.zone,
+      nextUnsectionedNumber === 1 ? bucket.tables.find(table => table.id === startTableId) ?? null : null)
     ordered.forEach(table => {
       const number = nextUnsectionedNumber++
       changes.push(createRenumberChange(table, String(number), number, preserveLabelOverride))
@@ -613,6 +689,9 @@ export function syncRoomFieldsForTables(
   tables: Record<string, TableObject>,
   room: CompositeRoom | null,
   sections: Record<string, Section> = {},
+  renumber = true,
+  direction: TableNumberingDirection = 'cw',
+  startTableId?: TableId | null,
 ): Record<string, TableObject> {
   const next: Record<string, TableObject> = {}
   const roomZones = getRoomZones(room)
@@ -624,7 +703,8 @@ export function syncRoomFieldsForTables(
   }
 
   if (roomZones.length === 0) {
-    const changes = buildAllSectionRenumberChanges(next, sections, room, 'cw', true)
+    if (!renumber) return next
+    const changes = buildAllSectionRenumberChanges(next, sections, room, direction, true, true, startTableId)
     for (const change of changes) {
       const table = next[change.tableId]
       if (!table) continue
@@ -652,7 +732,8 @@ export function syncRoomFieldsForTables(
     tablesByResolvedRoom.get(resolvedRoomId)?.push(table)
   }
 
-  const changes = buildAllSectionRenumberChanges(next, sections, room, 'cw', true)
+  if (!renumber) return next
+  const changes = buildAllSectionRenumberChanges(next, sections, room, direction, true, true, startTableId)
   for (const change of changes) {
     const table = next[change.tableId]
     if (!table) continue
@@ -661,5 +742,41 @@ export function syncRoomFieldsForTables(
     if (!table.labelOverridden) table.label = change.next.displayId
   }
 
+  return next
+}
+
+/** Only offer starts in the first room's outer ring, preserving outside-in order. */
+export function getNumberingStartTables(tables: TableObject[], room: CompositeRoom | null): TableObject[] {
+  const bucket = getRoomBuckets(tables, room).find(bucket => bucket.tables.length > 0)
+  if (!bucket) return []
+  const outer = sortTablesForRoom(bucket.tables, bucket.zone, 'cw', null, true)
+  const hull = getTableCenterHull(outer)
+  return hull.length <= 2 && outer.length > 1 ? [outer[0], outer[outer.length - 1]] : outer
+}
+
+/** Keep established IDs frozen and append unused IDs only for newly placed tables. */
+export function numberNewTablesWhileLocked(
+  tables: Record<string, TableObject>, previousIds: ReadonlySet<string>, sections: Record<string, Section>,
+): Record<string, TableObject> {
+  const next = Object.fromEntries(Object.values(tables).map(table => [table.id, { ...table }]))
+  const existing = Object.values(next).filter(table => previousIds.has(table.id))
+  const used = new Set(existing.flatMap(table => [table.displayId, table.label]))
+  const prefixes = getSectionPrefixes(sections)
+  for (const table of Object.values(next)) {
+    if (previousIds.has(table.id)) continue
+    const prefix = table.sectionId ? prefixes.get(table.sectionId) ?? '' : ''
+    let number = existing.reduce((max, other) => {
+      const suffix = other.displayId.startsWith(prefix) ? other.displayId.slice(prefix.length) : ''
+      return /^\d+$/.test(suffix) ? Math.max(max, Number(suffix)) : max
+    }, 0) + 1
+    let displayId = prefix ? formatScopedDisplayId(prefix, number) : String(number)
+    while (used.has(displayId)) {
+      number++
+      displayId = prefix ? formatScopedDisplayId(prefix, number) : String(number)
+    }
+    Object.assign(table, { tableNumber: number, displayId, label: displayId, labelOverridden: false })
+    existing.push(table)
+    used.add(displayId)
+  }
   return next
 }

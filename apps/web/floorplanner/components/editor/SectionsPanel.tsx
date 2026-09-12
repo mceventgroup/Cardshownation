@@ -9,11 +9,12 @@
 // Double-click section name to rename.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useEditorStore, selectSections, selectSelectedIds } from '@floorplanner/store/index'
 import { SECTION_COLORS } from '@floorplanner/lib/defaults'
 import { createSectionId } from '@floorplanner/lib/id'
-import { buildAllSectionRenumberChanges, buildSectionRenumberChanges, type TableNumberingDirection } from '@floorplanner/domain/room-numbering'
+import { getNextSectionName, type TableNumberingDirection } from '@floorplanner/domain/room-numbering'
+import NumberingPreview, { NUMBERING_DIRECTION_LABELS } from './NumberingPreview'
 import type { Section, SectionId, TableId } from '@floorplanner/domain/types'
 
 export default function SectionsPanel() {
@@ -24,21 +25,26 @@ export default function SectionsPanel() {
   const dispatch     = useEditorStore(s => s.dispatch)
   const selectBySec  = useEditorStore(s => s.selectBySection)
   const tables       = useEditorStore(s => s.tables)
-  const room         = useEditorStore(s => s.room)
+  const numberingLocked = useEditorStore(s => s.settings.numberingLocked ?? false)
+  const documentGeneration = useEditorStore(s => s.documentGeneration)
+  const [preview, setPreview] = useState<{ sectionId: SectionId | null; direction: TableNumberingDirection } | null>(null)
+  const savedDirection = useEditorStore(s => s.settings.numberingDirection ?? 'cw')
 
   const [editingId, setEditingId]    = useState<string | null>(null)
   const [editName, setEditName]      = useState('')
-  const [numberingDirection, setNumberingDirection] = useState<TableNumberingDirection>('cw')
+  const [numberingDirection, setNumberingDirection] = useState<TableNumberingDirection>(savedDirection)
+
+  useEffect(() => { setNumberingDirection(savedDirection); setPreview(null) }, [documentGeneration, savedDirection])
 
   const sectionList = Object.values(sections).sort((a, b) => a.order - b.order)
   const hasSelection = selectedIds.size > 0
 
   function handleCreate() {
-    const order = sectionList.length
+    const order = Math.max(-1, ...sectionList.map(section => section.order)) + 1
     const color = SECTION_COLORS[order % SECTION_COLORS.length]
     const section: Section = {
       id: createSectionId(),
-      name: `Section ${String.fromCharCode(65 + order)}`,
+      name: getNextSectionName(sections),
       color,
       order,
     }
@@ -103,43 +109,22 @@ export default function SectionsPanel() {
     return count
   }
 
-  function dispatchRenumberChanges(scope: 'section' | 'layout', scopeId: SectionId | null, changes: ReturnType<typeof buildSectionRenumberChanges>) {
-    const filtered = changes.filter(change => (
-      change.prev.label !== change.next.label ||
-      change.prev.labelOverridden !== change.next.labelOverridden ||
-      change.prev.displayId !== change.next.displayId ||
-      change.prev.tableNumber !== change.next.tableNumber
-    ))
-    if (filtered.length === 0) return
-
-    dispatch({
-      type: 'RENUMBER',
-      scope,
-      scopeId,
-      changes: filtered,
-      timestamp: Date.now(),
-    })
-  }
-
   function handleRenumberSection(sectionId: SectionId) {
-    dispatchRenumberChanges(
-      'section',
-      sectionId,
-      buildSectionRenumberChanges(tables, sections, sectionId, numberingDirection, room),
-    )
+    setPreview({ sectionId, direction: sections[sectionId]?.numberingDirection ?? savedDirection })
   }
 
   function handleRenumberAll() {
-    dispatchRenumberChanges(
-      'layout',
-      null,
-      buildAllSectionRenumberChanges(tables, sections, room, numberingDirection),
-    )
+    setPreview({ sectionId: null, direction: numberingDirection })
   }
 
   return (
     <div className="text-sm">
+      {preview && <NumberingPreview key={documentGeneration} sectionId={preview.sectionId} initialDirection={preview.direction} onClose={() => setPreview(null)} />}
       <div className="px-3 py-3 border-b border-gray-100 bg-white">
+        <label className="mb-3 flex items-start gap-2 rounded-md border p-2">
+          <input type="checkbox" checked={numberingLocked} onChange={event => dispatch({ type: 'UPDATE_SETTINGS', prev: { numberingLocked }, next: { numberingLocked: event.target.checked }, timestamp: Date.now() })} className="mt-0.5" />
+          <span><span className="block text-xs font-semibold">Lock table numbers</span><span className="block text-xs text-gray-500">Keep existing IDs when moving tables or changing sections. New tables receive unused numbers.</span></span>
+        </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-gray-600">Numbering Direction</span>
           <select
@@ -151,15 +136,19 @@ export default function SectionsPanel() {
             <option value="rtl">Right to Left</option>
             <option value="ttb">Top to Bottom</option>
             <option value="btt">Bottom to Top</option>
-            <option value="cw">Clockwise</option>
-            <option value="ccw">Counter Clockwise</option>
+            <option value="cw">Clockwise · Outside to Inside</option>
+            <option value="ccw">Counter Clockwise · Outside to Inside</option>
           </select>
         </label>
+        <p className="mt-2 text-xs text-gray-500">
+          {numberingDirection === 'cw' || numberingDirection === 'ccw' ? 'Start at the top-left of each outer ring, then work inward. ' : ''}
+          Each section starts at 01.
+        </p>
         <button
           onClick={handleRenumberAll}
           className="mt-2 w-full rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200"
         >
-          Renumber All Sections
+          Preview All Sections
         </button>
       </div>
 
@@ -237,6 +226,7 @@ export default function SectionsPanel() {
                   />
                 ) : (
                   <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <div className="min-w-0 flex-1">
                     <button
                       className="min-w-0 flex-1 text-left text-xs text-gray-700 truncate hover:text-blue-600"
                       onClick={() => selectBySec(s.id)}
@@ -249,12 +239,18 @@ export default function SectionsPanel() {
                       {s.name}
                       <span className="text-gray-400 ml-1">({tableCount})</span>
                     </button>
+                    <p className="text-[10px] text-slate-500" aria-label={`Saved numbering for ${s.name}`}>
+                      {NUMBERING_DIRECTION_LABELS[s.numberingDirection ?? savedDirection]}
+                      {s.numberingStartTableId && tables[s.numberingStartTableId]?.sectionId === s.id ? ` · Start: ${tables[s.numberingStartTableId].displayId}` : ' · Automatic start'}
+                      {numberingLocked ? ' · Locked' : ''}
+                    </p>
+                    </div>
                     <button
                       onClick={() => handleRenumberSection(s.id)}
                       className="shrink-0 rounded border border-slate-300 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
-                      title={`Renumber ${s.name}`}
+                      title={`Preview numbering for ${s.name}`}
                     >
-                      Renumber
+                      Preview
                     </button>
                   </div>
                 )}

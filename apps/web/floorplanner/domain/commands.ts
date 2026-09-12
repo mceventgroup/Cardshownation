@@ -52,6 +52,12 @@ import type {
 
 interface CommandBase {
   readonly timestamp: number  // Date.now() at creation
+  /** Automatic numbering is part of the same undo step as the initiating edit. */
+  readonly autoNumberingChanges?: ReadonlyArray<{
+    tableId: TableId
+    prev: Pick<TableObject, 'roomId' | 'tableNumber' | 'displayId' | 'label' | 'labelOverridden'>
+    next: Pick<TableObject, 'roomId' | 'tableNumber' | 'displayId' | 'label' | 'labelOverridden'>
+  }>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,6 +215,16 @@ export interface AssignToSectionCommand extends CommandBase {
  * the override correctly.
  */
 export interface RenumberCommand extends CommandBase {
+  readonly startTableId?: TableId | null
+  readonly previousStarts?: {
+    layout: TableId | null | undefined
+    sections: Readonly<Record<string, TableId | null | undefined>>
+  }
+  readonly direction?: import('./types').TableNumberingDirection
+  readonly previousDirections?: {
+    layout: import('./types').TableNumberingDirection | undefined
+    sections: Readonly<Record<string, import('./types').TableNumberingDirection | undefined>>
+  }
   readonly type: 'RENUMBER'
   readonly scope: 'row' | 'section' | 'layout'
   readonly scopeId: RowId | SectionId | null  // null for layout scope

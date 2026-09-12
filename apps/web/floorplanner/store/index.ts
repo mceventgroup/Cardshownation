@@ -29,7 +29,7 @@ import {
 } from '@floorplanner/lib/persistence'
 import { getFloorplannerStorageNamespace } from '@floorplanner/lib/runtime'
 import { csvImportModule, expandTableNumbers } from '@floorplanner/domain/csv-import.impl'
-import { getDefaultRoomId, getRoomZones, syncRoomFieldsForTables } from '@floorplanner/domain/room-numbering'
+import { getDefaultRoomId, getRoomZones, syncRoomFieldsForTables, numberNewTablesWhileLocked } from '@floorplanner/domain/room-numbering'
 import { createImportSessionId, createAssignmentId, createVendorId } from '@floorplanner/lib/id'
 import { applyCommand, reverseCommand } from './executor'
 
@@ -60,7 +60,7 @@ function applyDocumentSliceToState(state: EditorState, slice: DocumentSlice): vo
   state.documentGeneration++
   state.cloudSaveStatus = 'idle'
   state.cloudSaveError = null
-  state.tables = syncRoomFieldsForTables(slice.tables, slice.room, slice.sections)
+  state.tables = syncRoomFieldsForTables(slice.tables, slice.room, slice.sections, false)
   state.rows = slice.rows
   state.sections = slice.sections
   state.vendors = slice.vendors
@@ -352,10 +352,51 @@ export const useEditorStore = create<EditorState>()(
     },
 
     dispatch(command) {
+      if (get().settings.numberingLocked && (command.type === 'RENUMBER' || command.type === 'RELABEL_TABLE')) return
       set(state => {
+        if (command.type === 'RENUMBER' && command.startTableId !== undefined) {
+          const scope = command.scope
+          const scopeId = command.scopeId
+          command = { ...command, previousStarts: {
+            layout: state.settings.numberingStartTableId,
+            sections: Object.fromEntries(Object.values(state.sections)
+              .filter(section => scope === 'layout' || scopeId === section.id)
+              .map(section => [section.id, section.numberingStartTableId])),
+          } }
+        }
+        if (command.type === 'RENUMBER' && command.direction) {
+          command = { ...command, previousDirections: {
+            layout: state.settings.numberingDirection,
+            sections: Object.fromEntries(Object.values(state.sections)
+              .filter(section => command.type === 'RENUMBER' && (command.scope === 'layout' || command.scopeId === section.id))
+              .map(section => [section.id, section.numberingDirection])),
+          } }
+        }
+        const numberingFields = (table: TableObject) => ({
+          roomId: table.roomId, tableNumber: table.tableNumber, displayId: table.displayId,
+          label: table.label, labelOverridden: table.labelOverridden,
+        })
+        const previousNumbers = new Map(Object.values(state.tables).map(table => [table.id, numberingFields(table)]))
         // Apply the command to document state
         applyCommand(state, command)
-        state.tables = syncRoomFieldsForTables(state.tables, state.room, state.sections)
+        const appliedNumbers = new Map(Object.values(state.tables).map(table => [table.id, numberingFields(table)]))
+        const renumber = [
+          'PLACE_TABLE', 'PLACE_TABLES', 'MOVE_TABLES', 'RESIZE_TABLE', 'ROTATE_TABLES', 'DELETE_TABLES',
+          'PLACE_ROW', 'DELETE_ROW', 'UPDATE_ROW', 'DELETE_SECTION', 'ASSIGN_TO_SECTION',
+          'SET_ROOM', 'ADD_ROOM_SEGMENT', 'UPDATE_ROOM_SEGMENT', 'DELETE_ROOM_SEGMENT', 'SET_FREEHAND_ROOM',
+        ].includes(command.type) || (command.type === 'UPDATE_SECTION' && command.next.name !== undefined)
+        // Explicit renumbering, vendor edits and cosmetic changes must keep the chosen order.
+        if (renumber) {
+          state.tables = syncRoomFieldsForTables(state.tables, state.room, state.sections, !state.settings.numberingLocked,
+            state.settings.numberingDirection, state.settings.numberingStartTableId)
+          if (state.settings.numberingLocked) state.tables = numberNewTablesWhileLocked(state.tables, new Set(previousNumbers.keys()), state.sections)
+        }
+        const autoNumberingChanges = renumber ? Object.values(state.tables).flatMap(table => {
+          const prev = previousNumbers.get(table.id) ?? appliedNumbers.get(table.id)!
+          const next = numberingFields(table)
+          if (Object.keys(next).every(key => prev[key as keyof typeof prev] === next[key as keyof typeof next])) return []
+          return [{ tableId: table.id, prev, next }]
+        }) : undefined
         if (!state.activeRoomId || !getRoomZones(state.room).some(zone => zone.id === state.activeRoomId)) {
           state.activeRoomId = getDefaultRoomId(state.room)
         }
@@ -365,7 +406,7 @@ export const useEditorStore = create<EditorState>()(
         const past   = state.history.past   as unknown as LayoutCommand[]
         const future = state.history.future as unknown as LayoutCommand[]
 
-        past.push(command)
+        past.push(autoNumberingChanges ? { ...command, autoNumberingChanges } : command)
         if (past.length > state.history.maxSize) past.shift()
         future.length = 0  // always clear future on new action
       })
@@ -380,6 +421,10 @@ export const useEditorStore = create<EditorState>()(
         const command = past[past.length - 1]
 
         reverseCommand(state, command)
+        for (const change of command.autoNumberingChanges ?? []) {
+          const table = state.tables[change.tableId]
+          if (table) Object.assign(table, change.prev)
+        }
 
         past.pop()
         future.push(command)
@@ -395,6 +440,10 @@ export const useEditorStore = create<EditorState>()(
         const command = future[future.length - 1]
 
         applyCommand(state, command)
+        for (const change of command.autoNumberingChanges ?? []) {
+          const table = state.tables[change.tableId]
+          if (table) Object.assign(table, change.next)
+        }
 
         future.pop()
         past.push(command)

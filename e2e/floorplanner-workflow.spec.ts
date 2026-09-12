@@ -18,6 +18,75 @@ async function openEditor(page: import("@playwright/test").Page) {
   await expect(projectButton).toBeVisible();
 }
 
+test('section numbering follows inward rings and keeps the chosen direction after reassignment and reload', async ({ page }) => {
+  const { DEFAULT_SETTINGS } = await import('../apps/web/floorplanner/lib/defaults');
+  await page.addInitScript(settings => {
+    const key = 'floorplanner:e2e-floorplanner:layout';
+    if (localStorage.getItem(key)) return;
+    const tables = Object.fromEntries(Array.from({ length: 9 }, (_, index) => [`t${index}`, {
+      id: `t${index}`, x: 50 + index % 3 * 100, y: 50 + Math.floor(index / 3) * 100,
+      width: 20, height: 20, rotation: 0, shape: 'rectangle', roomId: 'R1', tableNumber: index + 1,
+      displayId: String(index + 1), label: String(index + 1), labelOverridden: false, rowId: null,
+      sectionId: 'a', order: index, premium: false,
+    }]));
+    localStorage.setItem(key, JSON.stringify({ version: 1, savedAt: new Date().toISOString(), data: {
+      tables, rows: {}, sections: { a: { id: 'a', name: 'Section A', color: '#22c55e', order: 0 } },
+      vendors: {}, vendorAssignments: {}, doors: {}, backgroundImages: {}, settings, room: null,
+    } }));
+  }, DEFAULT_SETTINGS);
+  const savedLabels = () => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('floorplanner:e2e-floorplanner:layout')!).data;
+    return Array.from({ length: 9 }, (_, index) => data.tables[`t${index}`].displayId);
+  });
+  await openEditor(page);
+  await page.getByRole('button', { name: 'Space', exact: true }).click();
+  await page.getByRole('button', { name: 'Zones', exact: true }).click();
+  await page.getByRole('button', { name: 'Preview All Sections', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'Proposed table numbering path' })).toBeVisible();
+  await expect.poll(savedLabels).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+  await page.getByRole('combobox', { name: 'Starting table', exact: true }).selectOption('t2');
+  await expect(page.getByRole('combobox', { name: 'Starting table', exact: true }).locator('option[value="t4"]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect.poll(savedLabels).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+  await page.getByRole('button', { name: 'Preview All Sections', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Starting table', exact: true }).selectOption('t2');
+  await page.screenshot({ path: 'test-results/numbering-preview.png' });
+  await page.getByRole('button', { name: 'Apply numbering', exact: true }).click();
+  await expect.poll(savedLabels).toEqual(['A07', 'A08', 'A01', 'A06', 'A09', 'A02', 'A05', 'A04', 'A03']);
+  await expect(page.getByLabel('Saved numbering for Section A')).toContainText('Start: A01');
+  await page.getByRole('combobox', { name: 'Numbering Direction' }).selectOption('ccw');
+  await page.getByRole('button', { name: 'Preview All Sections', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Starting table', exact: true }).selectOption('');
+  await page.getByRole('button', { name: 'Apply numbering', exact: true }).click();
+  const ccw = ['A01', 'A08', 'A07', 'A02', 'A09', 'A06', 'A03', 'A04', 'A05'];
+  await expect.poll(savedLabels).toEqual(ccw);
+  await page.getByRole('button', { name: '+ New Section', exact: true }).click();
+  await page.getByRole('button', { name: /^Section A\s*\(9\)$/ }).click();
+  await page.getByRole('button', { name: /^Section B\s*\(0\)$/ }).first().click();
+  await expect.poll(savedLabels).toEqual(ccw.map(label => label.replace('A', 'B')));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(savedLabels).toEqual(ccw);
+  await openEditor(page);
+  await page.getByRole('button', { name: 'Space', exact: true }).click();
+  await page.getByRole('button', { name: 'Zones', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Numbering Direction' })).toHaveValue('ccw');
+  await expect.poll(savedLabels).toEqual(ccw);
+  await expect(page.getByLabel('Saved numbering for Section A')).toContainText('Counter clockwise');
+  await page.getByRole('checkbox', { name: /Lock table numbers/ }).check();
+  await page.getByRole('button', { name: /^Section A\s*\(9\)$/ }).click();
+  await page.getByRole('button', { name: /^Section B\s*\(0\)$/ }).first().click();
+  await expect.poll(savedLabels).toEqual(ccw);
+  await page.getByRole('button', { name: 'Preview All Sections', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Apply numbering', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('floorplanner:e2e-floorplanner:layout')!).data.settings.numberingLocked)).toBe(true);
+  await openEditor(page);
+  await page.getByRole('button', { name: 'Space', exact: true }).click();
+  await page.getByRole('button', { name: 'Zones', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: /Lock table numbers/ })).toBeChecked();
+  await expect.poll(savedLabels).toEqual(ccw);
+});
+
 test("floor planner project and vendor workflows stay understandable", async ({ page }) => {
   await openEditor(page);
 

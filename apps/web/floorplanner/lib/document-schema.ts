@@ -137,6 +137,8 @@ function parseSection(value: unknown, label: string): Section {
     name: expectString(record.name, `${label}.name`),
     color: expectString(record.color, `${label}.color`),
     order: expectNumber(record.order, `${label}.order`),
+    ...(record.numberingDirection === undefined ? {} : { numberingDirection: parseNumberingDirection(record.numberingDirection, label) }),
+    ...(record.numberingStartTableId === undefined ? {} : { numberingStartTableId: expectNullableString(record.numberingStartTableId, `${label}.numberingStartTableId`) as Section['numberingStartTableId'] }),
   }
 }
 
@@ -277,9 +279,19 @@ function parseRoom(value: unknown, label: string): CompositeRoom | null {
   }
 }
 
+function parseNumberingDirection(value: unknown, label: string): NonNullable<LayoutSettings['numberingDirection']> {
+  if (typeof value !== 'string' || !['ltr', 'rtl', 'ttb', 'btt', 'cw', 'ccw'].includes(value)) {
+    throw new Error(`${label}.numberingDirection is invalid.`)
+  }
+  return value as NonNullable<LayoutSettings['numberingDirection']>
+}
+
 function parseSettings(value: unknown, label: string): LayoutSettings {
   const record = asRecord(value, label)
   return {
+    ...(record.numberingDirection === undefined ? {} : { numberingDirection: parseNumberingDirection(record.numberingDirection, label) }),
+    ...(record.numberingLocked === undefined ? {} : { numberingLocked: expectBoolean(record.numberingLocked, `${label}.numberingLocked`) }),
+    ...(record.numberingStartTableId === undefined ? {} : { numberingStartTableId: expectNullableString(record.numberingStartTableId, `${label}.numberingStartTableId`) as LayoutSettings['numberingStartTableId'] }),
     canvasWidth: expectNumber(record.canvasWidth, `${label}.canvasWidth`),
     canvasHeight: expectNumber(record.canvasHeight, `${label}.canvasHeight`),
     gridSize: expectNumber(record.gridSize, `${label}.gridSize`),

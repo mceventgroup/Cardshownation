@@ -182,6 +182,20 @@ export function applyCommand(state: MutableCanvasState, command: LayoutCommand):
     // ── Numbering commands ────────────────────────────────────────────────
 
     case 'RENUMBER': {
+      if (command.startTableId !== undefined && command.scope !== 'row') {
+        if (command.scope === 'layout') state.settings.numberingStartTableId = command.startTableId
+        for (const section of Object.values(state.sections)) {
+          if (command.scope === 'layout' || section.id === command.scopeId) {
+            section.numberingStartTableId = command.startTableId && state.tables[command.startTableId]?.sectionId === section.id ? command.startTableId : null
+          }
+        }
+      }
+      if (command.direction && command.scope !== 'row') {
+        if (command.scope === 'layout') state.settings.numberingDirection = command.direction
+        for (const section of Object.values(state.sections)) {
+          if (command.scope === 'layout' || section.id === command.scopeId) section.numberingDirection = command.direction
+        }
+      }
       for (const c of command.changes) {
         const t = state.tables[c.tableId]
         if (t) {
@@ -489,6 +503,30 @@ export function reverseCommand(state: MutableCanvasState, command: LayoutCommand
     // ── Numbering commands ────────────────────────────────────────────────
 
     case 'RENUMBER': {
+      if (command.previousStarts) {
+        if (command.scope === 'layout') {
+          if (command.previousStarts.layout === undefined) delete state.settings.numberingStartTableId
+          else state.settings.numberingStartTableId = command.previousStarts.layout
+        }
+        for (const [id, start] of Object.entries(command.previousStarts.sections)) {
+          const section = state.sections[id]
+          if (!section) continue
+          if (start === undefined) delete section.numberingStartTableId
+          else section.numberingStartTableId = start
+        }
+      }
+      if (command.previousDirections) {
+        if (command.scope === 'layout') {
+          if (command.previousDirections.layout === undefined) delete state.settings.numberingDirection
+          else state.settings.numberingDirection = command.previousDirections.layout
+        }
+        for (const [id, direction] of Object.entries(command.previousDirections.sections)) {
+          const section = state.sections[id]
+          if (!section) continue
+          if (direction === undefined) delete section.numberingDirection
+          else section.numberingDirection = direction
+        }
+      }
       for (const c of command.changes) {
         const t = state.tables[c.tableId]
         if (t) {
