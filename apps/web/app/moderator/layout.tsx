@@ -115,6 +115,15 @@ export default async function ModeratorLayout({ children }: { children: React.Re
             </nav>
           </MobileMenu>
         </div>
+        <div className="px-4 pb-3">
+          <Link
+            href="/"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-800 transition-colors hover:bg-brand-100"
+          >
+            <Home className="h-4 w-4" aria-hidden="true" />
+            Main website
+          </Link>
+        </div>
       </header>
       }
     >
