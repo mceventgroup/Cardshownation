@@ -144,22 +144,24 @@ function getAccountAudienceLabel(role: UserRole) {
   }
 }
 
-export async function sendPasswordResetEmail(to: string, resetUrl: string, role: UserRole) {
+export async function sendPasswordResetEmail(to: string, resetUrl: string, role: UserRole, options: { adminRequested?: boolean } = {}) {
   const audienceLabel = getResetAudienceLabel(role);
   await sendEmail({
     from: getFromAddress(),
     to,
     subject: "Reset your Card Show Nation password",
+    text: `${options.adminRequested ? "A Card Show Nation admin sent you a password reset link." : "You requested a password reset."} Reset your ${audienceLabel} password: ${resetUrl}\nThis link expires in 1 hour. Your password changes only after you choose a new one.`,
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px">
         <h1 style="font-size:22px;font-weight:600;color:#020617;margin-bottom:8px">
           Reset your password
         </h1>
         <p style="color:#475569;font-size:15px;line-height:1.6;margin-bottom:24px">
+          ${options.adminRequested ? "A Card Show Nation admin sent you this link to change your password." : "You requested a password reset."}
           Click the button below to reset your Card Show Nation ${audienceLabel} password.
           This link expires in 1 hour.
         </p>
-        <a href="${resetUrl}"
+        <a href="${escapeHtml(resetUrl)}"
            style="display:inline-block;background:#0284c7;color:#fff;font-size:14px;
                   font-weight:600;padding:12px 24px;border-radius:9999px;
                   text-decoration:none">
@@ -174,29 +176,41 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string, role:
   });
 }
 
-export async function sendAdminCreatedAccountEmail(to: string, setupUrl: string, role: UserRole) {
+export async function sendAdminCreatedAccountEmail(to: string, setupUrl: string, role: UserRole, options: { name?: string | null; floorplannerAccess?: boolean } = {}) {
   const audienceLabel = getAccountAudienceLabel(role);
+  const appUrl = new URL(setupUrl).origin;
+  const loginUrl = `${appUrl}${role === "ORGANIZER" ? "/promoter/login" : role === "MODERATOR" ? "/moderator/login" : "/account/login"}`;
+  const recoveryUrl = loginUrl.replace("/login", "/forgot-password");
+  const accessText = options.floorplannerAccess ? "Floorplanner access is enabled for your account without a paid subscription." : "";
 
-  await sendEmail({
+  return sendEmail({
     from: getFromAddress(),
     to,
     subject: "Your Card Show Nation account is ready",
+    text: `${options.name ? `Hi ${options.name},\n\n` : ""}Your Card Show Nation ${audienceLabel} account is ready.\nEmail: ${to}\n${accessText}\nSet your password: ${setupUrl}\nThis link expires in 1 hour. If it expires, request a new link: ${recoveryUrl}\nSign in: ${loginUrl}${options.floorplannerAccess ? `\nOpen Floorplanner after signing in: ${appUrl}/floorplanner/workspace` : ""}`,
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px">
         <h1 style="font-size:22px;font-weight:600;color:#020617;margin-bottom:8px">
           Your account is ready
         </h1>
         <p style="color:#475569;font-size:15px;line-height:1.6;margin-bottom:24px">
+          ${options.name ? `Hi ${escapeHtml(options.name)},<br><br>` : ""}
           An admin created a Card Show Nation ${audienceLabel} account for this email address.
+          ${escapeHtml(accessText)}
           Click the button below to set your password and finish activating your account.
           This link expires in 1 hour.
         </p>
-        <a href="${setupUrl}"
+        <a href="${escapeHtml(setupUrl)}"
            style="display:inline-block;background:#0284c7;color:#fff;font-size:14px;
                   font-weight:600;padding:12px 24px;border-radius:9999px;
                   text-decoration:none">
           Set password
         </a>
+        <p style="color:#475569;font-size:14px;line-height:1.6">
+          Sign in with ${escapeHtml(to)} at <a href="${escapeHtml(loginUrl)}">your account login</a>.
+          ${options.floorplannerAccess ? `After signing in, <a href="${escapeHtml(appUrl)}/floorplanner/workspace">open Floorplanner</a>.` : ""}
+          If your setup link expires, <a href="${escapeHtml(recoveryUrl)}">request a new password link</a>.
+        </p>
         <p style="color:#94a3b8;font-size:13px;margin-top:24px">
           If you were not expecting this account, you can ignore this email.
         </p>

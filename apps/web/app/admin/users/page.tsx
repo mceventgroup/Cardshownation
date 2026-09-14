@@ -19,6 +19,7 @@ import {
   listModeratorAccounts,
   revokeModeratorAccessByAdmin,
   sendPasswordResetByAdmin,
+  sendAccountSetupByAdmin,
   setFloorplannerAccessByAdmin,
 } from "@/lib/users";
 import {
@@ -37,6 +38,7 @@ type SearchParams = {
   moderatorAssigned?: string;
   moderatorRevoked?: string;
   resetSent?: string;
+  setupSent?: string;
   testCreated?: string;
   userDeleted?: string;
   floorplannerAccess?: string;
@@ -195,12 +197,16 @@ async function createManagedAccount(formData: FormData) {
       email,
       name,
       organizerName,
+      floorplannerAccess: formData.get("floorplannerAccess") === "on",
     });
     const token = await createPasswordResetToken(user.id);
     const setupPath = `${getPasswordResetPathForRole(user.role)}?token=${token}`;
 
     try {
-      await sendAdminCreatedAccountEmail(user.email, `${getAppUrl()}${setupPath}`, user.role);
+      await sendAdminCreatedAccountEmail(user.email, `${getAppUrl()}${setupPath}`, user.role, {
+        name: user.name,
+        floorplannerAccess: formData.get("floorplannerAccess") === "on",
+      });
       await setAdminUsersFlashCookie({
         kind: "account-created",
         role: user.role,
@@ -401,6 +407,20 @@ async function deleteUser(formData: FormData) {
   }
 }
 
+async function resendSetup(formData: FormData) {
+  "use server";
+  const session = await requireAdminSession("/admin/users");
+  const userId = readRequiredString(formData, "userId", 120);
+  try {
+    await sendAccountSetupByAdmin({ actorId: session.user.id, userId });
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    const message = getRedirectErrorMessage(error, "Setup email could not be sent.");
+    redirect(`/admin/users?error=reset-send&errorMessage=${encodeURIComponent(message)}`);
+  }
+  redirect("/admin/users?setupSent=1");
+}
+
 async function setFloorplannerAccess(formData: FormData) {
   "use server";
 
@@ -432,6 +452,7 @@ async function setFloorplannerAccess(formData: FormData) {
 }
 
 function getMessage(sp: SearchParams) {
+  if (sp.setupSent === "1") return "Account setup email sent.";
   if (sp.accountCreated === "1") {
     return sp.inviteFailed === "1"
       ? sp.errorMessage ?? "Account created. Send the setup link manually from the details below."
@@ -615,10 +636,11 @@ export default async function AdminUsersPage({
             Create the account, email them a setup link, and let them choose their own password.
           </p>
 
-          <form action={createManagedAccount} className="mt-5 space-y-4">
+          <form id="add-account" action={createManagedAccount} className="mt-5 scroll-mt-6 space-y-4">
             <select
               name="role"
               defaultValue="FAN"
+              aria-label="Account type"
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             >
               <option value="FAN">Member account</option>
@@ -628,20 +650,35 @@ export default async function AdminUsersPage({
               name="name"
               type="text"
               placeholder="Contact name"
+              aria-label="Contact name"
+              required
+              maxLength={120}
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
             <input
               name="email"
               type="email"
               placeholder="person@example.com"
+              aria-label="Email address"
+              required
+              maxLength={320}
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
             <input
               name="organizerName"
               type="text"
               placeholder="Organizer name (promoter accounts only)"
+              aria-label="Organizer name (required for promoter accounts)"
+              maxLength={120}
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
+            <label className="flex items-start gap-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
+              <input type="checkbox" name="floorplannerAccess" className="mt-1 h-4 w-4" />
+              <span>
+                <span className="block font-semibold">Grant Floorplanner access</span>
+                <span className="mt-1 block text-xs">Allow this account to use Floorplanner without a paid subscription.</span>
+              </span>
+            </label>
             <button
               type="submit"
               className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
@@ -919,6 +956,14 @@ export default async function AdminUsersPage({
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      {canManageFloorplanner && (!account.emailVerifiedAt || !account.passwordHash) && (
+                        <form action={resendSetup}>
+                          <input type="hidden" name="userId" value={account.id} />
+                          <button type="submit" className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-50">
+                            Resend setup email
+                          </button>
+                        </form>
+                      )}
                       <form action={sendResetLink}>
                         <input type="hidden" name="userId" value={account.id} />
                         <button

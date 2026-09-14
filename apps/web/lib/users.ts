@@ -6,6 +6,7 @@ import {
   sendFanEmailChangeNotice,
   sendFanEmailChangeVerificationEmail,
   sendPasswordResetEmail,
+  sendAdminCreatedAccountEmail,
 } from "@/lib/email";
 import { createPasswordResetToken } from "@/lib/password-reset-token";
 import {
@@ -44,6 +45,7 @@ type CreateManagedAccountByAdminInput = {
   email: string;
   name: string;
   organizerName?: string;
+  floorplannerAccess?: boolean;
 };
 
 type CreateTestAccountByAdminInput = {
@@ -398,6 +400,10 @@ export async function createManagedAccountByAdmin(
   const name = input.name.trim().slice(0, 120);
   const organizerName = input.organizerName?.trim().slice(0, 120) ?? "";
 
+  if (input.role !== "FAN" && input.role !== "ORGANIZER") {
+    throw new Error("Only member and promoter accounts can be created here.");
+  }
+
   if (!name || !isValidEmail(email)) {
     throw new Error("Please enter a valid name and email address.");
   }
@@ -426,6 +432,7 @@ export async function createManagedAccountByAdmin(
                 email,
                 passwordHash,
                 role: "ORGANIZER",
+                ...(input.floorplannerAccess ? { floorplannerAccessGranted: true } : {}),
               },
             });
 
@@ -434,6 +441,7 @@ export async function createManagedAccountByAdmin(
               data: {
                 userId: user.id,
                 name: organizerName,
+                ...(input.floorplannerAccess ? { floorplanEnabled: true } : {}),
               },
             });
 
@@ -446,10 +454,12 @@ export async function createManagedAccountByAdmin(
               email,
               passwordHash,
               role: "ORGANIZER",
+              ...(input.floorplannerAccess ? { floorplannerAccessGranted: true } : {}),
               organizer: {
                 create: {
                   name: organizerName,
                   email,
+                  ...(input.floorplannerAccess ? { floorplanEnabled: true } : {}),
                 },
               },
             },
@@ -461,6 +471,7 @@ export async function createManagedAccountByAdmin(
             email,
             passwordHash,
             role: "FAN",
+            ...(input.floorplannerAccess ? { floorplannerAccessGranted: true } : {}),
           },
         });
 
@@ -474,6 +485,7 @@ export async function createManagedAccountByAdmin(
       email: createdUser.email,
       role: createdUser.role,
       organizerName: input.role === "ORGANIZER" ? organizerName : null,
+      ...(input.floorplannerAccess ? { floorplannerAccessGranted: true } : {}),
     },
   });
 
@@ -1022,7 +1034,7 @@ export async function sendPasswordResetByAdmin(input: AdminUserActionInput) {
   const token = await createPasswordResetToken(user.id);
   const resetUrl = `${getAppUrl()}${getPasswordResetPathForRole(user.role)}?token=${token}`;
 
-  await sendPasswordResetEmail(user.email, resetUrl, user.role);
+  await sendPasswordResetEmail(user.email, resetUrl, user.role, { adminRequested: true });
 
   await writeAuditLog({
     actorId: input.actorId,
@@ -1034,6 +1046,28 @@ export async function sendPasswordResetByAdmin(input: AdminUserActionInput) {
       email: user.email,
       role: user.role,
     },
+  });
+}
+
+export async function sendAccountSetupByAdmin(input: AdminUserActionInput) {
+  const user = await db.user.findUnique({
+    where: { id: input.userId },
+    include: { organizer: { select: { floorplanEnabled: true } } },
+  });
+  if (!user || (user.role !== "FAN" && user.role !== "ORGANIZER")) {
+    throw new Error("Setup emails are available for member and promoter accounts.");
+  }
+  if (user.emailVerifiedAt && user.passwordHash) {
+    throw new Error("This account is already activated. Send a password reset email instead.");
+  }
+  const token = await createPasswordResetToken(user.id);
+  await sendAdminCreatedAccountEmail(user.email, `${getAppUrl()}${getPasswordResetPathForRole(user.role)}?token=${token}`, user.role, {
+    name: user.name,
+    floorplannerAccess: user.floorplannerAccessGranted || Boolean(user.organizer?.floorplanEnabled),
+  });
+  await writeAuditLog({
+    actorId: input.actorId, actorRole: "ADMIN", action: "user.setup_email_sent",
+    targetType: "User", targetId: user.id, details: { email: user.email, role: user.role },
   });
 }
 

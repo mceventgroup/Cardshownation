@@ -264,6 +264,49 @@ test("createManagedAccountByAdmin links promoter accounts to existing organizer 
   });
 });
 
+for (const role of ["FAN", "ORGANIZER"] as const) {
+  for (const existingOrganizer of role === "ORGANIZER" ? [false, true] : [false]) {
+    test(`managed ${role} account grants floorplanner access (existing organizer: ${existingOrganizer})`, async () => {
+      stubMethod(db.user, "findUnique", async () => null);
+      stubMethod(db.organizer, "findFirst", async () => existingOrganizer ? { id: "org-1" } : null);
+      const createUser = stubMethod(db.user, "create", async ({ data }) => ({ id: "user-1", ...data }));
+      const updateOrganizer = stubMethod(db.organizer, "update", async (input) => input);
+      const audit = stubMethod(db.auditLog, "create", async (input) => input);
+      await usersModule.createManagedAccountByAdmin({
+        actorId: "admin-1", role, name: "Example", email: "example@example.com",
+        organizerName: "Example Shows", floorplannerAccess: true,
+      });
+      const data = createUser.mock.calls[0].arguments[0].data;
+      assert.equal(data.floorplannerAccessGranted, true);
+      if (role === "ORGANIZER") {
+        assert.equal(existingOrganizer
+          ? updateOrganizer.mock.calls[0].arguments[0].data.floorplanEnabled
+          : data.organizer.create.floorplanEnabled, true);
+      }
+      assert.equal(audit.mock.calls[0].arguments[0].data.details.floorplannerAccessGranted, true);
+    });
+  }
+}
+
+test("managed account creation refuses admin roles", async () => {
+  await assert.rejects(() => usersModule.createManagedAccountByAdmin({
+    actorId: "admin-1", role: "ADMIN" as any, name: "Example", email: "example@example.com",
+  }), /Only member and promoter/);
+});
+
+test("setup email resend rejects protected and activated accounts before creating tokens", async () => {
+  const createToken = stubMethod(db.passwordResetToken, "create", async (input) => input);
+  for (const account of [
+    { role: "ADMIN" },
+    { role: "MODERATOR" },
+    { role: "ORGANIZER", emailVerifiedAt: new Date(), passwordHash: "existing-hash" },
+  ]) {
+    stubMethod(db.user, "findUnique", async () => account);
+    await assert.rejects(() => usersModule.sendAccountSetupByAdmin({ actorId: "admin-1", userId: "user-1" }));
+  }
+  assert.equal(createToken.mock.calls.length, 0);
+});
+
 test("createTestAccountByAdmin creates auto-verified test accounts with a login path", async () => {
   const createUserMock = stubMethod(db.user, "create", async (input) => ({
     id: "test-user-1",

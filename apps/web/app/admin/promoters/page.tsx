@@ -31,6 +31,9 @@ export default async function AdminPromotersPage() {
             ({promoters.length.toLocaleString()})
           </span>
         </h1>
+        <Link href="/admin/users#add-account" className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+          Add account
+        </Link>
       </div>
 
       {promoters.length === 0 ? (

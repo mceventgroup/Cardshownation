@@ -8,9 +8,41 @@ import {
   isSignupEmailVerificationRequired,
   sendFanEmailChangeNotice,
   sendFanEmailChangeVerificationEmail,
+  sendAdminCreatedAccountEmail,
+  sendPasswordResetEmail,
 } from "./email";
 
 const TEST_RESEND_CREDENTIAL = ["re", "test", "key"].join("_");
+
+test("account setup and admin reset emails explain access and password setup", async () => {
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFrom = process.env.RESEND_FROM_EMAIL;
+  const originalFetch = global.fetch;
+  const requests: any[] = [];
+  process.env.RESEND_API_KEY = TEST_RESEND_CREDENTIAL;
+  process.env.RESEND_FROM_EMAIL = "Card Show Nation <noreply@cardshownation.com>";
+  global.fetch = async (_input: any, init?: any) => {
+    requests.push(JSON.parse(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ id: "email_test" }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    await sendAdminCreatedAccountEmail("test@example.com", "https://cardshownation.com/promoter/reset-password?token=test", "ORGANIZER", { name: "Test <Person>", floorplannerAccess: true });
+    assert.match(requests[0].html, /Test &lt;Person&gt;/);
+    assert.match(requests[0].text, /Floorplanner access is enabled/);
+    assert.match(requests[0].text, /promoter\/forgot-password/);
+    assert.match(requests[0].text, /promoter\/login/);
+    assert.match(requests[0].text, /expires in 1 hour/);
+    await sendAdminCreatedAccountEmail("member@example.com", "https://cardshownation.com/account/reset-password?token=test", "FAN");
+    assert.doesNotMatch(requests[1].text, /Floorplanner access is enabled/);
+    await sendPasswordResetEmail("test@example.com", "https://cardshownation.com/promoter/reset-password?token=test", "ORGANIZER", { adminRequested: true });
+    assert.match(requests[2].text, /admin sent you a password reset link/);
+    assert.match(requests[2].html, /admin sent you this link/);
+  } finally {
+    process.env.RESEND_API_KEY = originalApiKey;
+    process.env.RESEND_FROM_EMAIL = originalFrom;
+    global.fetch = originalFetch;
+  }
+});
 
 test("public signup email verification is on unless explicitly disabled", () => {
   const originalSetting = process.env.SIGNUP_EMAIL_VERIFICATION_REQUIRED;
