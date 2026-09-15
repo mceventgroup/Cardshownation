@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { ArrowRight, ChevronDown, ExternalLink, Search } from "lucide-react";
+import { ArrowRight, ChevronDown, LocateFixed, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
 import { HomeStatePicker } from "@/components/shows/home-state-picker";
@@ -82,7 +82,7 @@ export default async function HomePage() {
       />
 
       {/* Hero */}
-      <section className="relative flex min-h-[80vh] items-center overflow-hidden bg-slate-950 text-white">
+      <section className="relative flex items-center overflow-hidden bg-slate-950 text-white sm:min-h-[560px]">
         {/* Background image — priority-loaded above-the-fold, blurred and scaled so edges don't clip */}
         <Image
           src="/cardshow_hero.webp"
@@ -93,24 +93,14 @@ export default async function HomePage() {
           className="absolute inset-0 scale-[1.02] object-cover blur-[2px]"
         />
         {/* Dark overlay sits between image and content */}
-        <div aria-hidden className="absolute inset-0 bg-black/65" />
+        <div aria-hidden className="absolute inset-0 bg-slate-950/80" />
 
-        <div className="container-wide relative z-10 py-16 sm:py-20">
-          <a
-            href="https://kansascardshow.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mb-5 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-white/20 bg-slate-950/65 px-4 py-2 text-xs text-slate-200 shadow-lg backdrop-blur transition-colors hover:border-cyan-300/60 hover:bg-slate-900 sm:rounded-full sm:text-sm"
-          >
-            <span>From the team behind</span>
-            <span className="font-semibold text-cyan-300">Kansas Card Show</span>
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          </a>
-          <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white drop-shadow-md sm:text-5xl">
+        <div className="container-wide relative z-10 py-10 sm:py-20">
+          <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
             Find card shows near you.
           </h1>
-          <p className="mt-3 max-w-xl text-base text-slate-200 drop-shadow">
-            Search by city, show name, or promoter — or use your location.
+          <p className="mt-3 max-w-xl text-base text-slate-300">
+            Your next card show starts here.
           </p>
 
           <form
@@ -118,64 +108,62 @@ export default async function HomePage() {
             method="GET"
             className="mt-7 flex max-w-xl gap-2"
           >
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
                 name="q"
+                aria-label="City, state, or show name"
                 placeholder="City, state, or show name"
-                className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 placeholder:text-slate-500 shadow-lg focus:border-brand-400 focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-3 text-base text-slate-900 placeholder:text-slate-500 focus:border-brand-400 focus:outline-none"
               />
             </div>
             <button
               type="submit"
-              className="whitespace-nowrap rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-brand-400"
+              className="shrink-0 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-500 sm:px-5"
             >
               Search
             </button>
           </form>
 
-          <div className="mt-4">
-            <NearMeButton
-              isActive={false}
-              label="Use precise location"
-              tone="dark"
-              align="start"
-            />
-          </div>
+          <details className="group mt-3 max-w-xl">
+            <summary className="flex min-h-11 w-fit cursor-pointer list-none items-center gap-2 rounded-lg text-sm font-medium text-slate-200 hover:text-white [&::-webkit-details-marker]:hidden">
+              <LocateFixed className="h-4 w-4" aria-hidden="true" />
+              Search near me
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="mt-2 rounded-xl border border-white/15 bg-slate-950/60 p-4">
+              <NearMeButton
+                isActive={false}
+                label="Use precise location"
+                tone="dark"
+                align="start"
+              />
+            </div>
+          </details>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1">
             <Link
               href="/submit-show"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-brand-400"
+              className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-slate-300 underline-offset-4 hover:text-white hover:underline"
             >
               Submit a show
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href={portalLink.href}
-              className="inline-flex items-center justify-center rounded-2xl border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-white/15"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-slate-300 underline-offset-4 hover:text-white hover:underline"
             >
               {portalLink.label}
             </Link>
           </div>
 
-          <div className="mt-10 grid max-w-sm gap-6 text-slate-200 sm:grid-cols-2">
-            <div>
-              <p className="text-2xl font-semibold text-white drop-shadow">
-                {stats.upcomingShows.toLocaleString()}
-              </p>
-              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">
-                Upcoming shows
-              </p>
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-white drop-shadow">{stats.activeStates}</p>
-              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">
-                States
-              </p>
-            </div>
-          </div>
+          <p className="mt-5 border-t border-white/15 pt-5 text-xs text-slate-400 sm:max-w-xl sm:text-sm">
+            <span className="font-semibold text-slate-200">{stats.upcomingShows.toLocaleString()}</span>
+            {" upcoming shows across "}
+            <span className="font-semibold text-slate-200">{stats.activeStates}</span>
+            {" states"}
+          </p>
         </div>
       </section>
 
