@@ -2,6 +2,14 @@
 
 Current decision: stay on `Vercel + Neon` for now so beta work can keep moving.
 
+Homepage location detection uses a saved state first, then a server-side GeoJS
+lookup of the visitor IP, then Vercel's US state header if the lookup fails.
+Automatic results are statewide; device-location searches retain their radius.
+GeoJS requires no API key. Requests have a 1.2-second timeout, use no persistent
+fetch cache, and share a bounded in-memory cache of hashed IP keys/state results
+for up to 15 minutes (30 seconds for failures). No raw IP is intentionally logged.
+Provider documentation: https://www.geojs.io/docs/v1/endpoints/geo/
+
 Portability prep already completed:
 
 - Prisma now uses a true singleton pattern in `apps/web/lib/db.ts`

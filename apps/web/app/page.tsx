@@ -10,7 +10,7 @@ import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { isPurchasingEnabled } from "@/lib/purchasing";
 import { PREFERRED_STATE_COOKIE_NAME } from "@/lib/preferred-state";
-import { getHomepageDirectoryStats, getNearbyShows, getUpcomingShows } from "@/lib/shows";
+import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
 import { getHomeShowFeed } from "@/lib/home-show-feed";
 import { getStateByCode, US_STATES } from "@/lib/states";
 import { getUserSession } from "@/lib/user-auth";
@@ -52,7 +52,6 @@ export default async function HomePage() {
   const preferredState = accountState ?? browserState;
   const showFeed = await getHomeShowFeed(requestHeaders, preferredState?.code, {
     upcoming: getUpcomingShows,
-    nearby: getNearbyShows,
   }).catch((err) => {
     console.error("[HomePage] show feed failed, rendering empty list:", err);
     return {

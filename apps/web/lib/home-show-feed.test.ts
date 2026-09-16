@@ -1,55 +1,49 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getHomeShowFeed } from "@/lib/home-show-feed";
+import { getRequestState } from "@/lib/ip-state";
+import type { ShowCard } from "@/types";
 
-function locationHeaders() {
-  return new Headers({
-    "x-vercel-ip-country": "US",
-    "x-vercel-ip-country-region": "MO",
-    "x-vercel-ip-city": "Kansas%20City",
-    "x-vercel-ip-latitude": "39.0997",
-    "x-vercel-ip-longitude": "-94.5786",
-  });
-}
+const omahaHeaders = new Headers({
+  "x-vercel-forwarded-for": "198.51.100.19",
+  "x-vercel-ip-country": "US",
+  "x-vercel-ip-country-region": "NE",
+  "x-vercel-ip-city": "Omaha",
+  "x-vercel-ip-latitude": "41.2565",
+  "x-vercel-ip-longitude": "-95.9345",
+});
 
-test("saved state overrides IP location", async () => {
-  const feed = await getHomeShowFeed(locationHeaders(), "CO", {
+test("saved state overrides IP location and skips the external lookup", async () => {
+  const feed = await getHomeShowFeed(omahaHeaders, "CO", {
     upcoming: async (options) => {
       assert.deepEqual(options, { state: "CO", limit: 8 });
       return { shows: [] };
     },
-    nearby: async () => { throw new Error("Must not override the saved state"); },
+    detectState: async () => { throw new Error("Must skip lookup for saved state"); },
   });
   assert.equal(feed.title, "Upcoming shows in Colorado");
   assert.equal(feed.href, "/card-shows/colorado");
 });
 
-test("new visitors get an IP radius search across state borders without national filler", async () => {
-  const feed = await getHomeShowFeed(locationHeaders(), undefined, {
-    upcoming: async () => { throw new Error("Must not use nationwide shows"); },
-    nearby: async (options) => {
-      assert.equal(options.lat, 39.0997);
-      assert.equal(options.lng, -94.5786);
-      assert.equal(options.radiusMiles, 100);
-      assert.equal(options.limit, 8);
-      return [];
-    },
-  });
-  assert.equal(feed.title, "Upcoming shows near Kansas City, MO");
-  assert.match(feed.emptyMessage, /within 100 miles/);
-  assert.deepEqual(feed.shows, []);
-});
-
-test("missing coordinates fall back to a detected US state", async () => {
-  const headers = locationHeaders();
-  headers.delete("x-vercel-ip-latitude");
-  await getHomeShowFeed(headers, undefined, {
+test("Kansas detection overrides Omaha headers and includes Wichita without a radius cutoff", async () => {
+  const wichita: ShowCard = {
+    id: "wichita", title: "Wichita show", slug: "wichita-show", city: "Wichita", state: "KS",
+    startDate: new Date("2030-01-01"), endDate: new Date("2030-01-01"),
+    startTimeLabel: null, endTimeLabel: null, isFree: true, admissionPrice: null,
+    categories: [], flyerImageUrl: null, tableCount: null, vendorDetails: null,
+    featuredRank: null, venue: null,
+  };
+  const feed = await getHomeShowFeed(omahaHeaders, undefined, {
+    detectState: (headers) => getRequestState(headers, async () => "KS"),
     upcoming: async (options) => {
-      assert.deepEqual(options, { state: "MO", limit: 8 });
-      return { shows: [] };
+      assert.deepEqual(options, { state: "KS", limit: 8 });
+      return { shows: [wichita] };
     },
-    nearby: async () => { throw new Error("Coordinates unavailable"); },
   });
+  assert.equal(feed.title, "Upcoming shows in Kansas");
+  assert.deepEqual(feed.shows, [wichita]);
+  assert.equal(feed.href, "/card-shows/kansas");
+  assert.match(feed.description, /statewide/);
 });
 
 test("unavailable location and invalid preferences use an explicitly nationwide feed", async () => {
@@ -58,19 +52,17 @@ test("unavailable location and invalid preferences use an explicitly nationwide 
       assert.deepEqual(options, { limit: 8 });
       return { shows: [] };
     },
-    nearby: async () => { throw new Error("Coordinates unavailable"); },
   });
   assert.match(feed.description, /nationwide/);
 });
 
-test("foreign regions are not mistaken for US states", async () => {
-  await getHomeShowFeed(new Headers({
-    "x-vercel-ip-country": "CA", "x-vercel-ip-country-region": "AB",
-  }), undefined, {
-    upcoming: async (options) => {
-      assert.deepEqual(options, { limit: 8 });
+test("empty state results do not get filled with out-of-state shows", async () => {
+  const feed = await getHomeShowFeed(new Headers(), "KS", {
+    upcoming: async ({ state }) => {
+      assert.equal(state, "KS");
       return { shows: [] };
     },
-    nearby: async () => { throw new Error("Coordinates unavailable"); },
   });
+  assert.deepEqual(feed.shows, []);
+  assert.match(feed.emptyMessage, /No upcoming shows listed in Kansas/);
 });

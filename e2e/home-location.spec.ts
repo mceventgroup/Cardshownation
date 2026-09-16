@@ -12,8 +12,8 @@ test("homepage personalizes each request using IP location or a saved state", as
   const nearby = await request.get("/", { headers: geoHeaders });
   expect(nearby.ok()).toBeTruthy();
   const nearbyHtml = await nearby.text();
-  expect(nearbyHtml).toContain("Upcoming shows near Kansas City, MO");
-  expect(nearbyHtml).toContain("Within 100 miles of your approximate internet location.");
+  expect(nearbyHtml).toContain("Upcoming shows in Missouri");
+  expect(nearbyHtml).toContain("Showing statewide based on your approximate internet location.");
 
   const preferred = await request.get("/", {
     headers: { ...geoHeaders, Cookie: "csn_preferred_state=CO" },
@@ -25,7 +25,7 @@ test("homepage personalizes each request using IP location or a saved state", as
   expect(nationwide.ok()).toBeTruthy();
   const nationwideHtml = await nationwide.text();
   expect(nationwideHtml).toContain("Showing nationwide.");
-  expect(nationwideHtml).not.toContain("Upcoming shows near Kansas City, MO");
+  expect(nationwideHtml).not.toContain("Upcoming shows in Missouri");
 });
 
 test("a visitor can correct an Omaha IP estimate to Kansas and keep it after reloading", async ({ page, context }) => {
@@ -38,7 +38,7 @@ test("a visitor can correct an Omaha IP estimate to Kansas and keep it after rel
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Essential only" }).click();
-  await expect(page.getByRole("heading", { name: "Upcoming shows near Omaha, NE" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming shows in Nebraska" })).toBeVisible();
 
   await page.getByLabel("Choose your state").selectOption("KS");
   await page.getByRole("button", { name: "Update shows" }).click();
@@ -59,7 +59,7 @@ test("failed state saves show an error without pretending the location changed",
   await page.getByLabel("Choose your state").selectOption("KS");
   await page.getByRole("button", { name: "Update shows" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Your state could not be saved" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Upcoming shows near Kansas City, MO" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming shows in Missouri" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Update shows" })).toBeEnabled();
 });
 
