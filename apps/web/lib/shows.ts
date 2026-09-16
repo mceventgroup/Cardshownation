@@ -4,7 +4,7 @@ import { customAlphabet } from "nanoid";
 import { writeAuditLog } from "@/lib/audit-log";
 import { db } from "@/lib/db";
 import { isFixtureMode } from "@/lib/data-mode";
-import { getCityCoords } from "@/lib/city-coords";
+import { filterShowsByCityDistance } from "@/lib/nearby-shows";
 import { resolveManagedFlyerImageUrl } from "@/lib/flyers";
 import type { FixtureShow } from "@/lib/fixture-data";
 import {
@@ -1151,10 +1151,11 @@ export async function getNearbyShows({
   limit?: number;
 }) {
   if (isFixtureMode()) {
-    return (await filterFixtureShows({}))
+    return filterShowsByCityDistance(
+      (await filterFixtureShows({})).map(projectShowCard), lat, lng, radiusMiles,
+    )
       .sort(sortShows)
-      .slice(0, limit)
-      .map(projectShowCard);
+      .slice(0, limit);
   }
 
   const today = startOfToday();
@@ -1258,37 +1259,18 @@ export async function getNearbyShows({
 
   const noCoordShows = await db.show.findMany({
     where: {
-      ...upcomingWhere(),
-      OR: [
+      AND: [upcomingWhere(), { OR: [
         { venueId: null },
         { venue: { latitude: null } },
         { venue: { longitude: null } },
-      ],
+      ] }],
     },
     select: { ...showCardSelect, id: true },
   });
 
-  function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
-    const R = 3959;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
-
-  const cityFallback = noCoordShows
-    .filter((s) => !venueResultIds.has(s.id))
-    .flatMap((s) => {
-      const coords = getCityCoords(s.city, s.state);
-      if (!coords) return [];
-      const dist = haversine(lat, lng, coords.lat, coords.lng);
-      if (dist > radiusMiles) return [];
-      return [{ ...s, distanceMiles: Math.round(dist * 10) / 10 }];
-    });
+  const cityFallback = filterShowsByCityDistance(
+    noCoordShows.filter((s) => !venueResultIds.has(s.id)), lat, lng, radiusMiles,
+  );
 
   return [...venueResults, ...cityFallback]
     .sort(sortShows)

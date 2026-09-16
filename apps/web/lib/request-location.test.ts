@@ -36,3 +36,12 @@ test("rejects missing or out-of-range coordinates", () => {
   );
   assert.equal(getApproximateRequestLocation(new Headers()), null);
 });
+
+test("blank and malformed coordinates do not become a false location", () => {
+  for (const latitude of ["", " ", "NaN", "not-a-number"]) {
+    assert.equal(getApproximateRequestLocation(new Headers({
+      "x-vercel-ip-latitude": latitude,
+      "x-vercel-ip-longitude": "-94.5786",
+    })), null);
+  }
+});

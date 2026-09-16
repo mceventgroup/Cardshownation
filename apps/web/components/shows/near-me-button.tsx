@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, LocateFixed, X } from "lucide-react";
+import { ChevronDown, Loader2, LocateFixed, X } from "lucide-react";
 import { DEFAULT_NEARBY_RADIUS, NEARBY_RADIUS_OPTIONS, normalizeNearbyRadius } from "@/lib/nearby-radius";
 import { NEARBY_LOCATION_STORAGE_KEY } from "@/lib/nearby-location";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ type NearMeButtonProps = {
   align?: "start" | "end";
   label?: string;
   tone?: "light" | "dark";
+  collapseOptions?: boolean;
 };
 
 function buildNearbyHref({
@@ -40,6 +41,7 @@ export function NearMeButton({
   label = "Near me",
   radiusMiles = DEFAULT_NEARBY_RADIUS,
   tone = "light",
+  collapseOptions = false,
 }: NearMeButtonProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -109,45 +111,13 @@ export function NearMeButton({
     );
   }
 
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-1.5",
-        align === "start" ? "items-start" : "items-end"
-      )}
-    >
-      <button
-        type="button"
-        data-analytics-event={isActive ? "clear_near_me" : "use_near_me"}
-        data-analytics-source={tone === "dark" ? "homepage" : "show_directory"}
-        onClick={handleClick}
-        disabled={loading}
-        className={cn(
-          "inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-60",
-          tone === "dark"
-            ? isActive
-              ? "border-brand-400/60 bg-brand-500 text-white hover:bg-brand-400"
-              : "border-white/15 bg-white/5 text-white hover:border-brand-300/50 hover:bg-white/10"
-            : isActive
-              ? "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
-              : "border-slate-200 bg-white text-slate-700 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-        )}
-      >
-        {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : isActive ? (
-          <X className="h-4 w-4" />
-        ) : (
-          <LocateFixed className="h-4 w-4" />
-        )}
-        {isActive ? "Clear near me" : label}
-      </button>
+  const locationOptions = (
+    <>
       {!isActive && (
         <p className={cn("max-w-xs text-xs", helperTone)}>
           Uses device GPS, rounds it before sending, and keeps it only in this tab for up to 15 minutes.
         </p>
       )}
-      {error && <p className={cn("max-w-xs text-xs", errorTone)}>{error}</p>}
       <label className={cn("flex items-center gap-2 text-xs font-medium", helperTone)}>
         <span>Distance</span>
         <select
@@ -179,6 +149,50 @@ export function NearMeButton({
           ))}
         </select>
       </label>
+    </>
+  );
+
+  return (
+    <div className={cn("flex flex-col gap-1.5", align === "start" ? "items-start" : "items-end")}>
+      <button
+        type="button"
+        data-analytics-event={isActive ? "clear_near_me" : "use_near_me"}
+        data-analytics-source={tone === "dark" ? "homepage" : "show_directory"}
+        onClick={handleClick}
+        disabled={loading}
+        aria-busy={loading}
+        className={cn(
+          "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-60",
+          tone === "dark"
+            ? isActive
+              ? "border-brand-400/60 bg-brand-500 text-white hover:bg-brand-400"
+              : "border-white/15 bg-white/5 text-white hover:border-brand-300/50 hover:bg-white/10"
+            : isActive
+              ? "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
+              : "border-slate-200 bg-white text-slate-700 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700",
+          collapseOptions && "min-h-12 w-full rounded-xl sm:w-auto sm:px-6",
+          collapseOptions && tone === "dark" && !isActive && "border-cyan-300/70 bg-cyan-300/10 text-cyan-100 hover:border-cyan-200 hover:bg-cyan-300/20"
+        )}
+      >
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : isActive ? (
+          <X className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <LocateFixed className="h-4 w-4" aria-hidden="true" />
+        )}
+        {loading ? "Finding your location…" : isActive ? "Clear near me" : label}
+      </button>
+      {error && <p role="alert" className={cn("max-w-xs text-xs", errorTone)}>{error}</p>}
+      {collapseOptions ? (
+        <details className="group w-full">
+          <summary className={cn("flex min-h-11 w-fit cursor-pointer list-none items-center gap-1 rounded-lg text-xs font-medium [&::-webkit-details-marker]:hidden", tone === "dark" ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900")}>
+            Location options
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="flex flex-col items-start gap-3 pb-2">{locationOptions}</div>
+        </details>
+      ) : locationOptions}
     </div>
   );
 }

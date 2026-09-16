@@ -18,7 +18,7 @@ const sections = [
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" summary="This policy explains what information Card Show Nation handles, why we use it, and the choices available to you." updated="September 3, 2026" currentPath="/privacy" sections={sections}>
+    <LegalPage title="Privacy Policy" summary="This policy explains what information Card Show Nation handles, why we use it, and the choices available to you." updated="September 15, 2026" currentPath="/privacy" sections={sections}>
       <LegalSection id="scope" title="1. Scope">
         <p>Card Show Nation is operated by MC Event Group LLC, a Kansas limited liability company. This policy applies to cardshownation.com, Card Show Nation accounts, show submissions, promoter tools, the Floor Planner, and related communications. It does not control the practices of independent event organizers, venues, payment providers, or websites that we link to.</p>
       </LegalSection>
@@ -51,7 +51,8 @@ export default function PrivacyPage() {
       </LegalSection>
       <LegalSection id="sharing" title="5. How information is shared">
         <p>We disclose information as needed to categories of service providers that support website hosting and data storage; email delivery; payment processing; account sign-in; optional analytics and advertising; and AI-assisted extraction when you ask us to read an uploaded flyer. Each provider receives information reasonably necessary for its assigned function and handles it under applicable contracts and privacy terms.</p>
-        <p>Nearby search begins only when you select the location control and your browser grants permission. Exact device coordinates are rounded to two decimal places before leaving the browser, kept temporarily in the current tab for no more than 15 minutes, and sent in the body of a no-store request solely to calculate nearby shows. They are not placed in the page address, saved to an account or cookie, or intentionally sent to analytics or advertising providers.</p>
+        <p>The homepage uses your saved state, or an approximate location derived from your IP address by our hosting provider, to display local shows. This approximate location is used for the current request and is not saved to your account or a location cookie. You can choose a state to override it.</p>
+        <p>Device-location search begins only when you select the location control and your browser grants permission. Exact device coordinates are rounded to two decimal places before leaving the browser, kept temporarily in the current tab for no more than 15 minutes, and sent in the body of a no-store request solely to calculate nearby shows. They are not placed in the page address, saved to an account or cookie, or intentionally sent to analytics or advertising providers.</p>
         <p>We may disclose information when reasonably necessary to comply with law, protect rights or safety, investigate abuse, or complete a merger, financing, acquisition, or transfer of business assets. We do not sell account contact information for money. Some optional advertising or measurement activity may be treated as “sharing,” “targeted advertising,” or a “sale” under certain privacy laws; it remains disabled unless you choose optional cookies.</p>
       </LegalSection>
       <LegalSection id="cookies" title="6. Cookies, analytics, and advertising">

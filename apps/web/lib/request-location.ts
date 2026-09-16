@@ -8,7 +8,7 @@ export type ApproximateRequestLocation = {
 };
 
 function readCoordinate(value: string | null, min: number, max: number) {
-  if (value === null) return null;
+  if (value === null || value.trim() === "") return null;
 
   const coordinate = Number(value);
   return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max

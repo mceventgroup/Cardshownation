@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { ArrowRight, ChevronDown, LocateFixed, Search } from "lucide-react";
+import { cookies, headers } from "next/headers";
+import { ArrowRight, ChevronDown, Search } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { NearMeButton } from "@/components/shows/near-me-button";
 import { HomeStatePicker } from "@/components/shows/home-state-picker";
@@ -10,7 +10,8 @@ import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { isPurchasingEnabled } from "@/lib/purchasing";
 import { PREFERRED_STATE_COOKIE_NAME } from "@/lib/preferred-state";
-import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
+import { getHomepageDirectoryStats, getNearbyShows, getUpcomingShows } from "@/lib/shows";
+import { getHomeShowFeed } from "@/lib/home-show-feed";
 import { getStateByCode, US_STATES } from "@/lib/states";
 import { getUserSession } from "@/lib/user-auth";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
@@ -36,22 +37,33 @@ const HOME_INLINE_AD_SLOT = process.env.NEXT_PUBLIC_AD_SLOT_HOME_INLINE?.trim() 
 export default async function HomePage() {
   const floorPlannerAvailable = isPurchasingEnabled();
 
-  const [portalLink, showFeed, stats, cookieStore, userSession] = await Promise.all([
+  const [portalLink, stats, cookieStore, userSession, requestHeaders] = await Promise.all([
     getPublicPortalLink(),
-    getUpcomingShows({ limit: 8 }).catch((err) => {
-      console.error("[HomePage] show feed failed, rendering empty list:", err);
-      return { shows: [], total: 0 };
-    }),
     getHomepageDirectoryStats().catch((err) => {
       console.error("[HomePage] getHomepageDirectoryStats failed, rendering zeros:", err);
       return { upcomingShows: 0, activeStates: 0 };
     }),
     cookies(),
     getUserSession().catch(() => null),
+    headers(),
   ]);
   const accountState = getStateByCode(userSession?.user.state);
   const browserState = getStateByCode(cookieStore.get(PREFERRED_STATE_COOKIE_NAME)?.value);
   const preferredState = accountState ?? browserState;
+  const showFeed = await getHomeShowFeed(requestHeaders, preferredState?.code, {
+    upcoming: getUpcomingShows,
+    nearby: getNearbyShows,
+  }).catch((err) => {
+    console.error("[HomePage] show feed failed, rendering empty list:", err);
+    return {
+      shows: [],
+      title: "Upcoming shows",
+      description: "",
+      href: "/card-shows",
+      linkLabel: "Browse all",
+      emptyMessage: "Shows could not be loaded right now. Please try again shortly.",
+    };
+  });
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -126,21 +138,15 @@ export default async function HomePage() {
             </button>
           </form>
 
-          <details className="group mt-3 max-w-xl">
-            <summary className="flex min-h-11 w-fit cursor-pointer list-none items-center gap-2 rounded-lg text-sm font-medium text-slate-200 hover:text-white [&::-webkit-details-marker]:hidden">
-              <LocateFixed className="h-4 w-4" aria-hidden="true" />
-              Search near me
-              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
-            </summary>
-            <div className="mt-2 rounded-xl border border-white/15 bg-slate-950/60 p-4">
-              <NearMeButton
-                isActive={false}
-                label="Use precise location"
-                tone="dark"
-                align="start"
-              />
-            </div>
-          </details>
+          <div className="mt-3 max-w-xl">
+            <NearMeButton
+              isActive={false}
+              label="Use my location"
+              tone="dark"
+              align="start"
+              collapseOptions
+            />
+          </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1">
             <Link
@@ -171,16 +177,22 @@ export default async function HomePage() {
       <section className="container-wide py-10">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-slate-950">Upcoming shows</h2>
+            <h2 className="text-xl font-semibold text-slate-950">{showFeed.title}</h2>
+            <p className="mt-1 text-sm text-slate-500">{showFeed.description}</p>
           </div>
           <Link
-            href="/card-shows"
+            href={showFeed.href}
             className="text-sm font-semibold text-brand-700 hover:text-brand-800"
           >
-            View all
+            {showFeed.linkLabel}
           </Link>
         </div>
         <div className="mt-4 flex flex-col gap-2">
+          {showFeed.shows.length === 0 && (
+            <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+              {showFeed.emptyMessage}
+            </p>
+          )}
           {showFeed.shows.map((show) => (
             <ShowListItem key={show.id} show={show} />
           ))}
