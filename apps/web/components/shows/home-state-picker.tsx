@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import type { DirectoryState } from "@/lib/states";
@@ -19,6 +19,9 @@ export function HomeStatePicker({
   const router = useRouter();
   const [selectedCode, setSelectedCode] = useState(preferredState?.code ?? "");
   const [saving, setSaving] = useState(false);
+  const [refreshing, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const busy = saving || refreshing;
 
   async function openState(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -26,16 +29,20 @@ export function HomeStatePicker({
     if (!selected) return;
 
     setSaving(true);
+    setError(null);
     try {
-      await fetch("/api/preferences/state", {
+      const response = await fetch("/api/preferences/state", {
         method: "POST",
         cache: "no-store",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ state: selected.code }),
       });
+      if (!response.ok) throw new Error("State preference could not be saved");
+      startTransition(() => router.refresh());
+    } catch {
+      setError("Your state could not be saved. Please try again.");
     } finally {
-      router.push(`/card-shows/${selected.slug}`);
       setSaving(false);
     }
   }
@@ -46,11 +53,17 @@ export function HomeStatePicker({
         <label htmlFor="home-state-picker" className="block text-sm font-semibold text-slate-900">
           Choose your state
         </label>
+        <p className="mt-1 text-sm text-slate-500">
+          {preferredState
+            ? "Change the state shown on your homepage."
+            : "Wrong area? Choose your state to replace the estimated location and see shows statewide."}
+        </p>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <div className="relative w-full sm:max-w-md">
           <select
             id="home-state-picker"
             value={selectedCode}
+            disabled={busy}
             onChange={(event) => setSelectedCode(event.target.value)}
             className="w-full appearance-none rounded-xl border border-slate-300 bg-white py-3 pl-4 pr-11 text-base font-medium text-slate-900 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           >
@@ -68,14 +81,15 @@ export function HomeStatePicker({
           </div>
           <button
             type="submit"
-            disabled={!selectedCode || saving}
+            disabled={!selectedCode || busy}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Opening…" : "View shows"}
-            {!saving && <ArrowRight className="h-4 w-4" />}
+            {busy ? "Updating…" : "Update shows"}
+            {!busy && <ArrowRight className="h-4 w-4" />}
           </button>
         </div>
       </form>
+      {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
       <p className="mt-2 text-xs text-slate-500">
         {preferredState
           ? `${preferredState.name} was remembered ${savedToAccount ? "from your account" : "on this device"}.`

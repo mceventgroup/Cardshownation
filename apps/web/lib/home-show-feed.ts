@@ -39,7 +39,7 @@ export async function getHomeShowFeed(
     return {
       shows,
       title: label ? `Upcoming shows near ${label}` : "Upcoming shows near you",
-      description: `Within ${HOME_SHOW_RADIUS_MILES} miles of your approximate internet location. Use your location or choose a state to refine results.`,
+      description: `Within ${HOME_SHOW_RADIUS_MILES} miles of your approximate internet location. This estimate can be in a different city. Choose your state below to correct it.`,
       href: "/card-shows",
       linkLabel: "Browse all",
       emptyMessage: `No upcoming shows found within ${HOME_SHOW_RADIUS_MILES} miles. Choose a state or use your location to try another area.`,

@@ -27,3 +27,47 @@ test("homepage personalizes each request using IP location or a saved state", as
   expect(nationwideHtml).toContain("Showing nationwide.");
   expect(nationwideHtml).not.toContain("Upcoming shows near Kansas City, MO");
 });
+
+test("a visitor can correct an Omaha IP estimate to Kansas and keep it after reloading", async ({ page, context }) => {
+  await page.setExtraHTTPHeaders({
+    ...geoHeaders,
+    "x-vercel-ip-country-region": "NE",
+    "x-vercel-ip-city": "Omaha",
+    "x-vercel-ip-latitude": "41.2565",
+    "x-vercel-ip-longitude": "-95.9345",
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Essential only" }).click();
+  await expect(page.getByRole("heading", { name: "Upcoming shows near Omaha, NE" })).toBeVisible();
+
+  await page.getByLabel("Choose your state").selectOption("KS");
+  await page.getByRole("button", { name: "Update shows" }).click();
+  await expect(page.getByRole("heading", { name: "Upcoming shows in Kansas" })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  expect((await context.cookies()).find((cookie) => cookie.name === "csn_preferred_state")?.value).toBe("KS");
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Upcoming shows in Kansas" })).toBeVisible();
+  await expect(page.getByLabel("Choose your state")).toHaveValue("KS");
+});
+
+test("failed state saves show an error without pretending the location changed", async ({ page }) => {
+  await page.setExtraHTTPHeaders(geoHeaders);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Essential only" }).click();
+  await page.route("**/api/preferences/state", (route) => route.fulfill({ status: 500, body: "Unavailable" }));
+  await page.getByLabel("Choose your state").selectOption("KS");
+  await page.getByRole("button", { name: "Update shows" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Your state could not be saved" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming shows near Kansas City, MO" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Update shows" })).toBeEnabled();
+});
+
+test("state preferences still reject cross-origin requests", async ({ request }) => {
+  const response = await request.post("/api/preferences/state", {
+    headers: { Origin: "https://unrelated.example" },
+    data: { state: "KS" },
+  });
+  expect(response.status()).toBe(403);
+  expect(response.headers()["set-cookie"]).toBeUndefined();
+});

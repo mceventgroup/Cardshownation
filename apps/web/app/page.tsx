@@ -187,6 +187,11 @@ export default async function HomePage() {
             {showFeed.linkLabel}
           </Link>
         </div>
+        <HomeStatePicker
+          states={US_STATES}
+          preferredState={preferredState}
+          savedToAccount={Boolean(accountState)}
+        />
         <div className="mt-4 flex flex-col gap-2">
           {showFeed.shows.length === 0 && (
             <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
@@ -224,12 +229,6 @@ export default async function HomePage() {
             Full directory
           </Link>
         </div>
-        <HomeStatePicker
-          states={US_STATES}
-          preferredState={preferredState}
-          savedToAccount={Boolean(accountState)}
-        />
-
         <details className="group mt-3 overflow-hidden rounded-2xl border border-brand-200 bg-brand-50 shadow-sm transition-colors open:bg-white">
           <summary className="cursor-pointer list-none px-5 py-4 marker:hidden hover:bg-brand-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500">
             <span className="flex items-center justify-between gap-4">

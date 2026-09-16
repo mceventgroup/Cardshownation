@@ -9,7 +9,10 @@ import {
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
-  if (!origin || origin !== request.nextUrl.origin) {
+  // NextURL normalizes loopback hostnames; compare against the host the browser
+  // actually requested so a same-origin request from 127.0.0.1 is accepted.
+  const requestOrigin = `${request.nextUrl.protocol}//${request.headers.get("host") ?? request.nextUrl.host}`;
+  if (!origin || origin !== requestOrigin) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
   }
 
