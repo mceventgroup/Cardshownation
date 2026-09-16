@@ -8,16 +8,18 @@ import type { DirectoryState } from "@/lib/states";
 type HomeStatePickerProps = {
   states: DirectoryState[];
   preferredState?: DirectoryState | null;
+  selectedState?: DirectoryState | null;
   savedToAccount?: boolean;
 };
 
 export function HomeStatePicker({
   states,
   preferredState,
+  selectedState,
   savedToAccount = false,
 }: HomeStatePickerProps) {
   const router = useRouter();
-  const [selectedCode, setSelectedCode] = useState(preferredState?.code ?? "");
+  const [selectedCode, setSelectedCode] = useState(selectedState?.code ?? "");
   const [saving, setSaving] = useState(false);
   const [refreshing, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +27,14 @@ export function HomeStatePicker({
 
   async function openState(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedCode) {
+      setError(null);
+      startTransition(() => {
+        router.push("/", { scroll: false });
+        router.refresh();
+      });
+      return;
+    }
     const selected = states.find((state) => state.code === selectedCode);
     if (!selected) return;
 
@@ -39,7 +49,7 @@ export function HomeStatePicker({
         body: JSON.stringify({ state: selected.code }),
       });
       if (!response.ok) throw new Error("State preference could not be saved");
-      startTransition(() => router.refresh());
+      startTransition(() => router.push(`/?state=${selected.code}`, { scroll: false }));
     } catch {
       setError("Your state could not be saved. Please try again.");
     } finally {
@@ -54,9 +64,7 @@ export function HomeStatePicker({
           Choose your state
         </label>
         <p className="mt-1 text-sm text-slate-500">
-          {preferredState
-            ? "Change the state shown on your homepage."
-            : "Wrong area? Choose your state to replace the estimated location and see shows statewide."}
+          Follow your current IP location, or choose a state to browse shows statewide.
         </p>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <div className="relative w-full sm:max-w-md">
@@ -67,7 +75,7 @@ export function HomeStatePicker({
             onChange={(event) => setSelectedCode(event.target.value)}
             className="w-full appearance-none rounded-xl border border-slate-300 bg-white py-3 pl-4 pr-11 text-base font-medium text-slate-900 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           >
-            <option value="">Select a state…</option>
+            <option value="">Use my IP location (automatic)</option>
             {states.map((state) => (
               <option key={state.code} value={state.code}>
                 {state.name} ({state.code})
@@ -81,7 +89,7 @@ export function HomeStatePicker({
           </div>
           <button
             type="submit"
-            disabled={!selectedCode || busy}
+            disabled={busy}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "Updating…" : "Update shows"}
@@ -92,8 +100,8 @@ export function HomeStatePicker({
       {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
       <p className="mt-2 text-xs text-slate-500">
         {preferredState
-          ? `${preferredState.name} was remembered ${savedToAccount ? "from your account" : "on this device"}.`
-          : "Your selection is remembered for six months. Signed-in members also save it to their account."}
+          ? `${preferredState.name} is saved ${savedToAccount ? "in your account" : "on this device"} as a fallback when automatic location is unavailable.`
+          : "The homepage automatically follows your IP location. A saved state is only a fallback when detection is unavailable."}
       </p>
     </div>
   );

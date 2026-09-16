@@ -8,7 +8,7 @@ const geoHeaders = {
   "x-vercel-ip-longitude": "-94.5786",
 };
 
-test("homepage personalizes each request using IP location or a saved state", async ({ request }) => {
+test("homepage follows each request location despite a saved Kansas state", async ({ request }) => {
   const nearby = await request.get("/", { headers: geoHeaders });
   expect(nearby.ok()).toBeTruthy();
   const nearbyHtml = await nearby.text();
@@ -16,10 +16,13 @@ test("homepage personalizes each request using IP location or a saved state", as
   expect(nearbyHtml).toContain("Showing statewide based on your approximate internet location.");
 
   const preferred = await request.get("/", {
-    headers: { ...geoHeaders, Cookie: "csn_preferred_state=CO" },
+    headers: { ...geoHeaders, "x-vercel-ip-country-region": "NY", Cookie: "csn_preferred_state=KS" },
   });
   expect(preferred.ok()).toBeTruthy();
-  expect(await preferred.text()).toContain("Upcoming shows in Colorado");
+  expect(await preferred.text()).toContain("Upcoming shows in New York");
+
+  const fallback = await request.get("/", { headers: { Cookie: "csn_preferred_state=KS" } });
+  expect(await fallback.text()).toContain("Showing your saved state instead.");
 
   const nationwide = await request.get("/");
   expect(nationwide.ok()).toBeTruthy();
@@ -43,12 +46,21 @@ test("a visitor can correct an Omaha IP estimate to Kansas and keep it after rel
   await page.getByLabel("Choose your state").selectOption("KS");
   await page.getByRole("button", { name: "Update shows" }).click();
   await expect(page.getByRole("heading", { name: "Upcoming shows in Kansas" })).toBeVisible();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/\?state=KS$/);
   expect((await context.cookies()).find((cookie) => cookie.name === "csn_preferred_state")?.value).toBe("KS");
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Upcoming shows in Kansas" })).toBeVisible();
   await expect(page.getByLabel("Choose your state")).toHaveValue("KS");
+
+  await page.setExtraHTTPHeaders({ ...geoHeaders, "x-vercel-ip-country-region": "NY" });
+  await page.getByLabel("Choose your state").selectOption("");
+  await page.getByRole("button", { name: "Update shows" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "Upcoming shows in New York" })).toBeVisible();
+  await expect(page.getByLabel("Choose your state")).toHaveValue("");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Upcoming shows in New York" })).toBeVisible();
 });
 
 test("failed state saves show an error without pretending the location changed", async ({ page }) => {

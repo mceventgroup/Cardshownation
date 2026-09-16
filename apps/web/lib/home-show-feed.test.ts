@@ -13,16 +13,46 @@ const omahaHeaders = new Headers({
   "x-vercel-ip-longitude": "-95.9345",
 });
 
-test("saved state overrides IP location and skips the external lookup", async () => {
-  const feed = await getHomeShowFeed(omahaHeaders, "CO", {
+test("an explicit state URL overrides IP location and skips the external lookup", async () => {
+  const feed = await getHomeShowFeed(omahaHeaders, "KS", {
     upcoming: async (options) => {
       assert.deepEqual(options, { state: "CO", limit: 8 });
       return { shows: [] };
     },
-    detectState: async () => { throw new Error("Must skip lookup for saved state"); },
-  });
+    detectState: async () => { throw new Error("Must skip lookup for explicit state"); },
+  }, "CO");
   assert.equal(feed.title, "Upcoming shows in Colorado");
   assert.equal(feed.href, "/card-shows/colorado");
+});
+
+test("a New York visitor is not pinned to a saved Kansas state", async () => {
+  const feed = await getHomeShowFeed(new Headers({
+    "x-vercel-forwarded-for": "172.68.88.196", "cf-connecting-ip": "198.51.100.20",
+    "x-vercel-ip-country": "US", "x-vercel-ip-country-region": "NE",
+  }), "KS", {
+    detectState: (headers) => getRequestState(headers, async (ip) => {
+      assert.equal(ip, "198.51.100.20");
+      return "NY";
+    }),
+    upcoming: async (options) => {
+      assert.deepEqual(options, { state: "NY", limit: 8 });
+      return { shows: [] };
+    },
+  });
+  assert.equal(feed.title, "Upcoming shows in New York");
+  assert.match(feed.description, /approximate internet location/);
+});
+
+test("a saved state is used only when automatic detection is unavailable", async () => {
+  const feed = await getHomeShowFeed(new Headers(), "KS", {
+    detectState: async () => null,
+    upcoming: async ({ state }) => {
+      assert.equal(state, "KS");
+      return { shows: [] };
+    },
+  });
+  assert.match(feed.description, /could not estimate/);
+  assert.equal(feed.title, "Upcoming shows in Kansas");
 });
 
 test("Kansas detection overrides Omaha headers and includes Wichita without a radius cutoff", async () => {

@@ -11,18 +11,23 @@ export async function getHomeShowFeed(
   requestHeaders: Pick<Headers, "get">,
   preferredStateCode: string | undefined,
   queries: FeedQueries,
+  selectedStateCode?: string,
 ) {
   const preferredState = getStateByCode(preferredStateCode);
-  // Explicit choices skip the external lookup entirely. IP estimates select a
-  // state, not a city-radius cutoff that can hide relevant statewide shows.
-  const state = preferredState ?? await (queries.detectState ?? getRequestState)(requestHeaders);
+  const selectedState = getStateByCode(selectedStateCode);
+  // Only a state explicitly selected in this URL overrides the current IP.
+  // Old account/cookie preferences must not pin visitors to a previous location.
+  const detectedState = selectedState ? null : await (queries.detectState ?? getRequestState)(requestHeaders);
+  const state = selectedState ?? detectedState ?? preferredState;
 
   if (state) {
     const { shows } = await queries.upcoming({ state: state.code, limit: 8 });
     return {
       shows,
       title: `Upcoming shows in ${state.name}`,
-      description: preferredState ? "Based on your saved state." : "Showing statewide based on your approximate internet location. Choose your state below if this looks wrong.",
+      description: selectedState ? "Based on the state you selected. Choose Use my IP location below to detect your area automatically."
+        : detectedState ? "Showing statewide based on your approximate internet location. Choose your state below if this looks wrong."
+          : "We could not estimate your internet location. Showing your saved state instead.",
       href: `/card-shows/${state.slug}`,
       linkLabel: "View all",
       emptyMessage: `No upcoming shows listed in ${state.name} yet. Try another state or use your location to search nearby.`,

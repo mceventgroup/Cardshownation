@@ -2,8 +2,11 @@
 
 Current decision: stay on `Vercel + Neon` for now so beta work can keep moving.
 
-Homepage location detection uses a saved state first, then a server-side GeoJS
-lookup of the visitor IP, then Vercel's US state header if the lookup fails.
+Homepage location detection defaults to a server-side GeoJS lookup of the current
+visitor IP, then Vercel's US state header if the lookup fails on a direct request.
+A saved account/cookie state is only a fallback when detection is unavailable.
+An explicit `/?state=KS` selection overrides detection for that URL; the picker
+offers "Use my IP location" to return to `/` and automatic detection.
 Automatic results are statewide; device-location searches retain their radius.
 GeoJS requires no API key. Requests have a 1.2-second timeout, use no persistent
 fetch cache, and share a bounded in-memory cache of hashed IP keys/state results
@@ -14,8 +17,8 @@ Cloudflare proxies the production domain in front of Vercel. Vercel's incoming
 IP and geo headers can therefore describe a Cloudflare server, not the visitor.
 `getRequestIp` reads `CF-Connecting-IP` only when the Vercel-reported peer belongs
 to Cloudflare's published IPv4/IPv6 networks. Direct requests ignore that header.
-If the independent lookup fails on a proxied request, show the nationwide fallback
-instead of using the proxy's state. Proxy ranges: https://www.cloudflare.com/ips/
+If the independent lookup fails on a proxied request, use a saved state or the
+nationwide fallback instead of the proxy's state. Proxy ranges: https://www.cloudflare.com/ips/
 
 Portability prep already completed:
 

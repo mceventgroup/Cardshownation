@@ -17,7 +17,7 @@ import { getUserSession } from "@/lib/user-auth";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
 import { absoluteSiteUrl } from "@/lib/site-url";
 
-export const revalidate = 3600;
+export const revalidate = 0;
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
@@ -34,10 +34,12 @@ export const metadata: Metadata = {
 
 const HOME_INLINE_AD_SLOT = process.env.NEXT_PUBLIC_AD_SLOT_HOME_INLINE?.trim() ?? "";
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: {
+  searchParams: Promise<{ state?: string | string[] }>;
+}) {
   const floorPlannerAvailable = isPurchasingEnabled();
 
-  const [portalLink, stats, cookieStore, userSession, requestHeaders] = await Promise.all([
+  const [portalLink, stats, cookieStore, userSession, requestHeaders, query] = await Promise.all([
     getPublicPortalLink(),
     getHomepageDirectoryStats().catch((err) => {
       console.error("[HomePage] getHomepageDirectoryStats failed, rendering zeros:", err);
@@ -46,13 +48,15 @@ export default async function HomePage() {
     cookies(),
     getUserSession().catch(() => null),
     headers(),
+    searchParams,
   ]);
   const accountState = getStateByCode(userSession?.user.state);
   const browserState = getStateByCode(cookieStore.get(PREFERRED_STATE_COOKIE_NAME)?.value);
   const preferredState = accountState ?? browserState;
+  const selectedState = getStateByCode(typeof query.state === "string" ? query.state : undefined);
   const showFeed = await getHomeShowFeed(requestHeaders, preferredState?.code, {
     upcoming: getUpcomingShows,
-  }).catch((err) => {
+  }, selectedState?.code).catch((err) => {
     console.error("[HomePage] show feed failed, rendering empty list:", err);
     return {
       shows: [],
@@ -187,8 +191,10 @@ export default async function HomePage() {
           </Link>
         </div>
         <HomeStatePicker
+          key={selectedState?.code ?? "automatic"}
           states={US_STATES}
           preferredState={preferredState}
+          selectedState={selectedState}
           savedToAccount={Boolean(accountState)}
         />
         <div className="mt-4 flex flex-col gap-2">

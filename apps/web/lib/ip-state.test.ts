@@ -68,6 +68,21 @@ test("invalid, failed, or mismatched responses never invent a state", async () =
   assert.equal(await createIpStateLookup(async () => { throw new Error("timeout"); })(ip), undefined);
 });
 
+test("different visitors behind the same proxy never share cached states", async () => {
+  const addresses = ["198.51.100.19", "198.51.100.20"];
+  const calls: string[] = [];
+  const lookup = createIpStateLookup(async (url) => {
+    const address = String(url).split("/").at(-1)!.replace(".json", "");
+    calls.push(address);
+    return Response.json({ ip: address, country_code: "US", region: address === addresses[0] ? "Kansas" : "New York" });
+  });
+  for (const [address, expected] of [[addresses[0], "KS"], [addresses[1], "NY"], [addresses[0], "KS"]]) {
+    const proxied = new Headers({ "x-vercel-forwarded-for": "172.68.88.196", "cf-connecting-ip": address });
+    assert.equal((await getRequestState(proxied, lookup))?.code, expected);
+  }
+  assert.deepEqual(calls, addresses);
+});
+
 test("country is checked before matching state names", async () => {
   assert.equal(await createIpStateLookup(async () => Response.json({
     ip, country_code: "BR", region: "PA",
