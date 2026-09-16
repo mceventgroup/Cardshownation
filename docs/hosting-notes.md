@@ -10,6 +10,13 @@ fetch cache, and share a bounded in-memory cache of hashed IP keys/state results
 for up to 15 minutes (30 seconds for failures). No raw IP is intentionally logged.
 Provider documentation: https://www.geojs.io/docs/v1/endpoints/geo/
 
+Cloudflare proxies the production domain in front of Vercel. Vercel's incoming
+IP and geo headers can therefore describe a Cloudflare server, not the visitor.
+`getRequestIp` reads `CF-Connecting-IP` only when the Vercel-reported peer belongs
+to Cloudflare's published IPv4/IPv6 networks. Direct requests ignore that header.
+If the independent lookup fails on a proxied request, show the nationwide fallback
+instead of using the proxy's state. Proxy ranges: https://www.cloudflare.com/ips/
+
 Portability prep already completed:
 
 - Prisma now uses a true singleton pattern in `apps/web/lib/db.ts`

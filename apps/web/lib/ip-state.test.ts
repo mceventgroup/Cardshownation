@@ -10,6 +10,20 @@ const headers = new Headers({
   "x-vercel-ip-country-region": "NE",
 });
 
+test("looks up the actual visitor behind Cloudflare and never falls back to the proxy's state", async () => {
+  const proxied = new Headers({
+    "x-vercel-forwarded-for": "172.68.88.196", "cf-connecting-ip": ip,
+    "x-vercel-ip-country": "US", "x-vercel-ip-country-region": "NE",
+  });
+  assert.equal((await getRequestState(proxied, async (address) => {
+    assert.equal(address, ip);
+    return "KS";
+  }))?.code, "KS");
+  assert.equal(await getRequestState(proxied, async () => undefined), null);
+  proxied.delete("cf-connecting-ip");
+  assert.equal(await getRequestState(proxied, async () => { throw new Error("Never locate a proxy"); }), null);
+});
+
 test("uses the original visitor IP and prefers the independent state", async () => {
   const state = await getRequestState(headers, async (requestedIp) => {
     assert.equal(requestedIp, ip);

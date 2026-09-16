@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
-import { getRequestIp, isLocalIp } from "@/lib/request-ip";
+import { getRequestIp, getRequestPeerIp, isLocalIp } from "@/lib/request-ip";
+import { isCloudflareIp } from "@/lib/cloudflare-ip";
 import { getStateByCode, US_STATES } from "@/lib/states";
 
 export const IP_STATE_TIMEOUT_MS = 1200;
@@ -74,10 +75,13 @@ export async function getRequestState(
   lookup = lookupIpState,
 ) {
   const ip = getRequestIp(headers);
+  // A proxy's location is not the visitor's location, even as a fallback.
+  if (isCloudflareIp(ip)) return null;
   if (ip && isPublicIp(ip)) {
     const state = await lookup(ip);
     if (state !== undefined) return getStateByCode(state);
   }
+  if (isCloudflareIp(getRequestPeerIp(headers))) return null;
   return headers.get("x-vercel-ip-country") === "US"
     ? getStateByCode(headers.get("x-vercel-ip-country-region"))
     : null;

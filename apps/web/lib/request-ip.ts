@@ -1,3 +1,6 @@
+import { isIP } from "node:net";
+import { isCloudflareIp } from "@/lib/cloudflare-ip";
+
 type HeaderSource = Pick<Headers, "get">;
 
 function normalizeIpCandidate(rawValue: string | null | undefined) {
@@ -10,43 +13,35 @@ function normalizeIpCandidate(rawValue: string | null | undefined) {
     return null;
   }
 
-  const normalized = firstValue.startsWith("::ffff:")
+  const normalized = firstValue.toLowerCase().startsWith("::ffff:")
     ? firstValue.slice("::ffff:".length)
     : firstValue;
 
-  if (isValidIpv4(normalized) || isValidIpv6(normalized)) {
+  if (isIP(normalized)) {
     return normalized;
   }
 
   return null;
 }
 
-function isValidIpv4(value: string) {
-  const parts = value.split(".");
-  if (parts.length !== 4) {
-    return false;
-  }
-
-  return parts.every((part) => {
-    if (!/^\d{1,3}$/.test(part)) {
-      return false;
-    }
-
-    const number = Number.parseInt(part, 10);
-    return number >= 0 && number <= 255;
-  });
-}
-
-function isValidIpv6(value: string) {
-  return value.includes(":") && /^[0-9a-f:]+$/i.test(value);
-}
-
-export function getRequestIp(headers: HeaderSource) {
+export function getRequestPeerIp(headers: HeaderSource) {
   return (
     normalizeIpCandidate(headers.get("x-vercel-forwarded-for")) ??
     normalizeIpCandidate(headers.get("x-real-ip")) ??
     normalizeIpCandidate(headers.get("x-forwarded-for"))
   );
+}
+
+export function getRequestIp(headers: HeaderSource) {
+  const peer = getRequestPeerIp(headers);
+  // Vercel sees Cloudflare's proxy address. Only a verified proxy may supply
+  // CF-Connecting-IP; a direct visitor cannot spoof this header to evade limits.
+  if (isCloudflareIp(peer)) {
+    const forwarded = headers.get("cf-connecting-ip");
+    const client = forwarded?.includes(",") ? null : normalizeIpCandidate(forwarded);
+    if (client) return client;
+  }
+  return peer;
 }
 
 export function isLocalIp(ip: string | null) {
