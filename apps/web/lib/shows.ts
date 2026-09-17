@@ -548,18 +548,27 @@ export async function getShowsByCity(
 }
 
 export async function getShowBySlug(slug: string) {
-  if (isFixtureMode()) {
-    return getFixtureShowBySlug(slug);
-  }
+  const show = isFixtureMode()
+    ? await getFixtureShowBySlug(slug)
+    : await db.show.findUnique({
+        where: { slug },
+        include: {
+          venue: true,
+          organizer: true,
+          tags: true,
+        },
+      });
+  if (!show) return null;
 
-  return db.show.findUnique({
-    where: { slug },
-    include: {
-      venue: true,
-      organizer: true,
-      tags: true,
-    },
-  });
+  // Older imports embedded this administrative note in the description. Keep
+  // it out of public pages, metadata, and structured data without changing the
+  // original record or removing any event details.
+  return {
+    ...show,
+    description: show.description
+      ?.replace(/(^|\s)Imported from Trading Card Database\.?(?=\s|$)/gi, "$1")
+      .trim() || null,
+  };
 }
 
 export async function getCitiesWithShows(stateCode: string) {
