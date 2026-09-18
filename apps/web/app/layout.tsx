@@ -20,7 +20,7 @@ const inter = Inter({
 });
 
 const GA_MEASUREMENT_ID =
-  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "G-R66Z8VG1CC";
+  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "G-WC5XJB9N3E";
 const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim() ?? "";
 const GOOGLE_ADS_CONVERSION_LABEL =
   process.env.NEXT_PUBLIC_GOOGLE_ADS_LEAD_CONVERSION_LABEL?.trim() ?? "";
