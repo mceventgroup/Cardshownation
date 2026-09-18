@@ -12,7 +12,6 @@ export default function robots(): MetadataRoute.Robots {
           "/account",
           "/admin",
           "/api/",
-          "/card-shows?*",
           "/floorplanner/billing",
           "/floorplanner/workspace",
           "/moderator",

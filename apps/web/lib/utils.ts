@@ -23,38 +23,39 @@ export function formatShowDate(startDate: Date, endDate: Date): string {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
+  };
+
+  const monthDayOptions: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
   };
 
   if (
-    start.getFullYear() === end.getFullYear() &&
-    start.getMonth() === end.getMonth() &&
-    start.getDate() === end.getDate()
+    start.getUTCFullYear() === end.getUTCFullYear() &&
+    start.getUTCMonth() === end.getUTCMonth() &&
+    start.getUTCDate() === end.getUTCDate()
   ) {
     return start.toLocaleDateString("en-US", fullDateOptions);
   }
 
   if (
-    start.getFullYear() === end.getFullYear() &&
-    start.getMonth() === end.getMonth()
+    start.getUTCFullYear() === end.getUTCFullYear() &&
+    start.getUTCMonth() === end.getUTCMonth()
   ) {
-    const startLabel = start.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    const endLabel = end.toLocaleDateString("en-US", {
-      day: "numeric",
-      year: "numeric",
-    });
-
-    return `${startLabel}-${endLabel}`;
+    const startLabel = start.toLocaleDateString("en-US", monthDayOptions);
+    return `${startLabel}–${end.getUTCDate()}, ${end.getUTCFullYear()}`;
   }
 
-  const startLabel = start.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
+  const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
+  const startLabel = start.toLocaleDateString(
+    "en-US",
+    sameYear ? monthDayOptions : fullDateOptions
+  );
+  const endLabel = end.toLocaleDateString("en-US", fullDateOptions);
 
-  return `${startLabel} - ${end.toLocaleDateString("en-US", fullDateOptions)}`;
+  return `${startLabel}–${endLabel}`;
 }
 
 export function formatShortDate(date: Date): string {
@@ -62,6 +63,7 @@ export function formatShortDate(date: Date): string {
     weekday: "short",
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -69,22 +71,22 @@ export function getDateBadge(startDate: Date, endDate: Date) {
   const start = new Date(startDate);
   const end = new Date(endDate);
 
-  const month = start.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-  const weekday = start.toLocaleDateString("en-US", { weekday: "short" });
+  const month = start.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase();
+  const weekday = start.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
 
-  let dayLabel = String(start.getDate());
+  let dayLabel = String(start.getUTCDate());
 
   if (
-    start.getFullYear() === end.getFullYear() &&
-    start.getMonth() === end.getMonth() &&
-    start.getDate() !== end.getDate()
+    start.getUTCFullYear() === end.getUTCFullYear() &&
+    start.getUTCMonth() === end.getUTCMonth() &&
+    start.getUTCDate() !== end.getUTCDate()
   ) {
-    dayLabel = `${start.getDate()}-${end.getDate()}`;
+    dayLabel = `${start.getUTCDate()}–${end.getUTCDate()}`;
   } else if (
-    start.getFullYear() !== end.getFullYear() ||
-    start.getMonth() !== end.getMonth()
+    start.getUTCFullYear() !== end.getUTCFullYear() ||
+    start.getUTCMonth() !== end.getUTCMonth()
   ) {
-    dayLabel = `${start.getDate()}+`;
+    dayLabel = `${start.getUTCDate()}+`;
   }
 
   return {

@@ -8,6 +8,7 @@ import { getStateBySlug } from "@/lib/states";
 import { slugify } from "@/lib/utils";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
 import { absoluteSiteUrl } from "@/lib/site-url";
+import { isIndexableCityCount } from "@/lib/city-seo";
 
 export const revalidate = 3600;
 export const dynamic = "force-dynamic";
@@ -16,10 +17,10 @@ type Props = {
   params: Promise<{ state: string; city: string }>;
 };
 
-async function resolveCityName(stateCode: string, citySlug: string): Promise<string | null> {
+async function resolveCity(stateCode: string, citySlug: string) {
   const cities = await getCitiesWithShows(stateCode);
   const match = cities.find((c) => slugify(c.city) === citySlug);
-  return match?.city ?? null;
+  return match ?? null;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -27,8 +28,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const stateRecord = getStateBySlug(state);
   if (!stateRecord) return {};
 
-  const cityName = await resolveCityName(stateRecord.code, city);
-  if (!cityName) return {};
+  const cityRecord = await resolveCity(stateRecord.code, city);
+  if (!cityRecord) return {};
+  const cityName = cityRecord.city;
 
   const title = `${cityName}, ${stateRecord.name} Card Shows`;
   const description = `Find upcoming sports card, Pokemon, and TCG shows in ${cityName}, ${stateRecord.name}. Browse dates, venues, and admission details on Card Show Nation.`;
@@ -38,6 +40,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     alternates: { canonical: path },
+    robots: isIndexableCityCount(cityRecord.count)
+      ? undefined
+      : { index: false, follow: true },
     openGraph: { title, description, url: absoluteSiteUrl(path) },
   };
 }
@@ -47,8 +52,9 @@ export default async function CityPage({ params }: Props) {
   const stateRecord = getStateBySlug(state);
   if (!stateRecord) notFound();
 
-  const cityName = await resolveCityName(stateRecord.code, city);
-  if (!cityName) notFound();
+  const cityRecord = await resolveCity(stateRecord.code, city);
+  if (!cityRecord) notFound();
+  const cityName = cityRecord.city;
 
   const shows = await getShowsByCity(stateRecord.code, cityName, 50);
   const freeShows = shows.filter((s) => s.isFree).length;

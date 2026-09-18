@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getStateByCode } from "@/lib/states";
 import { slugify } from "@/lib/utils";
 import { isFixtureMode } from "@/lib/data-mode";
+import { MIN_INDEXABLE_CITY_SHOWS } from "@/lib/city-seo";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://cardshownation.com";
 
@@ -13,7 +14,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: BASE_URL, priority: 1.0, changeFrequency: "daily" },
     { url: `${BASE_URL}/card-shows`, priority: 0.9, changeFrequency: "daily" },
     { url: `${BASE_URL}/submit-show`, priority: 0.8, changeFrequency: "weekly" },
+    { url: `${BASE_URL}/submit-shows`, priority: 0.7, changeFrequency: "weekly" },
     { url: `${BASE_URL}/floorplanner`, priority: 0.7, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/about`, priority: 0.5, changeFrequency: "monthly" },
     { url: `${BASE_URL}/legal`, priority: 0.3, changeFrequency: "monthly" },
     { url: `${BASE_URL}/privacy`, priority: 0.3, changeFrequency: "monthly" },
     { url: `${BASE_URL}/terms`, priority: 0.3, changeFrequency: "monthly" },
@@ -71,7 +74,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       _max: { updatedAt: true },
     });
 
-    const cityPages: MetadataRoute.Sitemap = cityResults.flatMap(({ city, state, _max }) => {
+    const cityPages: MetadataRoute.Sitemap = cityResults.flatMap(({ city, state, _count, _max }) => {
+      if (_count.city < MIN_INDEXABLE_CITY_SHOWS) return [];
       const record = getStateByCode(state);
       if (!record) return [];
       return [

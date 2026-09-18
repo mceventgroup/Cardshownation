@@ -11,6 +11,8 @@ import {
   MapPin,
   Ticket,
   Users,
+  ShieldCheck,
+  Flag,
 } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { normalizeFlyerUrlForRender } from "@/lib/flyers";
@@ -20,9 +22,13 @@ import { normalizeExternalUrl } from "@/lib/url";
 import { formatShowDate, slugify, stateCodeToSlug } from "@/lib/utils";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
 import { absoluteSiteUrl } from "@/lib/site-url";
+import { formatVerifiedDate, getPublicSourceLabel } from "@/lib/show-provenance";
+import { PUBLIC_SHOW_REPORT_REASONS } from "@/lib/show-report";
+import { reportShowIssue } from "./actions";
 
 type Props = {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ report?: string }>;
 };
 
 export const dynamic = "force-dynamic";
@@ -75,8 +81,8 @@ function buildHoursLabel(show: Awaited<ReturnType<typeof getShowBySlug>>) {
   return `${show.startTimeLabel}${show.endTimeLabel ? ` - ${show.endTimeLabel}` : ""}`;
 }
 
-export default async function ShowDetailPage({ params }: Props) {
-  const { slug } = await params;
+export default async function ShowDetailPage({ params, searchParams }: Props) {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   const show = await getShowBySlug(slug);
 
   if (!show || show.status !== "APPROVED") notFound();
@@ -176,6 +182,16 @@ export default async function ShowDetailPage({ params }: Props) {
   const hasPromoterSection = Boolean(
     show.organizer || promoterContacts.length > 0 || show.loadInInfo
   );
+  const sourceLabel = getPublicSourceLabel(show.sourceType);
+  const verifiedLabel = formatVerifiedDate(show.lastVerifiedAt);
+  const reportMessage =
+    query.report === "received"
+      ? "Thanks. We received your correction report and will review it."
+      : query.report === "rate"
+        ? "Too many reports were sent from this connection. Please try again later."
+        : query.report === "invalid"
+          ? "We could not submit that report. Check the details and try again."
+          : null;
 
   const eventJsonLd = {
     "@context": "https://schema.org",
@@ -582,6 +598,62 @@ export default async function ShowDetailPage({ params }: Props) {
           </div>
 
           <aside className="space-y-6">
+            <section id="report-listing" className="scroll-mt-28 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-950">Listing verification</h2>
+                  <dl className="mt-3 space-y-2 text-sm leading-6">
+                    <div>
+                      <dt className="font-medium text-slate-900">Last verified</dt>
+                      <dd className="text-slate-600">{verifiedLabel}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-medium text-slate-900">Source</dt>
+                      <dd className="text-slate-600">{sourceLabel}</dd>
+                    </div>
+                  </dl>
+                  <Link href="/about#editorial-policy" className="mt-3 inline-flex text-sm font-semibold text-brand-700 hover:text-brand-800">
+                    How listings are verified
+                  </Link>
+                </div>
+              </div>
+
+              {reportMessage && (
+                <p role="status" className={`mt-4 rounded-xl px-3 py-2 text-sm ${query.report === "received" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
+                  {reportMessage}
+                </p>
+              )}
+
+              <details className="mt-4 border-t border-slate-100 pt-4">
+                <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
+                  <Flag className="h-4 w-4 text-slate-500" aria-hidden />
+                  Report incorrect information
+                </summary>
+                <form action={reportShowIssue.bind(null, show.id, show.slug)} className="mt-4 space-y-3">
+                  <label className="block text-sm font-medium text-slate-800">
+                    What needs attention?
+                    <select name="reason" required defaultValue="" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-brand-400 focus:outline-none">
+                      <option value="" disabled>Select a reason</option>
+                      {PUBLIC_SHOW_REPORT_REASONS.map((reason) => (
+                        <option key={reason.value} value={reason.value}>{reason.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-medium text-slate-800">
+                    Correction details
+                    <textarea name="details" rows={4} maxLength={1000} placeholder="Tell us the correct information or where we can verify it." className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-400 focus:outline-none" />
+                  </label>
+                  <div className="hidden" aria-hidden="true">
+                    <label>Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
+                  </div>
+                  <p className="text-xs leading-5 text-slate-500">Do not include passwords, payment information, or other sensitive details.</p>
+                  <button type="submit" className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+                    Send correction report
+                  </button>
+                </form>
+              </details>
+            </section>
             <section className="rounded-[2rem] border border-brand-200 bg-brand-50 p-5 shadow-sm">
               <h2 className="text-lg font-semibold text-slate-950">Promote this show?</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">

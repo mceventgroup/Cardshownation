@@ -22,6 +22,16 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "cardshownation.com" }],
+        destination: "https://www.cardshownation.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

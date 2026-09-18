@@ -49,6 +49,9 @@ export function Footer() {
               <Link href="/card-shows" className="transition-colors hover:text-brand-700">
                 Browse all shows
               </Link>
+              <Link href="/about" className="transition-colors hover:text-brand-700">
+                About &amp; editorial policy
+              </Link>
               <Link href="/submit-show" className="transition-colors hover:text-brand-700">
                 Submit a show
               </Link>
