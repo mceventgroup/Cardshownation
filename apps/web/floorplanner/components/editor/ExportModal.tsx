@@ -100,7 +100,12 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
         <div className="min-w-0 rounded-xl bg-slate-100 p-3"><p className="mb-2 text-xs font-semibold text-slate-500">Preview • {pages.length} {pages.length === 1 ? 'page' : 'pages'}</p>
           {pages.length > 1 && <div className="mb-3 flex items-center justify-between gap-2"><button className={button} disabled={busy || page === 0} onClick={() => setPage(page - 1)}>Previous</button><span className="text-xs">{page + 1} / {pages.length}</span><button className={button} disabled={busy || page >= pages.length - 1} onClick={() => setPage(page + 1)}>Next</button></div>}
           {/* SVG generated from escaped public display data only. */}
-          {preview && <img alt="Assignment map preview" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}`} className="w-full bg-white shadow" />}
+          {preview && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG preview is already the final export asset */}
+              <img alt="Assignment map preview" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}`} className="w-full bg-white shadow" />
+            </>
+          )}
           {pages.length > 1 && <p className="mt-3 text-xs text-slate-600">PDF and Print include every page. Image downloads save the page shown above.</p>}
         </div>
       </div>

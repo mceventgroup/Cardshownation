@@ -299,7 +299,7 @@ test("setup email resend rejects protected and activated accounts before creatin
   for (const account of [
     { role: "ADMIN" },
     { role: "MODERATOR" },
-    { role: "ORGANIZER", emailVerifiedAt: new Date(), passwordHash: "existing-hash" },
+    { role: "ORGANIZER", emailVerifiedAt: new Date(), passwordHash: "test-existing-hash" },
   ]) {
     stubMethod(db.user, "findUnique", async () => account);
     await assert.rejects(() => usersModule.sendAccountSetupByAdmin({ actorId: "admin-1", userId: "user-1" }));
