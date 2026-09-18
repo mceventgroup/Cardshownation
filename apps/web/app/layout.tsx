@@ -59,11 +59,6 @@ export const metadata: Metadata = {
   verification: process.env.GOOGLE_SITE_VERIFICATION?.trim()
     ? { google: process.env.GOOGLE_SITE_VERIFICATION.trim() }
     : undefined,
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: { index: true, follow: true },
-  },
 };
 
 export default async function RootLayout({
