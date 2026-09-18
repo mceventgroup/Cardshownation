@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Home,
+  Facebook,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -24,6 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/floorplanner", label: "Floorplanner", icon: Map },
     { href: "/admin/submissions", label: "Submissions", icon: Send },
     { href: "/admin/shows", label: "All Shows", icon: ListChecks },
+    { href: "/admin/facebook", label: "Facebook Posts", icon: Facebook },
     { href: "/admin/data-quality", label: "Data Quality", icon: ShieldCheck },
     { href: "/admin/promoters", label: "Promoters", icon: Users },
     { href: "/admin/users", label: "Users", icon: Users },

@@ -83,6 +83,16 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
+      <div className="mb-8 rounded-xl border border-blue-200 bg-blue-50 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Weekly Facebook posts</h2>
+            <p className="mt-1 text-sm text-slate-600">Preview upcoming shows by state and publish each roundup to your Facebook Page.</p>
+          </div>
+          <Link href="/admin/facebook" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Create Facebook posts</Link>
+        </div>
+      </div>
+
       <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
           {

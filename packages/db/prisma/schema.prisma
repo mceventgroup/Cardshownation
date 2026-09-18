@@ -462,6 +462,24 @@ model AuditLog {
   @@index([actorId, createdAt])
 }
 
+model FacebookRoundupPost {
+  id        String   @id @default(cuid())
+  pageId    String
+  state     String
+  rangeStart String
+  rangeEnd   String
+  message   String
+  status    String   @default("PUBLISHING")
+  postId    String?
+  error     String?
+  actorId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageId, state, rangeStart, rangeEnd])
+  @@index([pageId, createdAt])
+}
+
 // State directory table — seeded once, drives /card-shows/[state] pages
 model State {
   id       String  @id // 2-letter code: "TX", "CA", etc.
