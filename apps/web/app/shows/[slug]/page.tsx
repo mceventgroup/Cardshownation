@@ -127,6 +127,8 @@ export default async function ShowDetailPage({ params, searchParams }: Props) {
       ? flyerImageUrl
       : absoluteSiteUrl(flyerImageUrl)
     : null;
+  const structuredEventImageUrl =
+    structuredFlyerImageUrl ?? absoluteSiteUrl("/cardshow_hero.webp");
   const admissionPriceMatch = show.admissionPrice?.match(/\$\s*(\d+(?:\.\d{1,2})?)/);
   const structuredPrice = show.isFree ? 0 : admissionPriceMatch?.[1];
   const organizerEmail =
@@ -202,7 +204,7 @@ export default async function ShowDetailPage({ params, searchParams }: Props) {
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     description: show.description ?? undefined,
-    image: structuredFlyerImageUrl ?? undefined,
+    image: structuredEventImageUrl,
     url: canonicalUrl,
     sameAs: [websiteUrl, facebookUrl].filter((value): value is string => Boolean(value)),
     isAccessibleForFree: show.isFree,
