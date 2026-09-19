@@ -15,6 +15,7 @@ import {
   Flag,
 } from "lucide-react";
 import { AdSlot } from "@/components/ads/ad-slot";
+import { getEventAdmissionPrice } from "@/lib/event-admission";
 import { normalizeFlyerUrlForRender } from "@/lib/flyers";
 import { getStateByCode } from "@/lib/states";
 import { ensureManagedShowFlyerImage, getShowBySlug } from "@/lib/shows";
@@ -129,8 +130,7 @@ export default async function ShowDetailPage({ params, searchParams }: Props) {
     : null;
   const structuredEventImageUrl =
     structuredFlyerImageUrl ?? absoluteSiteUrl("/cardshow_hero.webp");
-  const admissionPriceMatch = show.admissionPrice?.match(/\$\s*(\d+(?:\.\d{1,2})?)/);
-  const structuredPrice = show.isFree ? 0 : admissionPriceMatch?.[1];
+  const structuredPrice = getEventAdmissionPrice(show.isFree, show.admissionPrice);
   const organizerEmail =
     show.organizer?.publicEmailConsentAt && show.organizer.publicEmail?.trim()
       ? show.organizer.publicEmail.trim()
