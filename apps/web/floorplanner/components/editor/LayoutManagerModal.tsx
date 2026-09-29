@@ -6,6 +6,7 @@ import { hasPendingEditorChanges } from '@floorplanner/lib/editor-save-state'
 import { keepCurrentDeviceShow, saveCurrentShow } from '@floorplanner/lib/save-show'
 import { deleteLayout, getActiveLayoutId, listLayouts, recoverLayoutsFromStorage, type LayoutEntry } from '@floorplanner/lib/persistence'
 import { deleteCloudLayout, getCloudSession, listCloudLayouts, loadCloudLayout, type CloudLayoutSummary } from '@floorplanner/lib/cloud-layouts'
+import { compareSavedLayouts, formatSavedLayoutDate } from '@floorplanner/lib/saved-layout-date'
 
 export default function LayoutManagerModal({ onClose }: { onClose: () => void }) {
   const title = useEditorStore(s => s.settings.eventName)
@@ -68,7 +69,7 @@ export default function LayoutManagerModal({ onClose }: { onClose: () => void })
   const shows = [
     ...local.map(show => ({ ...show, source: 'device' as const, current: show.id === activeId })),
     ...account.map(show => ({ ...show, source: 'account' as const, current: show.id === cloudId })),
-  ].filter(show => show.name.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+  ].filter(show => show.name.toLowerCase().includes(search.toLowerCase())).sort(compareSavedLayouts)
   const button = 'rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40'
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onClick={() => { if (!busy) onClose() }}>
@@ -88,7 +89,7 @@ export default function LayoutManagerModal({ onClose }: { onClose: () => void })
         {!shows.length && <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">{search ? 'No shows match your search.' : 'No saved shows yet. Use Save in the editor to keep your current show here.'}</div>}
         <div className="space-y-2">
           {shows.map(show => <div key={show.source + show.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3">
-            <div className="min-w-0 flex-1"><div className="truncate font-semibold">{show.name}</div><p className="mt-1 text-xs text-slate-500">{show.source === 'device' ? 'This device' : 'Account'} · {show.tableCount} {show.tableCount === 1 ? 'table' : 'tables'} · {show.vendorCount} {show.vendorCount === 1 ? 'vendor' : 'vendors'} · {new Date(show.savedAt).toLocaleDateString()}</p></div>
+            <div className="min-w-0 flex-1"><div className="truncate font-semibold">{show.name}</div><p className="mt-1 text-xs text-slate-500">{show.source === 'device' ? 'This device' : 'Account'} · {show.tableCount} {show.tableCount === 1 ? 'table' : 'tables'} · {show.vendorCount} {show.vendorCount === 1 ? 'vendor' : 'vendors'} · {formatSavedLayoutDate(show.savedAt)}</p></div>
             {show.current && show.source === 'device' ? <span className="text-xs font-medium text-blue-700">Currently open</span> : <button className={button} disabled={busy} aria-label={(show.current ? 'Reload ' : 'Open ') + show.name + ' from ' + show.source} onClick={() => void perform(() => open(show.id, show.source))}>{show.current ? 'Reload' : 'Open'}</button>}
             {!show.current && <details className="relative"><summary className="cursor-pointer px-2 text-sm text-slate-500" aria-label={'More options for ' + show.name}>More</summary><button className="mt-2 rounded-lg px-2 py-1 text-xs text-red-700" disabled={busy} onClick={() => void perform(async () => {
               if (!window.confirm('Delete “' + show.name + '” from ' + (show.source === 'device' ? 'this device' : 'your account') + '?')) return

@@ -11,6 +11,7 @@ import type {
   BackgroundImage,
 } from '@floorplanner/domain/types'
 import { validateDocumentSlice } from './document-schema'
+import { compareSavedLayouts } from './saved-layout-date'
 import {
   canPersistBackgroundImagesExternally,
   clearAllBackgroundImagesExternally,
@@ -251,7 +252,7 @@ export function recoverLayoutsFromStorage(): number {
     }
   }
 
-  recoveredLayouts.sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+  recoveredLayouts.sort(compareSavedLayouts)
 
   const activeLayoutId =
     existingManifest.activeLayoutId && seenIds.has(existingManifest.activeLayoutId)

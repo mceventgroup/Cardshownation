@@ -4,6 +4,8 @@ import type { DocumentSlice } from "./persistence";
 import { configureFloorplannerRuntime } from "./runtime";
 import {
   CloudRevisionConflictError,
+  listCloudLayouts,
+  loadCloudLayout,
   saveCloudLayout,
 } from "./cloud-layouts";
 
@@ -18,6 +20,48 @@ const emptyDocument = {
   settings: {},
   backgroundImages: {},
 } as DocumentSlice;
+
+const accountRow = {
+  id: "account-layout",
+  name: "Main Hall",
+  revision: 4,
+  saved_at: "2026-09-29T12:00:00.000Z",
+  table_count: 121,
+  vendor_count: 32,
+};
+const accountSummary = {
+  id: accountRow.id,
+  name: accountRow.name,
+  revision: accountRow.revision,
+  savedAt: accountRow.saved_at,
+  tableCount: accountRow.table_count,
+  vendorCount: accountRow.vendor_count,
+};
+
+test("account saves expose the same metadata as show-specific saves when listing, loading, and saving", async () => {
+  const originalFetch = global.fetch;
+  configureFloorplannerRuntime({ cloudBasePath: "/api/floorplanner" });
+  try {
+    global.fetch = async () => Response.json({ layouts: [accountRow, { ...accountSummary, id: 'show-layout' }] });
+    assert.deepEqual(await listCloudLayouts(), [accountSummary, { ...accountSummary, id: 'show-layout' }]);
+
+    global.fetch = async () => Response.json({ layout: { ...accountRow, data: emptyDocument } });
+    assert.deepEqual(await loadCloudLayout(accountRow.id), { ...accountSummary, data: emptyDocument });
+    assert.deepEqual(await saveCloudLayout({ name: accountRow.name, data: emptyDocument }), accountSummary);
+
+    global.fetch = async () => Response.json({
+      error: 'Changed on another device', code: 'revision-conflict', currentLayout: accountRow,
+    }, { status: 409 });
+    await assert.rejects(() => saveCloudLayout({ name: accountRow.name, data: emptyDocument }), error => {
+      assert.ok(error instanceof CloudRevisionConflictError);
+      assert.deepEqual(error.currentLayout, accountSummary);
+      return true;
+    });
+  } finally {
+    global.fetch = originalFetch;
+    configureFloorplannerRuntime({ cloudBasePath: "" });
+  }
+});
 
 test("saveCloudLayout sends the selected id and revision when overwriting", async () => {
   const originalFetch = global.fetch;

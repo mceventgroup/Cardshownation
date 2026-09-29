@@ -14,10 +14,32 @@ export interface CloudLayoutRecord extends CloudLayoutSummary {
   data: DocumentSlice
 }
 
+// Account endpoints return database column names; show-specific endpoints
+// already return camelCase. Keep both behind the same editor-facing contract.
+type CloudLayoutResponse = Pick<CloudLayoutSummary, 'id' | 'name' | 'revision'> & {
+  savedAt?: string
+  saved_at?: string
+  tableCount?: number
+  table_count?: number
+  vendorCount?: number
+  vendor_count?: number
+}
+
+function toLayoutSummary(layout: CloudLayoutResponse): CloudLayoutSummary {
+  return {
+    id: layout.id,
+    name: layout.name,
+    revision: layout.revision,
+    savedAt: layout.savedAt ?? layout.saved_at ?? '',
+    tableCount: layout.tableCount ?? layout.table_count ?? 0,
+    vendorCount: layout.vendorCount ?? layout.vendor_count ?? 0,
+  }
+}
+
 interface ErrorPayload {
   error?: string
   code?: string
-  currentLayout?: CloudLayoutSummary | null
+  currentLayout?: CloudLayoutResponse | null
   limit?: number
 }
 
@@ -67,7 +89,7 @@ async function assertOk(response: Response): Promise<void> {
   if (response.status === 409 && payload.code === 'revision-conflict') {
     throw new CloudRevisionConflictError(
       payload.error ?? `Request failed (${response.status})`,
-      payload.currentLayout ?? null,
+      payload.currentLayout ? toLayoutSummary(payload.currentLayout) : null,
     )
   }
   if (response.status === 409 && payload.code === 'quota-exceeded') {
@@ -124,8 +146,8 @@ export async function listCloudLayouts(): Promise<CloudLayoutSummary[]> {
   })
   await assertOk(response)
 
-  const payload = await response.json() as { layouts: CloudLayoutSummary[] }
-  return payload.layouts
+  const payload = await response.json() as { layouts: CloudLayoutResponse[] }
+  return payload.layouts.map(toLayoutSummary)
 }
 
 export async function saveCloudLayout(input: {
@@ -150,8 +172,8 @@ export async function saveCloudLayout(input: {
   })
   await assertOk(response)
 
-  const payload = await response.json() as { layout: CloudLayoutSummary }
-  return payload.layout
+  const payload = await response.json() as { layout: CloudLayoutResponse }
+  return toLayoutSummary(payload.layout)
 }
 
 export async function loadCloudLayout(id: string): Promise<CloudLayoutRecord> {
@@ -160,8 +182,8 @@ export async function loadCloudLayout(id: string): Promise<CloudLayoutRecord> {
   })
   await assertOk(response)
 
-  const payload = await response.json() as { layout: CloudLayoutRecord }
-  return payload.layout
+  const payload = await response.json() as { layout: CloudLayoutResponse & { data: DocumentSlice } }
+  return { ...toLayoutSummary(payload.layout), data: payload.layout.data }
 }
 
 export async function deleteCloudLayout(id: string): Promise<void> {
