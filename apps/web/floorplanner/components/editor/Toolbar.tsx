@@ -19,9 +19,11 @@ interface ToolbarProps {
   onToggleTheme: () => void
   onToggleSidebar: () => void
   sidebarOpen: boolean
+  mapFocused: boolean
+  onToggleFocus: () => void
 }
 
-export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebarOpen }: ToolbarProps) {
+export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebarOpen, mapFocused, onToggleFocus }: ToolbarProps) {
   const cloudSaveStatus = useEditorStore(s => s.cloudSaveStatus)
   const cloudSaveError = useEditorStore(s => s.cloudSaveError)
   const canUndo = useEditorStore(selectCanUndo)
@@ -234,6 +236,7 @@ export default function Toolbar({ theme, onToggleTheme, onToggleSidebar, sidebar
           >
             Tools
           </button>
+          <button onClick={onToggleFocus} aria-pressed={mapFocused} className="hidden shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 md:block">{mapFocused ? 'Show tools' : 'Focus map'}</button>
           <button onClick={openBrowserLayouts} disabled={savingShow} className="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">Open shows</button>
           <button
             disabled={savingShow}

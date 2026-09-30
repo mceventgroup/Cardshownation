@@ -16,11 +16,12 @@ import { hasPendingEditorChanges } from '@floorplanner/lib/editor-save-state'
 import { loadFromLocalStorage, type DocumentSlice } from '@floorplanner/lib/persistence'
 import { configureFloorplannerRuntime } from '@floorplanner/lib/runtime'
 import { buildShowInventoryOptions } from '@floorplanner/lib/show-inventory'
+import { vendorDisplayName } from '@floorplanner/lib/vendor-resolution'
+import type { VendorId } from '@floorplanner/domain/types'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
 import LeftSidebar, { type FloorplannerSidebarTab } from './LeftSidebar'
 import ShowModeSidebar from './ShowModeSidebar'
-import VendorDrawer from './VendorDrawer'
 import ShowModeVendorList from './ShowModeVendorList'
 import HelpCheatSheetModal from './HelpCheatSheetModal'
 import FirstRunModal from './FirstRunModal'
@@ -115,6 +116,8 @@ export default function EditorShell({
   const tables = useEditorStore(s => s.tables)
   const sections = useEditorStore(s => s.sections)
   const vendors = useEditorStore(s => s.vendors)
+  const activeVendorId = useEditorStore(s => s.activeVendorId)
+  const setActiveVendor = useEditorStore(s => s.setActiveVendor)
   const assignments = useEditorStore(s => s.vendorAssignments)
   const room = useEditorStore(s => s.room)
   const doors = useEditorStore(s => s.doors)
@@ -130,6 +133,7 @@ export default function EditorShell({
   const [activeTab, setActiveTab] = useState<FloorplannerSidebarTab>('tables')
   const [theme, setTheme] = useState<EditorTheme>('light')
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [mapFocused, setMapFocused] = useState(false)
 
   useEffect(() => {
     configureFloorplannerRuntime({
@@ -244,6 +248,8 @@ export default function EditorShell({
           onToggleTheme={handleToggleTheme}
           onToggleSidebar={() => setMobileSidebarOpen(open => !open)}
           sidebarOpen={mobileSidebarOpen}
+          mapFocused={mapFocused}
+          onToggleFocus={() => setMapFocused(focused => !focused)}
         />
       )}
       <div className="flex-1 overflow-hidden">
@@ -307,7 +313,7 @@ export default function EditorShell({
                   className="fixed inset-0 z-50 bg-slate-950/35 md:hidden"
                 />
               )}
-              <div className={`fixed inset-y-0 left-0 z-[60] md:static md:z-auto md:block ${mobileSidebarOpen ? 'block' : 'hidden'}`}>
+              <div className={`fixed inset-y-0 left-0 z-[60] md:static md:z-auto ${mapFocused ? 'md:hidden' : 'md:block'} ${mobileSidebarOpen ? 'block' : 'hidden'}`}>
                 <LeftSidebar
                   activeTab={activeTab}
                   onTabChange={handleTabChange}
@@ -320,7 +326,18 @@ export default function EditorShell({
             <div className="relative min-h-0 flex-1 overflow-hidden">
               <KonvaCanvas />
             </div>
-            {!showMode && <VendorDrawer active={activeTab === 'vendors'} />}
+            {!showMode && mapFocused && activeTab === 'vendors' && (
+              <div className="hidden shrink-0 items-center gap-3 border-t border-slate-200 bg-white px-4 py-2 text-xs text-slate-700 md:flex">
+                <label className="flex min-w-0 items-center gap-2">Assigning
+                  <select aria-label="Vendor to assign" value={activeVendorId ?? ''} onChange={e => setActiveVendor((e.target.value || null) as VendorId | null)} className="min-w-0 max-w-64 rounded-lg border border-slate-300 bg-white px-2 py-1.5">
+                    <option value="">Choose a vendor</option>
+                    {Object.values(vendors).sort((a, b) => vendorDisplayName(a).localeCompare(vendorDisplayName(b))).map(vendor => <option key={vendor.id} value={vendor.id}>{vendorDisplayName(vendor)}</option>)}
+                  </select>
+                </label>
+                <span>Click open tables on the map.</span>
+                <button onClick={() => setMapFocused(false)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1.5">Show vendor filters</button>
+              </div>
+            )}
           </div>
           {showMode && <ShowModeVendorList />}
         </div>

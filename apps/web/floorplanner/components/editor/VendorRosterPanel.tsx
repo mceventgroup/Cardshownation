@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   useEditorStore,
   selectActiveVendorId,
@@ -17,7 +18,7 @@ import { autoAssignVendors } from '@floorplanner/domain/auto-assign'
 import { createAssignmentId } from '@floorplanner/lib/id'
 import { DRAFT_LAYOUT_ID } from '@floorplanner/lib/defaults'
 
-type VendorFilter = 'all' | 'open' | 'complete' | 'premium'
+export type VendorFilter = 'all' | 'open' | 'partial' | 'complete' | 'premium'
 type VendorSortKey =
   | 'company'
   | 'email'
@@ -58,6 +59,7 @@ interface VendorRosterPanelProps {
   onSearchChange: (value: string) => void
   filter: VendorFilter
   onFilterChange: (value: VendorFilter) => void
+  compact?: boolean
 }
 
 const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
@@ -117,7 +119,8 @@ const COLUMN_DEFS: Array<{ key: ColumnKey; label: string; align: 'text-left' | '
 export const VENDOR_FILTERS: Array<{ id: VendorFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'open', label: 'Open' },
-  { id: 'complete', label: 'Complete' },
+  { id: 'partial', label: 'Partial' },
+  { id: 'complete', label: 'Assigned' },
   { id: 'premium', label: 'Premium' },
 ]
 
@@ -186,7 +189,9 @@ function matchesFilter(summary: VendorSummary, filter: VendorFilter): boolean {
     case 'open':
       return summary.open > 0
     case 'complete':
-      return summary.open === 0
+      return summary.open <= 0
+    case 'partial':
+      return summary.assigned > 0 && summary.open > 0
     case 'premium':
       return summary.isPremium
     default:
@@ -255,6 +260,7 @@ export function useVendorGridData(
   filter: VendorFilter,
   sortKey: VendorSortKey = 'open',
   sortDirection: SortDirection = 'desc',
+  premiumOnly = false,
 ) {
   const vendors = useEditorStore(selectVendors)
   const assignments = useEditorStore(selectVendorAssignments)
@@ -284,7 +290,7 @@ export function useVendorGridData(
         cases: bucket.vendor?.cases ?? 0,
         need,
         assigned,
-        open: need - assigned,
+        open: Math.max(0, need - assigned),
         tables: assignedLabels,
         tableSize: summarizeTableSizes(
           [bucket.vendor?.tableSize?.trim() ?? ''].filter(Boolean),
@@ -295,12 +301,12 @@ export function useVendorGridData(
     })
   }, [assignments, tables, vendors])
 
-  const filteredSummaries = useMemo(() => {
+  const searchedSummaries = useMemo(() => {
     const q = search.trim().toLowerCase()
 
     return vendorSummaries
       .filter(summary => {
-        if (!matchesFilter(summary, filter)) return false
+        if (premiumOnly && !summary.isPremium) return false
         if (!q) return true
 
         return [
@@ -315,8 +321,12 @@ export function useVendorGridData(
           summary.inventory,
         ].some(value => value.toLowerCase().includes(q))
       })
-      .sort((a, b) => compareSummaries(a, b, sortKey, sortDirection))
-  }, [filter, search, sortDirection, sortKey, vendorSummaries])
+  }, [premiumOnly, search, vendorSummaries])
+
+  const filteredSummaries = useMemo(() => searchedSummaries
+    .filter(summary => matchesFilter(summary, filter))
+    .sort((a, b) => compareSummaries(a, b, sortKey, sortDirection)),
+  [filter, searchedSummaries, sortDirection, sortKey])
 
   const totals = useMemo(() => {
     const vendorsCount = vendorSummaries.length
@@ -328,10 +338,14 @@ export function useVendorGridData(
     return { vendorsCount, assignedCount, openCount, completion }
   }, [vendorSummaries])
 
-  return { filteredSummaries, totals }
+  const filterCounts = Object.fromEntries(VENDOR_FILTERS.map(item => [
+    item.id, searchedSummaries.filter(summary => matchesFilter(summary, item.id)).length,
+  ])) as Record<VendorFilter, number>
+
+  return { filteredSummaries, totals, filterCounts, vendorSummaries }
 }
 
-export default function VendorRosterPanel({ search, onSearchChange, filter, onFilterChange }: VendorRosterPanelProps) {
+export default function VendorRosterPanel({ search, onSearchChange, filter, onFilterChange, compact = false }: VendorRosterPanelProps) {
   const fieldClassName =
     'border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400'
   const activeVendorId = useEditorStore(selectActiveVendorId)
@@ -351,7 +365,14 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
   const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS)
   const [selectedVendorIds, setSelectedVendorIds] = useState<Set<string>>(new Set())
   const [assignmentMessage, setAssignmentMessage] = useState<string | null>(null)
-  const { filteredSummaries } = useVendorGridData(search, filter, sortKey, sortDirection)
+  const [premiumOnly, setPremiumOnly] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const { filteredSummaries, filterCounts, vendorSummaries } = useVendorGridData(search, filter, sortKey, sortDirection, premiumOnly)
+
+  useEffect(() => {
+    if (expanded) dialogRef.current?.showModal()
+  }, [expanded])
 
   const [keyboardIndex, setKeyboardIndex] = useState(0)
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -535,6 +556,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
   }
 
   function handleKeyboard(e: React.KeyboardEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest('input, select, textarea, button')) return
     if (filteredSummaries.length === 0) return
 
     if (e.key === 'ArrowDown') {
@@ -631,7 +653,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
     rowRefs.current[keyboardVendorKey]?.scrollIntoView({ block: 'nearest' })
   }, [keyboardIndex, keyboardVendorKey])
 
-  return (
+  const roster = (
     <div
       tabIndex={0}
       onKeyDown={handleKeyboard}
@@ -673,6 +695,7 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             value={search}
+            aria-label="Search vendors"
             onChange={e => onSearchChange(e.target.value)}
             placeholder="Search company, email, category, notes, or tables"
             className={`min-w-[220px] flex-1 px-2 py-1 text-xs ${fieldClassName}`}
@@ -682,14 +705,16 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
               <button
                 key={item.id}
                 onClick={() => onFilterChange(item.id)}
+                aria-pressed={filter === item.id}
                 className={`border px-2 py-1 text-[11px] font-medium ${
                   filter === item.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                {item.label}
+                {item.label} {filterCounts[item.id]}
               </button>
             ))}
           </div>
+          <label className="flex items-center gap-1 text-xs text-slate-700"><input type="checkbox" checked={premiumOnly} onChange={e => setPremiumOnly(e.target.checked)} />Premium only</label>
           <button
             onClick={deleteSelectedVendors}
             disabled={selectedVendorIds.size === 0}
@@ -887,6 +912,58 @@ export default function VendorRosterPanel({ search, onSearchChange, filter, onFi
           </div>
         )}
       </div>
+    </div>
+  )
+
+  if (!compact) return roster
+
+  const activeSummary = vendorSummaries.find(summary => summary.vendor?.id === activeVendorId)
+  return (
+    <div className="flex min-h-[440px] flex-1 flex-col bg-white" aria-label="Vendor assignment panel">
+      <div className="shrink-0 space-y-2 border-b border-slate-200 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">Vendors</h2>
+          <button onClick={() => setExpanded(true)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">Full roster</button>
+        </div>
+        <input value={search} onChange={e => onSearchChange(e.target.value)} aria-label="Search vendors" placeholder="Search vendors or tables" className={`w-full rounded-lg px-2 py-2 text-xs ${fieldClassName}`} />
+        <div className="grid grid-cols-2 gap-1" role="group" aria-label="Vendor status">
+          {VENDOR_FILTERS.filter(item => item.id !== 'premium').map(item => (
+            <button key={item.id} onClick={() => onFilterChange(item.id)} aria-pressed={filter === item.id} className={`rounded-lg border px-2 py-1.5 text-xs font-medium ${filter === item.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'}`}>
+              {item.label} <span className="tabular-nums">{filterCounts[item.id]}</span>
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 text-xs text-slate-600">Sort
+          <select aria-label="Sort vendors" value={`${sortKey}:${sortDirection}`} onChange={e => { const [key, direction] = e.target.value.split(':'); setSortKey(key as VendorSortKey); setSortDirection(direction as SortDirection) }} className={`min-w-0 flex-1 rounded-lg px-2 py-1.5 ${fieldClassName}`}>
+            <option value="company:asc">Name A–Z</option><option value="company:desc">Name Z–A</option><option value="open:desc">Most tables open</option><option value="need:desc">Largest booking</option><option value="assigned:desc">Most tables assigned</option>
+            {!['company:asc', 'company:desc', 'open:desc', 'need:desc', 'assigned:desc'].includes(`${sortKey}:${sortDirection}`) && <option value={`${sortKey}:${sortDirection}`}>{COLUMN_DEFS.find(column => column.key === sortKey)?.label} {sortDirection === 'asc' ? '↑' : '↓'}</option>}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={premiumOnly || filter === 'premium'} onChange={e => { setPremiumOnly(e.target.checked); if (filter === 'premium') onFilterChange('all') }} />Premium only</label>
+      </div>
+      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2" aria-label="Vendor results">
+        {filteredSummaries.length === 0 && <p className="p-2 text-xs text-slate-500">No vendors match these filters.</p>}
+        {filteredSummaries.map(summary => (
+          <button key={summary.key} disabled={!summary.vendor} onClick={() => { setActiveVendor(summary.vendor!.id); useEditorStore.getState().setActiveTool('select') }} onMouseEnter={() => summary.vendor && setHoveredVendor(summary.vendor.id)} onMouseLeave={() => setHoveredVendor(null)} aria-pressed={summary.vendor?.id === activeVendorId} className={`block w-full rounded-xl border p-3 text-left ${summary.vendor?.id === activeVendorId ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+            <span className="block break-words text-sm font-medium text-slate-900">{summary.company}</span>
+            <span className="mt-1 block text-xs text-slate-600">{summary.open === 0 ? 'Assigned' : summary.assigned > 0 ? 'Partial' : 'Open'} · {summary.assigned}/{summary.need} assigned · {summary.open} open{summary.isPremium ? ' · Premium' : ''}</span>
+            {summary.tables.length > 0 && <span className="mt-1 block break-words text-xs text-slate-500">Tables: {compressTableLabels(summary.tables)}</span>}
+          </button>
+        ))}
+      </div>
+      <div className="shrink-0 space-y-2 border-t border-slate-200 bg-slate-50 p-3">
+        {activeVendor ? <>
+          <p className="text-xs text-slate-700">Assigning: <strong>{vendorDisplayName(activeVendor)}</strong>{activeSummary ? ` · ${activeSummary.open} open` : ''}</p>
+          <div className="flex flex-wrap gap-2"><button onClick={assignActiveVendorToSelection} disabled={selectedTableCount === 0} className="rounded-lg bg-teal-700 px-2 py-1.5 text-xs text-white disabled:bg-slate-300">Assign selection ({selectedTableCount})</button><button onClick={() => setActiveVendor(null)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700">Done</button></div>
+        </> : <p className="text-xs text-slate-500">Choose a vendor, then click open tables on the map.</p>}
+        <button onClick={handleAutoAssign} className="w-full rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700">Auto-assign open booths</button>
+        {assignmentMessage && <p role="status" className="text-xs text-slate-600">{assignmentMessage}</p>}
+      </div>
+      {expanded && createPortal(
+        <dialog ref={dialogRef} aria-label="Full vendor roster" onCancel={() => setExpanded(false)} onClose={() => setExpanded(false)} className="fixed inset-0 m-auto h-[90dvh] w-[96vw] max-w-none overflow-hidden rounded-2xl border border-slate-300 bg-white p-0 shadow-xl backdrop:bg-slate-950/50">
+          <div className="flex h-full min-h-0 flex-col"><div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3"><h2 className="font-semibold text-slate-900">Full vendor roster</h2><button onClick={() => setExpanded(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700">Back to map</button></div><div className="min-h-0 flex-1">{roster}</div></div>
+        </dialog>, document.body,
+      )}
     </div>
   )
 }

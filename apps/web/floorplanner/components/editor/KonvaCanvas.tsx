@@ -1745,9 +1745,9 @@ export default function KonvaCanvas() {
   const miniMap = useMemo(() => {
     const canvasWidth = settings.canvasWidth
     const canvasHeight = settings.canvasHeight
-    const width = 170
-    const height = Math.max(110, Math.round((canvasHeight / canvasWidth) * width))
-    const scale = width / canvasWidth
+    const scale = Math.min(140 / canvasWidth, 170 / canvasHeight)
+    const width = canvasWidth * scale
+    const height = canvasHeight * scale
     const viewport = {
       x: Math.max(0, (-stagePos.x / stageScale) * scale),
       y: Math.max(0, (-stagePos.y / stageScale) * scale),
@@ -2061,10 +2061,10 @@ export default function KonvaCanvas() {
           <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(360px,calc(100%-24px))] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-sm" role="status">
             {placementError ?? assignmentHint ?? (activeTool === 'measure' ? (measurementPreview ? 'Click the endpoint to save this distance. Shift for a straight line.' : 'Click a wall, table edge, or point to start a measurement.') : activeVendorId ? 'Click a table to assign the selected vendor. Esc to finish.' : panLocked ? 'Drag anywhere to move around. Choose Select to move tables.' : activeTool === 'place-table' ? 'Click the floor to add a table. Esc when finished.' : activeTool === 'place-row' ? 'Click the floor to place your row. Esc when finished.' : activeTool === 'select' ? 'Drag tables to move them. Drag empty space to select a group.' : 'Use the options on the left. Esc to return to Select.')}
           </div>
-          <div className="absolute right-4 top-4 z-20 hidden lg:block rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Mini Map</div>
+          <details className="absolute right-4 top-4 z-20 hidden lg:block rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-500">Mini map</summary>
             <div
-              className="relative overflow-hidden rounded-xl bg-slate-100 cursor-pointer"
+              className="relative mt-2 overflow-hidden rounded-xl bg-slate-100 cursor-pointer"
               style={{ width: miniMap.width, height: miniMap.height }}
               onPointerDown={handleMiniMapPointerDown}
               title="Click to center the canvas here"
@@ -2103,7 +2103,7 @@ export default function KonvaCanvas() {
                 }}
               />
             </div>
-          </div>
+          </details>
         </>
       )}
 

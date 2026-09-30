@@ -98,14 +98,87 @@ test("floor planner project and vendor workflows stay understandable", async ({ 
   await expect(projects.getByText("Device copies stay in this browser. Cloud autosave keeps account shows available on your other devices.")).toBeVisible();
   await projects.getByRole("button", { name: "Close saved shows" }).click();
 
-  await page.getByRole("button", { name: "Vendors" }).click();
+  await page.getByRole("button", { name: "Vendors", exact: true }).click();
+  await page.getByText('Add or import vendors', { exact: true }).click();
   await page.getByRole("textbox", { name: "Vendor name" }).fill("River City Cards");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByText("River City Cards", { exact: true }).click();
 
   await expect(page.getByText("Assigning: River City Cards")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Assign to 0 selected" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Assign selection (0)" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Auto-assign open booths" })).toBeVisible();
+});
+
+test('vendor sidebar preserves filters and sorting while the map stays full height', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const { DEFAULT_SETTINGS } = await import('../apps/web/floorplanner/lib/defaults');
+  await page.addInitScript(settings => {
+    const vendors = Object.fromEntries([
+      ['alpha', 'Alpha Cards', 2, false], ['beta', 'Beta Cards', 3, true],
+      ['gamma', 'Gamma Cards', 1, false], ['delta', 'Delta Cards', 1, true], ['echo', 'Echo Cards', 1, false],
+    ].map(([id, name, tablesNeeded, premium]) => [id, { id, name, tablesNeeded, premium, category: null, paymentStatus: 'unknown', notes: null, cases: 0 }]));
+    const tables = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`t${i}`, {
+      id: `t${i}`, x: 100 + i % 4 * 100, y: 100 + Math.floor(i / 4) * 100, width: 72, height: 30,
+      rotation: 0, shape: 'rectangle', roomId: 'R1', tableNumber: i + 1, displayId: `B${i + 1}`, label: `B${i + 1}`,
+      labelOverridden: false, rowId: null, sectionId: null, order: i, premium: false,
+    }]));
+    const vendorAssignments = Object.fromEntries(['beta', 'gamma', 'echo', 'echo'].map((id, i) => [`a${i}`, {
+      id: `a${i}`, tableId: `t${i}`, layoutId: 'draft', vendorId: id, vendorName: vendors[id].name,
+      vendorCategory: null, colorOverride: null, notes: null, paymentStatus: 'unknown', importSessionId: null,
+    }]));
+    localStorage.setItem('floorplanner:e2e-floorplanner:layout', JSON.stringify({ version: 1, savedAt: new Date().toISOString(), data: {
+      tables, rows: {}, sections: {}, vendors, vendorAssignments, doors: {}, backgroundImages: {}, settings, room: null,
+    } }));
+  }, DEFAULT_SETTINGS);
+  await openEditor(page);
+  const canvas = page.locator('.konvajs-content');
+  const originalHeight = (await canvas.boundingBox())!.height;
+  await page.getByRole('button', { name: 'Vendors', exact: true }).click();
+  await expect.poll(async () => (await canvas.boundingBox())!.height).toBe(originalHeight);
+  const panel = page.getByLabel('Vendor assignment panel', { exact: true });
+  const results = panel.getByLabel('Vendor results', { exact: true });
+  await expect(panel.getByRole('button', { name: 'All 5', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Open 3', exact: true }).click();
+  await expect(results.getByRole('button')).toHaveCount(3);
+  await panel.getByRole('button', { name: 'Partial 1', exact: true }).click();
+  await expect(results.getByRole('button')).toHaveCount(1);
+  await expect(results.getByRole('button')).toContainText('Beta Cards');
+  await panel.getByRole('button', { name: 'Assigned 2', exact: true }).click();
+  await expect(results.getByRole('button')).toHaveCount(2);
+  await panel.getByRole('button', { name: 'Open 3', exact: true }).click();
+  await panel.getByRole('checkbox', { name: 'Premium only' }).check();
+  await panel.getByRole('combobox', { name: 'Sort vendors' }).selectOption('need:desc');
+  await expect(results.getByRole('button').first()).toContainText('Beta Cards');
+  await expect(results.getByRole('button')).toHaveCount(2);
+  await results.getByRole('button').first().click();
+  const originalWidth = (await canvas.boundingBox())!.width;
+  await page.getByRole('button', { name: 'Focus map', exact: true }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('combobox', { name: 'Vendor to assign', exact: true })).toHaveValue('beta');
+  await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThan(originalWidth);
+  await page.getByRole('button', { name: 'Show vendor filters' }).click();
+  await expect(panel.getByRole('button', { name: 'Open 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('checkbox', { name: 'Premium only' })).toBeChecked();
+  await expect(panel.getByRole('combobox', { name: 'Sort vendors' })).toHaveValue('need:desc');
+  await panel.getByRole('button', { name: 'Full roster' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Full vendor roster' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('checkbox', { name: 'Select vendor Beta Cards' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Back to map' }).click();
+  await page.getByRole('button', { name: 'Tables', exact: true }).click();
+  await page.getByRole('button', { name: 'Vendors', exact: true }).click();
+  await expect(panel.getByRole('combobox', { name: 'Sort vendors' })).toHaveValue('need:desc');
+  await panel.getByRole('textbox', { name: 'Search vendors' }).fill('Beta');
+  await expect(results.getByRole('button')).toHaveCount(1);
+  await panel.getByRole('textbox', { name: 'Search vendors' }).fill('');
+  await panel.getByRole('checkbox', { name: 'Premium only' }).uncheck();
+  page.once('dialog', dialog => dialog.accept());
+  await panel.getByRole('button', { name: 'Auto-assign open booths' }).click();
+  await expect(panel.getByRole('button', { name: 'Open 0', exact: true })).toBeVisible();
+  await expect(results).toContainText('No vendors match');
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Open 3', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/vendor-sidebar.png' });
 });
 
 test("floor planner tools become a dismissible drawer on narrow screens", async ({ page }) => {
@@ -350,6 +423,7 @@ test('vendor sharing downloads real PDFs and images and prints one page per vend
   await page.locator('.konvajs-content').click({ position: { x: 400, y: 250 } });
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Vendors', exact: true }).click();
+  await page.getByText('Add or import vendors', { exact: true }).click();
   for (const name of ['Alpha Cards', 'Beta Collectibles']) {
     await page.getByRole('textbox', { name: 'Vendor name' }).fill(name);
     await page.getByRole('button', { name: 'Add', exact: true }).click();
@@ -428,6 +502,7 @@ test('show preparation offers separate JPEGs, table signs, social graphics, and 
   await page.locator('.konvajs-content').click({ position: { x: 400, y: 250 } });
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Next: assign vendors' }).click();
+  await page.getByText('Add or import vendors', { exact: true }).click();
   await page.getByRole('textbox', { name: 'Vendor name' }).fill('River City Cards');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   page.once('dialog', dialog => dialog.accept());

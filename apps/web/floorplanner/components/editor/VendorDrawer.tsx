@@ -1,9 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import VendorRosterPanel, { useVendorGridData } from './VendorRosterPanel'
-
-type VendorFilter = 'all' | 'open' | 'complete' | 'premium'
+import VendorRosterPanel, { useVendorGridData, type VendorFilter } from './VendorRosterPanel'
 type DrawerState = 'collapsed' | 'medium' | 'expanded'
 
 const COLLAPSED_HEIGHT = 44

@@ -20,6 +20,7 @@ import VendorQuickAdd from './VendorQuickAdd'
 import BackgroundImagePanel from './BackgroundImagePanel'
 import CaseRentalsPanel from './CaseRentalsPanel'
 import ExportModal from './ExportModal'
+import VendorRosterPanel, { type VendorFilter } from './VendorRosterPanel'
 
 const OPEN_VENDOR_IMPORT_EVENT = 'floorplanner:open-vendor-import'
 
@@ -147,6 +148,8 @@ function SegmentedTabs<T extends string>({ items, value, onChange }: {
 
 export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: LeftSidebarProps) {
   const [showExports, setShowExports] = useState(false)
+  const [vendorSearch, setVendorSearch] = useState('')
+  const [vendorFilter, setVendorFilter] = useState<VendorFilter>('all')
   const clearVendors = useEditorStore(s => s.clearVendors)
   const warningCount = useWarnings().warnings.length
   const [spaceTab, setSpaceTab] = useState<SpaceTab>('room')
@@ -211,11 +214,13 @@ export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: 
           </div>
         )}
 
-        {activeTab === 'vendors' && (
-          <div>
-            <PanelHeading title="Manage vendors" description="Add vendors here, then use the roster below the canvas for assignments and check-in." />
-            <VendorQuickAdd />
-            <div className="space-y-3 px-3 py-3">
+        <div className={activeTab === 'vendors' ? 'flex h-full min-h-0 flex-col' : 'hidden'}>
+            <VendorRosterPanel compact search={vendorSearch} onSearchChange={setVendorSearch} filter={vendorFilter} onFilterChange={setVendorFilter} />
+            <details className="shrink-0 border-t border-slate-200 bg-white">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-700">Add or import vendors</summary>
+              <div className="max-h-64 overflow-y-auto">
+              <VendorQuickAdd />
+              <div className="space-y-3 px-3 py-3">
               <button
                 onClick={() => window.dispatchEvent(new Event(OPEN_VENDOR_IMPORT_EVENT))}
                 className="w-full rounded-xl bg-slate-900 px-3 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
@@ -230,9 +235,10 @@ export default function LeftSidebar({ activeTab, onTabChange, onRequestClose }: 
               >
                 Clear all vendors
               </button>
-            </div>
+              </div>
+              </div>
+            </details>
           </div>
-        )}
 
         {activeTab === 'setup' && (
           <div>
