@@ -36,7 +36,7 @@ function normalizeMonth(value: string) {
 export function parseShowDateRange(value: string, fallbackYear = new Date().getUTCFullYear()) {
   const yearMatch = value.match(/\b(20\d{2})\b/);
   const year = yearMatch ? Number(yearMatch[1]) : fallbackYear;
-  const withoutYear = value.replace(/\b20\d{2}\b/, "");
+  const withoutYear = value.replace(/\b20\d{2}\b/, "|YEAR|");
   const first = new RegExp(`(${MONTH_PATTERN})\\.?\\s+(\\d{1,2})`, "i").exec(withoutYear);
   if (!first) return null;
 
@@ -44,22 +44,24 @@ export function parseShowDateRange(value: string, fallbackYear = new Date().getU
   const startDay = Number(first[2]);
   if (startMonth === undefined || startDay < 1 || startDay > 31) return null;
 
-  const tail = withoutYear.slice((first.index ?? 0) + first[0].length);
-  const secondMonth = new RegExp(`(${MONTH_PATTERN})\\.?\\s+(\\d{1,2})`, "i").exec(tail);
+  let tail = withoutYear.slice((first.index ?? 0) + first[0].length);
   let endMonth = startMonth;
   let endDay = startDay;
-  if (secondMonth) {
-    endMonth = normalizeMonth(secondMonth[1]);
-    endDay = Number(secondMonth[2]);
-  } else {
-    const extraDays = [...tail.matchAll(/(?:&|,|-)\s*(\d{1,2})(?!\d)/g)].map((match) => Number(match[1]));
-    if (extraDays.length > 0) endDay = extraDays.at(-1) ?? startDay;
+  // Only a contiguous date suffix is a range. Hours, addresses and phone
+  // numbers later in the listing must never become the show's end day.
+  const range = new RegExp(`^\\s*(?:&|,|[-–—]|to\\b)\\s*(?:(${MONTH_PATTERN})\\.?\\s+)?(\\d{1,2})(?![\\d:]|\\s*(?:AM|PM)\\b)`, "i");
+  while (true) {
+    const next = range.exec(tail);
+    if (!next) break;
+    if (next[1]) endMonth = normalizeMonth(next[1]);
+    endDay = Number(next[2]);
+    tail = tail.slice(next[0].length);
   }
 
   const endYear = endMonth < startMonth ? year + 1 : year;
   const startDate = new Date(Date.UTC(year, startMonth, startDay));
   const endDate = new Date(Date.UTC(endYear, endMonth, endDay));
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return null;
+  if (startDate.getUTCMonth() !== startMonth || startDate.getUTCDate() !== startDay || endDate.getUTCMonth() !== endMonth || endDate.getUTCDate() !== endDay || endDate < startDate) return null;
   return { startDate, endDate };
 }
 

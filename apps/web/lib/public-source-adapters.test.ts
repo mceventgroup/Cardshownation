@@ -7,6 +7,14 @@ test("parses multi-day and cross-month show date ranges", () => {
   assert.equal(parseShowDateRange("Oct 31 & Nov 1, 2026")?.endDate.toISOString().slice(0, 10), "2026-11-01");
   assert.equal(parseShowDateRange("April 23-25, 2027")?.endDate.toISOString().slice(0, 10), "2027-04-25");
 });
+test("date ranges do not consume hours, addresses or numbers later in a listing", () => {
+  assert.equal(parseShowDateRange("October 10, 2026, 9AM-3PM")?.endDate.toISOString().slice(0, 10), "2026-10-10");
+  assert.equal(parseShowDateRange("October 10, 2026, 9 Main St")?.endDate.toISOString().slice(0, 10), "2026-10-10");
+  assert.equal(parseShowDateRange("September 27 CT, Danbury. Card Show, 2 Main St. SH: 9AM-2PM", 2026)?.endDate.toISOString().slice(0, 10), "2026-09-27");
+  assert.equal(parseShowDateRange("October 10 - 9:00 AM to 3:00 PM, 2026")?.endDate.toISOString().slice(0, 10), "2026-10-10");
+  assert.equal(parseShowDateRange("February 31, 2026"), null);
+  assert.equal(parseShowDateRange("October 10-9, 2026"), null);
+});
 
 test("COMC adapter imports only US card-show calendar entries", () => {
   const source = { name: "COMC Calendar", url: "https://calendar.comc.com/", adapter: "comc" as const };
