@@ -162,8 +162,9 @@ async function enrichPublishedShow(showId: string, incoming: Record<string, unkn
   if (!show.venueId && changedFields.some((field) => field === "venueName" || field === "venueAddress")) {
     venueId = (await ensureImportedVenue({ ...incoming, ...merged }))?.id;
   }
-  if (show.venueId && !show.venue?.address1 && changedFields.includes("venueAddress")) {
-    await db.venue.update({ where: { id: show.venueId }, data: { address1: readPayloadText(merged, "venueAddress") } });
+  const importedAddress = readPayloadText(merged, "venueAddress");
+  if (show.venueId && !show.venue?.address1 && changedFields.includes("venueAddress") && importedAddress) {
+    await db.venue.update({ where: { id: show.venueId }, data: { address1: importedAddress } });
   }
   const tableCount = Number.parseInt(String(merged.tableCount ?? ""), 10);
   await db.show.update({
