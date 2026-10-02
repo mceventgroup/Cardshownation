@@ -41,3 +41,8 @@ test("calendar feeds can omit categories and attach different times to same-day 
   assert.deepEqual(parsed.categories, []);
   assert.equal(parsed.endDate.toISOString().slice(0, 10), "2026-11-10");
 });
+test("published venue names without addresses do not cause endless enrichment retries", () => {
+  const published = record(); published.record.venueName = null; published.record.venueAddress = null;
+  assert.equal(planLocalImport("test", [{ ...show, venueAddress: null }], [published], "2026-10-02").changes.length, 0);
+  assert.equal(planLocalImport("test", [show], [published], "2026-10-02").changes.length, 1);
+});

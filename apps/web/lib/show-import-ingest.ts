@@ -4,7 +4,7 @@ import { getCityCoords } from "@/lib/city-coords";
 import { slugify } from "@/lib/utils";
 import { normalizeExternalUrl } from "@/lib/url";
 import { buildShowDedupeKey, findDuplicateForPayload } from "@/lib/submissions";
-import { mergeMissingShowDetails } from "@/lib/show-enrichment";
+import { mergeMissingShowDetails, mergePersistableShowDetails } from "@/lib/show-enrichment";
 
 export type ImportedShow = {
   externalId: string;
@@ -155,12 +155,15 @@ async function enrichPublishedShow(showId: string, incoming: Record<string, unkn
     categories: show.categories,
     isFree: show.isFree,
   } satisfies Record<string, unknown>;
-  const { merged, changedFields } = mergeMissingImportedDetails(current, incoming);
+  const { merged, changedFields } = mergePersistableShowDetails(current, incoming);
   if (changedFields.length === 0) return false;
 
   let venueId: string | undefined;
   if (!show.venueId && changedFields.some((field) => field === "venueName" || field === "venueAddress")) {
     venueId = (await ensureImportedVenue({ ...incoming, ...merged }))?.id;
+  }
+  if (show.venueId && !show.venue?.address1 && changedFields.includes("venueAddress")) {
+    await db.venue.update({ where: { id: show.venueId }, data: { address1: readPayloadText(merged, "venueAddress") } });
   }
   const tableCount = Number.parseInt(String(merged.tableCount ?? ""), 10);
   await db.show.update({

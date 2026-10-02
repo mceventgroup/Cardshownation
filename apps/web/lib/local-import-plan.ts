@@ -1,5 +1,5 @@
 import { showMatchScore } from "./show-dedupe";
-import { mergeMissingShowDetails } from "./show-enrichment";
+import { mergeMissingShowDetails, mergePersistableShowDetails } from "./show-enrichment";
 import { US_STATES } from "./states";
 import type { ImportedShow } from "./show-import-ingest";
 
@@ -83,11 +83,13 @@ export function planLocalImport(source: string, shows: ImportedShow[], records: 
     const best = matches[0];
     if (best && (best.score < 72 || differentSessions(incoming, best.item.record))) { ambiguous.push(`${show.title} / ${best.item.record.showName}`); continue; }
     const existing = identity?.record ?? best?.item.record;
+    const target = identity ?? best?.item;
     const retryPending = identity?.status === "PENDING" && !identity.id.startsWith("local:");
-    if (existing && !retryPending && mergeMissingShowDetails(existing, incoming).changedFields.length === 0) { skipped++; continue; }
+    const merge = target?.kind === "show" || target?.status === "APPROVED" ? mergePersistableShowDetails : mergeMissingShowDetails;
+    if (existing && !retryPending && merge(existing, incoming).changedFields.length === 0) { skipped++; continue; }
     changes.push(show);
     // Later sources compare against this planned change, too.
-    if (existing) Object.assign(existing, mergeMissingShowDetails(existing, incoming).merged);
+    if (existing) Object.assign(existing, merge(existing, incoming).merged);
     else records.push({ id: `local:${source}:${show.externalId}`, kind: "submission", status: "PENDING", record: { ...incoming, source } });
   }
   return { changes, skipped, expired, ambiguous, errors };

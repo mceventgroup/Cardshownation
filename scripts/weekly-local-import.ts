@@ -109,6 +109,7 @@ async function main() {
   }
   const summary = { runId, mode: publish ? "publish" : "dry-run", at: new Date().toISOString(), snapshotAt: snapshot.generatedAt, eventbriteConfiguredOnServer: snapshot.eventbriteConfigured ?? null, apiRequests: requests, remainingChanges, reports, scanFile: scanFile ?? scanPath };
   const reportPath = resolve(output, `${runId}-report.json`);
+  writeFileSync(resolve(output, `${runId}-${Date.now()}-report.json`), JSON.stringify(summary, null, 2));
   writeFileSync(reportPath, JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary, null, 2));
   console.log(`Saved report: ${reportPath}`);

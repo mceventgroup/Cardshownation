@@ -30,6 +30,14 @@ The server accepts up to 25 changed shows per request and one summary report per
 
 Keep hosted weekly import schedules until the replacement endpoint is deployed, a saved scan publishes successfully, and the Codex task has been updated. Then remove only `/api/cron/eventbrite` and `/api/cron/kansas-card-shows` from Vercel schedules. Daily moderation, import-health notifications and expiration remain hosted.
 
+## Cutover verification: October 2, 2026
+
+The replacement endpoint was deployed and both application and database readiness checks passed. The saved scan `20261002194249167` covered 574 source listings and published 19 shows (Premier 1; Sports Collectors Digest 18). One SCD canonical listing gained missing information. A verification run using the same saved scan and a fresh snapshot published/enriched zero records, left zero eligible pending records, and reported `remainingChanges=0`. The two hosted weekly schedules are removed after this verification. Monday's Codex task remains active at 9 AM America/Chicago.
+
+Known source limitations: TCDB returned HTTP 403; COMC and Beckett could not be fetched; Eventbrite has no API key in either the deployed environment or local credential file. Kansas row 15 has an invalid date range and is excluded. These failures are logged and must not be represented as successful nationwide coverage. Four existing Kansas-source records provide only a venue name; the published model requires a name and street address to establish a venue, so those incomplete venue candidates are excluded from repeat enrichment attempts. Source names alone remain available in the imported submission provenance.
+
+A separate Friday follow-up is scheduled for October 9 to inspect Neon usage after a complete week. The retained dedicated checkout is `C:\Users\chens\Documents\Project\Card Show Nation\tmp\weekly-import-savings`; do not remove it while the automation uses it. Run reports are saved both as a latest pointer and as timestamped history. The original scan's publication log is retained under `.local-import/latest-publish.log`.
+
 ## Usage baseline
 
 Observed October 2, 2026 in Neon Console, project `card-show-nation` (`shy-queen-41932971`), production branch:

@@ -69,3 +69,15 @@ export function mergeMissingShowDetails(
 
   return { merged, changedFields };
 }
+
+// Published shows store venues through a related record, not a free-text name.
+// A name alone cannot create that relation, so do not retry it every week.
+export function mergePersistableShowDetails(existing: Record<string, unknown>, incoming: Record<string, unknown>) {
+  const result = mergeMissingShowDetails(existing, incoming);
+  if (!hasUsefulValue(result.merged.venueName) || !hasUsefulValue(result.merged.venueAddress)) {
+    result.changedFields = result.changedFields.filter((field) => field !== "venueName" && field !== "venueAddress");
+    result.merged.venueName = existing.venueName;
+    result.merged.venueAddress = existing.venueAddress;
+  }
+  return result;
+}
