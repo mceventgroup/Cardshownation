@@ -7,7 +7,7 @@ import type { ImportedShow } from "../apps/web/lib/show-import-ingest";
 import type { PublicImportSource } from "../apps/web/lib/auto-import-sources";
 
 type Scan = { source: string; label: string; shows: ImportedShow[]; errors: string[]; coverage: string[] };
-type Snapshot = { version: number; generatedAt: string; sources: PublicImportSource[]; records: SnapshotRecord[] };
+type Snapshot = { version: number; generatedAt: string; eventbriteConfigured?: boolean; sources: PublicImportSource[]; records: SnapshotRecord[] };
 const args = process.argv.slice(2);
 const option = (name: string) => { const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1]; };
 const publish = args.includes("--publish");
@@ -107,7 +107,7 @@ async function main() {
     remainingChanges = 0;
     for (const scan of scans) remainingChanges += planLocalImport(scan.source, scan.shows, verified.records, centralToday()).changes.length;
   }
-  const summary = { runId, mode: publish ? "publish" : "dry-run", at: new Date().toISOString(), snapshotAt: snapshot.generatedAt, apiRequests: requests, remainingChanges, reports, scanFile: scanFile ?? scanPath };
+  const summary = { runId, mode: publish ? "publish" : "dry-run", at: new Date().toISOString(), snapshotAt: snapshot.generatedAt, eventbriteConfiguredOnServer: snapshot.eventbriteConfigured ?? null, apiRequests: requests, remainingChanges, reports, scanFile: scanFile ?? scanPath };
   const reportPath = resolve(output, `${runId}-report.json`);
   writeFileSync(reportPath, JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary, null, 2));

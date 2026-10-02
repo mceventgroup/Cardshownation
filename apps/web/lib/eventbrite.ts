@@ -104,6 +104,7 @@ async function fetchPage(
 
   const res = await fetch(`${EVENTBRITE_API}/events/search/?${params}`, {
     headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(20_000),
     next: { revalidate: 0 },
   });
 

@@ -43,10 +43,11 @@ export function validateImportedShow(value: unknown, source: string, today = cen
     return result;
   };
   const startDate = date("startDate"), endDate = date("endDate");
-  if (endDate < startDate || endDate.toISOString().slice(0, 10) < today) throw new Error("Expired or invalid date range");
+  // These are calendar dates; some feeds attach noon to the start and midnight to the end.
+  if (endDate.toISOString().slice(0, 10) < startDate.toISOString().slice(0, 10) || endDate.toISOString().slice(0, 10) < today) throw new Error("Expired or invalid date range");
   const state = text("state", true, 2)!.toUpperCase();
   if (!US_STATES.some((item) => item.code === state)) throw new Error("Invalid state");
-  if (!Array.isArray(row.categories) || !row.categories.length || row.categories.length > 12 || row.categories.some((item) => typeof item !== "string" || !item.trim() || item.length > 80 || /tcdb\.com/i.test(item))) throw new Error("Invalid categories");
+  if (!Array.isArray(row.categories) || row.categories.length > 12 || row.categories.some((item) => typeof item !== "string" || !item.trim() || item.length > 80 || /tcdb\.com/i.test(item))) throw new Error("Invalid categories");
   if (typeof row.isFree !== "boolean") throw new Error("Invalid admission status");
   const link = (key: string) => {
     if (source === "tcdb" && (key === "sourceUrl" || key === "websiteUrl")) return null;

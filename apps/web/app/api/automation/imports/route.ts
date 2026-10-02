@@ -7,6 +7,7 @@ import { getPublicImportSourceKey } from "@/lib/import-source-keys";
 import { ingestImportedShows, type ImportedShow } from "@/lib/show-import-ingest";
 import { approveShowSubmission, getDuplicateReview } from "@/lib/submissions";
 import { validateImportedShow, differentSessions } from "@/lib/local-import-plan";
+import { readResponseTextLimited } from "@/lib/safe-remote-fetch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
     db.showSubmission.findMany({ select: { id: true, status: true, reviewedShowId: true, payloadJson: true } }),
     getAllPublicImportSources(),
   ]);
-  return json({ version: 1, generatedAt: new Date().toISOString(), sources, records: [
+  return json({ version: 1, generatedAt: new Date().toISOString(), eventbriteConfigured: Boolean(process.env.EVENTBRITE_API_KEY), sources, records: [
     ...shows.map((show) => ({ id: show.id, kind: "show", status: show.status, record: safeRecord({ ...show, showName: show.title, startDate: show.startDate.toISOString().slice(0, 10), endDate: show.endDate.toISOString().slice(0, 10), venueName: show.venue?.name, venueAddress: show.venue?.address1 }) })),
     ...submissions.filter((row) => row.status === "PENDING" || Boolean((row.payloadJson as Record<string, unknown>).externalId)).map((row) => {
       const payload = row.payloadJson as Record<string, unknown>;
@@ -47,8 +48,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   if (!authorized(request)) return json({ error: "Unauthorized" }, 401);
   if (isFixtureMode()) return json({ error: "Live database is required" }, 503);
-  const content = await request.text();
-  if (Buffer.byteLength(content) > 1024 * 1024) return json({ error: "Batch exceeds 1 MB" }, 413);
+  let content: string;
+  try { content = await readResponseTextLimited(new Response(request.body, { headers: request.headers }), 1024 * 1024); }
+  catch { return json({ error: "Batch exceeds 1 MB" }, 413); }
   let input: { source: string; label: string; batchId: string; shows?: unknown[]; report?: { imported: number; skipped: number; errors: string[] } };
   try {
     input = JSON.parse(content);

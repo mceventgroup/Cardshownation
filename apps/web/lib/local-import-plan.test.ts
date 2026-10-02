@@ -36,3 +36,8 @@ test("Central dates retain an event through its local day", () => {
 test("trade nights are held for review instead of being merged into a same-venue show", () => {
   assert.equal(planLocalImport("other", [{ ...show, title: "Wichita Card Show Trade Night" }], [record()], "2026-10-02").ambiguous.length, 1);
 });
+test("calendar feeds can omit categories and attach different times to same-day dates", () => {
+  const parsed = validateImportedShow({ ...show, categories: [], startDate: new Date("2026-11-10T12:00:00Z"), endDate: new Date("2026-11-10T00:00:00Z") }, "test", "2026-10-02");
+  assert.deepEqual(parsed.categories, []);
+  assert.equal(parsed.endDate.toISOString().slice(0, 10), "2026-11-10");
+});
