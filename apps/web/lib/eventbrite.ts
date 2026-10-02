@@ -114,7 +114,7 @@ async function fetchPage(
   return res.json();
 }
 
-export async function fetchCardShowsFromEventbrite(apiKey: string): Promise<MappedShow[]> {
+export async function fetchCardShowsFromEventbrite(apiKey: string, options: { pageLimit?: number; onError?: (error: string) => void } = {}): Promise<MappedShow[]> {
   const seen = new Set<string>();
   const results: MappedShow[] = [];
 
@@ -123,7 +123,7 @@ export async function fetchCardShowsFromEventbrite(apiKey: string): Promise<Mapp
       let page = 1;
       let hasMore = true;
 
-      while (hasMore && page <= 3) {
+      while (hasMore && page <= (options.pageLimit ?? 3)) {
         const data = await fetchPage(apiKey, keyword, page);
 
         for (const event of data.events) {
@@ -164,7 +164,9 @@ export async function fetchCardShowsFromEventbrite(apiKey: string): Promise<Mapp
         hasMore = data.pagination.has_more_items;
         page++;
       }
-    } catch {
+      if (hasMore) options.onError?.(`${keyword}: pagination limit reached`);
+    } catch (error) {
+      options.onError?.(`${keyword}: ${error instanceof Error ? error.message : String(error)}`);
       // continue with next keyword if one fails
     }
   }

@@ -38,6 +38,7 @@ export type ImportSourceSummary = {
   enriched: number;
   skipped: number;
   errors: string[];
+  submissionIds?: string[];
 };
 
 export function mergeMissingImportedDetails(
@@ -58,15 +59,15 @@ function chunkValues<T>(values: T[], size: number) {
 async function getExistingImportedRecords(source: string, externalIds: string[]) {
   const uniqueExternalIds = [...new Set(externalIds.filter(Boolean))];
   if (uniqueExternalIds.length === 0) {
-    return new Map<string, { submissionId: string; reviewedShowId: string | null }>();
+    return new Map<string, { submissionId: string; reviewedShowId: string | null; status: string }>();
   }
 
-  const existing = new Map<string, { submissionId: string; reviewedShowId: string | null }>();
+  const existing = new Map<string, { submissionId: string; reviewedShowId: string | null; status: string }>();
 
   for (const batch of chunkValues(uniqueExternalIds, 250)) {
-    const batchRows = await db.$queryRaw<Array<{ externalId: string | null; submissionId: string; reviewedShowId: string | null }>>(
+    const batchRows = await db.$queryRaw<Array<{ externalId: string | null; submissionId: string; reviewedShowId: string | null; status: string }>>(
       Prisma.sql`
-        SELECT "payloadJson"->>'externalId' AS "externalId", "id" AS "submissionId", "reviewedShowId"
+        SELECT "payloadJson"->>'externalId' AS "externalId", "id" AS "submissionId", "reviewedShowId", "status"
         FROM "ShowSubmission"
         WHERE "payloadJson"->>'source' = ${source}
           AND "payloadJson"->>'externalId' IN (${Prisma.join(batch.map((value) => Prisma.sql`${value}`))})
@@ -75,7 +76,7 @@ async function getExistingImportedRecords(source: string, externalIds: string[])
 
     for (const row of batchRows) {
       if (row.externalId) {
-        existing.set(row.externalId, { submissionId: row.submissionId, reviewedShowId: row.reviewedShowId });
+        existing.set(row.externalId, { submissionId: row.submissionId, reviewedShowId: row.reviewedShowId, status: row.status });
       }
     }
   }
@@ -83,7 +84,7 @@ async function getExistingImportedRecords(source: string, externalIds: string[])
   return existing;
 }
 
-function importedPayload(show: ImportedShow, source: string, suppressSourceLinks: boolean, venueId: string | null = null) {
+export function importedPayload(show: ImportedShow, source: string, suppressSourceLinks: boolean, venueId: string | null = null) {
   return {
     externalId: show.externalId,
     showName: show.title,
@@ -219,12 +220,14 @@ export async function ingestImportedShows(input: {
   submitterEmail: string;
   shows: ImportedShow[];
   sourceErrors?: string[];
-}) {
+  recordLog?: boolean;
+}): Promise<ImportSourceSummary> {
   const suppressSourceLinks = input.source.toLowerCase() === "tcdb";
   let imported = 0;
   let enriched = 0;
   let skipped = 0;
   const errors: string[] = [...(input.sourceErrors ?? [])];
+  const submissionIds: string[] = [];
   const uniqueShows = new Map<string, ImportedShow>();
 
   for (const show of input.shows) {
@@ -247,6 +250,8 @@ export async function ingestImportedShows(input: {
       const candidatePayload = importedPayload(show, input.source, suppressSourceLinks);
       const existingRecord = existingRecords.get(show.externalId);
       if (existingRecord) {
+        if (existingRecord.status === "REJECTED") { skipped++; continue; }
+        if (existingRecord.status === "PENDING") submissionIds.push(existingRecord.submissionId);
         const didEnrich = existingRecord.reviewedShowId
           ? await enrichPublishedShow(existingRecord.reviewedShowId, candidatePayload)
           : await enrichSubmission(existingRecord.submissionId, candidatePayload);
@@ -298,7 +303,7 @@ export async function ingestImportedShows(input: {
         suffix++;
       }
 
-      await db.showSubmission.create({
+      const submission = await db.showSubmission.create({
         data: {
           submitterName: input.submitterName,
           submitterEmail: input.submitterEmail,
@@ -307,6 +312,7 @@ export async function ingestImportedShows(input: {
           payloadJson: { ...candidatePayload, venueId, slug },
         },
       });
+      submissionIds.push(submission.id);
 
       imported++;
     } catch (err) {
@@ -314,7 +320,7 @@ export async function ingestImportedShows(input: {
     }
   }
 
-  await db.importLog.create({
+  if (input.recordLog !== false) await db.importLog.create({
     data: {
       source: input.source,
       imported,
@@ -331,5 +337,6 @@ export async function ingestImportedShows(input: {
     enriched,
     skipped,
     errors,
+    submissionIds,
   } satisfies ImportSourceSummary;
 }

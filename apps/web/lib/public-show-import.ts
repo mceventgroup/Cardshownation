@@ -589,6 +589,17 @@ async function crawlLinkedEventPages(source: PublicImportSource, sourceHtml: str
   return [...collected.values()];
 }
 
+// Fetch and parse without opening a database connection. Shared by the local scanner.
+export async function fetchPublicSourceShows(source: PublicImportSource) {
+  const html = await fetchSourceHtml(source);
+  const directShows = extractShowsFromHtml(html, source);
+  const linkedShows = resolveSourceAdapter(source)?.crawlLinks === false
+    ? [] : await crawlLinkedEventPages(source, html);
+  const shows = [...new Map([...directShows, ...linkedShows].map((show) => [show.externalId, show])).values()];
+  if (!shows.length) throw new Error("No card-show listings were found. The source layout or feed may have changed.");
+  return shows;
+}
+
 export async function runPublicSourceImports(selectedSource: string = "all") {
   const allSources = await getAllPublicImportSources();
   const sources = selectedSource === "all"
@@ -598,16 +609,7 @@ export async function runPublicSourceImports(selectedSource: string = "all") {
 
   for (const source of sources) {
     try {
-      const html = await fetchSourceHtml(source);
-      const directShows = extractShowsFromHtml(html, source);
-      const linkedShows = resolveSourceAdapter(source)?.crawlLinks === false
-        ? []
-        : await crawlLinkedEventPages(source, html);
-      const showMap = new Map<string, ImportedShow>();
-      for (const show of [...directShows, ...linkedShows]) {
-        showMap.set(show.externalId, show);
-      }
-      const shows = [...showMap.values()];
+      const shows = await fetchPublicSourceShows(source);
       if (shows.length === 0) {
         const message = "No card-show listings were found. The source layout or feed may have changed.";
         results.push(await recordImportFailure({

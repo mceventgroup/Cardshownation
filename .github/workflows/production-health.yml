@@ -2,8 +2,10 @@ name: Production health
 on:
   workflow_dispatch:
   schedule:
-    # Leave time between database probes for Neon's 5-minute scale-to-zero window.
+    # Frequent liveness checks do not open database connections.
     - cron: '17,47 * * * *'
+    # Database readiness once a day; separate from application liveness.
+    - cron: '17 12 * * *'
 permissions:
   contents: read
 concurrency:
@@ -11,6 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   health:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17,47 * * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -19,3 +22,13 @@ jobs:
         with:
           node-version: 20
       - run: node scripts/check-production-health.mjs
+  database:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 12 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - run: node scripts/check-production-health.mjs --database
