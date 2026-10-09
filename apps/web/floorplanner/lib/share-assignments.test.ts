@@ -75,6 +75,40 @@ test('flyers keep vendors separate and include assignments in every room in natu
   }
 })
 
+test('flyers follow natural table sequence using each vendor’s first table without reordering the directory', () => {
+  const data = makeProject()
+  const table = data.tables['table-1']
+  const vendor = data.vendors['vendor-1']
+  const assignment = data.vendorAssignments['table-1']
+  data.tables = {}
+  data.vendors = {}
+  data.vendorAssignments = {}
+  const entries = [
+    { name: 'Alpha', displayId: 'A11', label: '', tableNumber: 11 },
+    { name: 'Zulu', displayId: 'A10', label: '', tableNumber: 10 },
+    { name: 'Middle', displayId: 'B1', label: '', tableNumber: 1 },
+    { name: 'Zulu', displayId: 'A2', label: '', tableNumber: 2 },
+    { name: 'Number Ten', displayId: '', label: '', tableNumber: 10 },
+    { name: 'Number Two', displayId: '', label: '2', tableNumber: 2 },
+  ]
+  entries.forEach((entry, index) => {
+    const id = `t-${index}` as TableId
+    const vendorId = entry.name as VendorId
+    data.tables[id] = { ...table, id, displayId: entry.displayId, label: entry.label, tableNumber: entry.tableNumber }
+    data.vendors[vendorId] = { ...vendor, id: vendorId, name: entry.name, companyName: entry.name }
+    data.vendorAssignments[id] = { ...assignment, id: `a-${index}` as VendorAssignmentId, tableId: id, vendorId, vendorName: entry.name }
+  })
+  const before = JSON.stringify(data)
+  const directoryBefore = buildDirectoryPages(data)
+  const flyers = buildTableFlyers(data)
+  const expected = ['Number Two', 'Number Ten', 'Zulu', 'Alpha', 'Middle']
+  assert.equal(flyers.length, expected.length)
+  expected.forEach((name, index) => assert.ok(flyers[index].svg.includes(`>${name}</text>`), `${name} should be flyer ${index + 1}`))
+  assert.ok(flyers[2].svg.includes('>A2, A10</text>'))
+  assert.deepEqual(buildDirectoryPages(data), directoryBefore)
+  assert.equal(JSON.stringify(data), before)
+})
+
 test('large assignments retain every table on one flyer and empty settings have an honest fallback', () => {
   const data = makeProject()
   const original = data.tables['table-1']

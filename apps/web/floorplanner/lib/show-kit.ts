@@ -75,9 +75,13 @@ export function buildTableFlyers(data: DocumentSlice): ExportDocument[] {
     return wrapped.map((line, i) => text(line, x, y + size + i * size * 1.3, size, color, weight)).join('')
   }
 
-  return assignedVendors(data).map(vendor => {
+  const flyers = assignedVendors(data).map(vendor => {
     const labels = [...new Set(vendor.tables.map(table => table.displayId || table.label || String(table.tableNumber)))]
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+    return { vendor, labels }
+  }).sort((a, b) => a.labels[0].localeCompare(b.labels[0], undefined, { numeric: true, sensitivity: 'base' }))
+
+  return flyers.map(({ vendor, labels }) => {
     const rooms = [...new Set(vendor.tables.map(table => getRoomLabel(data.room, table.roomId)))].join(', ')
     return document(850, 1100,
       block(data.settings.eventName || 'Card Show', 50, 40, 750, 85, 30, '#334155', 700) +
