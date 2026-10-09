@@ -58,19 +58,40 @@ export function buildDirectoryPages(data: DocumentSlice): ExportDocument[] {
 }
 
 export function buildTableFlyers(data: DocumentSlice): ExportDocument[] {
-  return assignedVendors(data).flatMap(vendor => vendor.tables.map(table => {
-    const label = table.displayId || table.label || String(table.tableNumber)
-    const name = lines(vendor.displayName, 27)
-    const labels = lines(label, 15)
+  const upcomingShows = [
+    [data.settings.upcomingShow1Date, data.settings.upcomingShow1Location],
+    [data.settings.upcomingShow2Date, data.settings.upcomingShow2Location],
+    [data.settings.upcomingShow3Date, data.settings.upcomingShow3Location],
+  ].map(show => show.map(value => value.trim()).filter(Boolean).join(' — ')).filter(Boolean)
+
+  // Fit each block without dropping names, assignments, rooms, or show details.
+  const block = (value: string, x: number, y: number, width: number, height: number, maxSize: number, color = '#0f172a', weight = 400) => {
+    let size = maxSize
+    let wrapped = lines(value, Math.max(1, Math.floor(width / (size * 0.7))))
+    while (wrapped.length * size * 1.3 > height) {
+      size *= 0.95
+      wrapped = lines(value, Math.max(1, Math.floor(width / (size * 0.7))))
+    }
+    return wrapped.map((line, i) => text(line, x, y + size + i * size * 1.3, size, color, weight)).join('')
+  }
+
+  return assignedVendors(data).map(vendor => {
+    const labels = [...new Set(vendor.tables.map(table => table.displayId || table.label || String(table.tableNumber)))]
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+    const rooms = [...new Set(vendor.tables.map(table => getRoomLabel(data.room, table.roomId)))].join(', ')
     return document(850, 1100,
-      lines(data.settings.eventName || 'Card Show', 44).slice(0, 2).map((line, i) => text(line, 50, 70 + i * 36, 30, '#334155', 700)).join('') +
-      text('THIS TABLE BELONGS TO', 50, 205, 20, '#64748b', 700) +
-      name.map((line, i) => text(line, 50, 275 + i * Math.min(56, 170 / name.length), Math.min(46, 150 / name.length), '#0f172a', 700)).join('') +
-      `<rect x="50" y="480" width="750" height="300" rx="20" fill="#f1f5f9"/>` + text('TABLE', 85, 530, 24, '#475569', 700) +
-      labels.map((line, i) => text(line, 85, 645 + i * Math.min(80, 150 / labels.length), Math.min(82, 150 / labels.length), '#0f172a', 700)).join('') +
-      lines(getRoomLabel(data.room, table.roomId), 42).slice(0, 3).map((line, i) => text(line, 50, 860 + i * 36, 30)).join('') +
-      text(data.settings.eventDate || 'Welcome to the show', 50, 1030, 24, '#475569'))
-  }))
+      block(data.settings.eventName || 'Card Show', 50, 40, 750, 85, 30, '#334155', 700) +
+      block(data.settings.eventDate || 'Welcome to the show', 50, 130, 750, 45, 24, '#475569') +
+      text(vendor.tables.length === 1 ? 'THIS TABLE BELONGS TO' : 'THESE TABLES BELONG TO', 50, 220, 20, '#64748b', 700) +
+      block(vendor.displayName, 50, 245, 750, 140, 46, '#0f172a', 700) +
+      `<rect x="50" y="410" width="750" height="260" rx="20" fill="#f1f5f9"/>` +
+      text(vendor.tables.length === 1 ? 'TABLE' : 'TABLES', 85, 460, 24, '#475569', 700) +
+      block(labels.join(', '), 85, 480, 680, 165, 72, '#0f172a', 700) +
+      block(rooms, 50, 690, 750, 90, 28) +
+      '<path d="M50 800H800" stroke="#cbd5e1"/>' +
+      text('UPCOMING SHOWS', 50, 840, 22, '#475569', 700) +
+      block(upcomingShows.join('\n') || 'No upcoming shows listed', 50, 860, 750, 190, 26, '#334155'))
+  })
 }
 
 export function buildSocialImage(data: DocumentSlice, headline: string, footer: string): ExportDocument {
