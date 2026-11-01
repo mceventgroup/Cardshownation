@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUpcomingShows } from "@/lib/shows";
+import { getPublicUpcomingShows as getUpcomingShows } from "@/lib/public-directory";
 
 // Public JSON API — for future mobile app consumption
 export async function GET(req: NextRequest) {

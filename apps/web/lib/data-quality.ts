@@ -1,6 +1,7 @@
 import type { UserRole } from "@csn/db";
 import { db } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit-log";
+import { invalidatePublicDirectory } from "@/lib/public-directory-cache";
 import { isFixtureMode } from "@/lib/data-mode";
 import { fetchPublicUrl } from "@/lib/safe-remote-fetch";
 import { informationScore, showMatchScore, type DedupeRecord } from "@/lib/show-dedupe";
@@ -355,6 +356,7 @@ export async function mergeQualityShows(keepId: string, removeId: string, actor:
   });
 
   await writeAuditLog({ actorId: actor.actorId, actorRole: actor.actorRole, action: "data_quality.shows_merged", targetType: "Show", targetId: keeper.id, details: { removedShowId: duplicate.id, removedTitle: duplicate.title, changedFields } });
+  invalidatePublicDirectory();
   return { keeperId: keeper.id, removedId: duplicate.id, changedFields };
 }
 
@@ -365,6 +367,7 @@ export async function deleteQualityShow(showId: string, actor: { actorId: string
   if (!show) return null;
   await db.show.delete({ where: { id: show.id } });
   await writeAuditLog({ actorId: actor.actorId, actorRole: actor.actorRole, action: "data_quality.show_deleted", targetType: "Show", targetId: show.id, details: { title: show.title, slug: show.slug } });
+  invalidatePublicDirectory();
   return show;
 }
 
@@ -373,6 +376,7 @@ export async function markQualityShowExpired(showId: string, actor: { actorId: s
   if (isFixtureMode()) return null;
   const show = await db.show.update({ where: { id: showId }, data: { status: "EXPIRED" }, select: { id: true, title: true } });
   await writeAuditLog({ actorId: actor.actorId, actorRole: actor.actorRole, action: "data_quality.show_expired", targetType: "Show", targetId: show.id, details: { title: show.title } });
+  invalidatePublicDirectory();
   return show;
 }
 

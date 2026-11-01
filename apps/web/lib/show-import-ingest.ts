@@ -1,5 +1,6 @@
 import { Prisma } from "@csn/db";
 import { db } from "@/lib/db";
+import { invalidatePublicDirectory } from "@/lib/public-directory-cache";
 import { getCityCoords } from "@/lib/city-coords";
 import { slugify } from "@/lib/utils";
 import { normalizeExternalUrl } from "@/lib/url";
@@ -183,6 +184,7 @@ async function enrichPublishedShow(showId: string, incoming: Record<string, unkn
       ...(venueId ? { venueId } : {}),
     },
   });
+  invalidatePublicDirectory();
   return true;
 }
 

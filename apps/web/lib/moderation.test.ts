@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import test, { afterEach, before, mock } from "node:test";
+
+const nextCache = createRequire(import.meta.url)("next/cache") as typeof import("next/cache");
 
 process.env.DATABASE_URL ??= "postgresql://user@localhost:5432/csn_test";
 process.env.CSN_DATA_MODE = "live";
@@ -650,6 +653,7 @@ test("approveShowClaimUpdate rejects non-reviewer roles", async () => {
 });
 
 test("mergeDuplicateSubmission adds missing details without overwriting the published listing", async () => {
+  const invalidation = mock.method(nextCache, "revalidateTag", () => {});
   const incoming = {
     showName: "KC Card Show",
     startDate: "2026-10-17",
@@ -705,6 +709,7 @@ test("mergeDuplicateSubmission adds missing details without overwriting the publ
   assert.equal(update.websiteUrl, "https://example.com/show");
   assert.deepEqual(update.categories, ["Sports Cards", "Pokemon"]);
   assert.equal(updateSubmissionMock.mock.calls.at(-1)?.arguments[0].data.status, "APPROVED");
+  assert.deepEqual(invalidation.mock.calls.map(call => call.arguments), [["public-show-directory-v1", { expire: 0 }]]);
 });
 
 test("rejectShowSubmission rejects non-admin, non-moderator reviewer roles", async () => {

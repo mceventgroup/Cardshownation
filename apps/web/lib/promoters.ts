@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { invalidatePublicDirectory } from "@/lib/public-directory-cache";
 import { isFixtureMode } from "@/lib/data-mode";
 import { saveFlyerImage } from "@/lib/flyers";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
@@ -1103,6 +1104,7 @@ export async function cleanupPromoterTestData() {
         organizerId: { in: organizerIds },
       },
     });
+    invalidatePublicDirectory();
 
     await db.organizer.deleteMany({
       where: {

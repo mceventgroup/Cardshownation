@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit-log";
+import { invalidatePublicDirectory } from "@/lib/public-directory-cache";
 import { isFixtureMode } from "@/lib/data-mode";
 import { getCityCoords } from "@/lib/city-coords";
 import { resolveManagedFlyerImageUrl } from "@/lib/flyers";
@@ -521,7 +522,7 @@ export async function createApprovedShowFromPayload(payload: Record<string, unkn
     readString(payload, "flyerImageUrl")
   );
 
-  return db.show.create({
+  const created = await db.show.create({
     data: {
       title: readString(payload, "showName") ?? "Untitled Show",
       slug,
@@ -562,6 +563,8 @@ export async function createApprovedShowFromPayload(payload: Record<string, unkn
       venueId,
     },
   });
+  invalidatePublicDirectory();
+  return created;
 }
 
 export async function createShowSubmission(input: {
@@ -900,6 +903,7 @@ export async function mergeDuplicateSubmission(
     details: { duplicateKind: review.kind, duplicateId: review.id, changedFields },
   });
 
+  if (review.kind === "show") invalidatePublicDirectory();
   return { kind: review.kind, id: review.id, reviewedShowId, changedFields };
 }
 

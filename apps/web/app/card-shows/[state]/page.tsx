@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, CalendarDays, MapPin, Megaphone } from "lucide-react";
-import { getCitiesWithShows, getShowsByState } from "@/lib/shows";
+import { getPublicCitiesWithShows as getCitiesWithShows, getPublicShowsByState as getShowsByState } from "@/lib/public-directory";
 import { getStateBySlug } from "@/lib/states";
 import { ShowListItem } from "@/components/shows/show-list-item";
 import { slugify } from "@/lib/utils";

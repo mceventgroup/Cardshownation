@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, CalendarDays, MapPin, Megaphone } from "lucide-react";
 import { ShowListItem } from "@/components/shows/show-list-item";
-import { getShowsByCity, getCitiesWithShows } from "@/lib/shows";
+import { getPublicShowsByCity as getShowsByCity, getPublicCitiesWithShows as getCitiesWithShows } from "@/lib/public-directory";
 import { getStateBySlug } from "@/lib/states";
 import { slugify } from "@/lib/utils";
 import { serializeJsonLd } from "@/lib/safe-json-ld";

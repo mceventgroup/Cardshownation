@@ -2,6 +2,7 @@ import { Prisma } from "@csn/db";
 import type { UserRole } from "@csn/db";
 import { customAlphabet } from "nanoid";
 import { writeAuditLog } from "@/lib/audit-log";
+import { invalidatePublicDirectory } from "@/lib/public-directory-cache";
 import { db } from "@/lib/db";
 import { isFixtureMode } from "@/lib/data-mode";
 import { filterShowsByCityDistance } from "@/lib/nearby-shows";
@@ -1008,6 +1009,7 @@ export async function bulkCreateShows(
     },
   });
 
+  invalidatePublicDirectory();
   return {
     created: preparedRows.length,
     skipped: errors.length,
@@ -1536,6 +1538,7 @@ export async function updateAdminShowDetails(
     },
   });
 
+  invalidatePublicDirectory();
   return { success: true as const, reason: null };
 }
 
@@ -1559,6 +1562,7 @@ export async function ensureManagedShowFlyerImage(
       data: { flyerImageUrl: managedFlyerImageUrl },
     });
 
+    invalidatePublicDirectory();
     return managedFlyerImageUrl;
   } catch {
     return flyerImageUrl;

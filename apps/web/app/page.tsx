@@ -10,7 +10,7 @@ import { ShowListItem } from "@/components/shows/show-list-item";
 import { getPublicPortalLink } from "@/lib/public-portal";
 import { isPurchasingEnabled } from "@/lib/purchasing";
 import { PREFERRED_STATE_COOKIE_NAME } from "@/lib/preferred-state";
-import { getHomepageDirectoryStats, getUpcomingShows } from "@/lib/shows";
+import { getPublicDirectoryStats as getHomepageDirectoryStats, getPublicUpcomingShows as getUpcomingShows } from "@/lib/public-directory";
 import { getHomeShowFeed } from "@/lib/home-show-feed";
 import { getStateByCode, US_STATES } from "@/lib/states";
 import { getUserSession } from "@/lib/user-auth";

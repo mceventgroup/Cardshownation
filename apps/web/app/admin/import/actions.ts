@@ -2,6 +2,7 @@
 
 import { requireAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
+import { invalidatePublicDirectory } from "@/lib/public-directory-cache";
 import { getCityCoords } from "@/lib/city-coords";
 import { normalizeExternalUrl } from "@/lib/url";
 
@@ -361,5 +362,6 @@ export async function importShows(rows: ImportRow[]): Promise<ImportResult> {
     updated = toUpdate.length;
   }
 
+  if (imported || updated) invalidatePublicDirectory();
   return { imported, updated, errors };
 }

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit-log";
+import { invalidatePublicDirectory } from "@/lib/public-directory-cache";
 
 export async function expirePastShows(now = new Date()) {
   const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -17,5 +18,6 @@ export async function expirePastShows(now = new Date()) {
   const ids = candidates.map(({ id }) => id);
   const result = await db.show.updateMany({ where: { id: { in: ids }, status: "APPROVED" }, data: { status: "EXPIRED" } });
   await writeAuditLog({ action: "shows.expired", targetType: "Show", details: { count: result.count, ids: ids.slice(0, 100) } });
+  if (result.count) invalidatePublicDirectory();
   return { expired: result.count };
 }
