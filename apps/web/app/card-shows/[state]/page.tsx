@@ -10,6 +10,7 @@ import { slugify } from "@/lib/utils";
 import { serializeJsonLd } from "@/lib/safe-json-ld";
 import { absoluteSiteUrl } from "@/lib/site-url";
 import { getStateSeo, parseStatePage, STATE_PAGE_SIZE, statePagePath } from "@/lib/state-seo";
+import { DALLAS_FORT_WORTH_PATH, WISCONSIN_WEEKEND_PATH } from "@/lib/local-calendars";
 
 export const revalidate = 3600;
 export const dynamic = "force-dynamic";
@@ -144,6 +145,12 @@ export default async function StatePage({ params, searchParams }: Props) {
           <a href="#upcoming-shows" className="mt-4 inline-block text-sm font-semibold text-brand-700 underline underline-offset-4">
             See upcoming dates and venues
           </a>
+          {page === 1 && (stateRecord.code === "WI" || stateRecord.code === "TX") && (
+            <Link className="mt-2 block text-sm font-semibold text-brand-700 underline underline-offset-4"
+              href={stateRecord.code === "WI" ? WISCONSIN_WEEKEND_PATH : DALLAS_FORT_WORTH_PATH}>
+              {stateRecord.code === "WI" ? "Wisconsin shows this weekend" : "Dallas–Fort Worth card shows"}
+            </Link>
+          )}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-3xl bg-slate-50 p-4">

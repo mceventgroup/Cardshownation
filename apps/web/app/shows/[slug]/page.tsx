@@ -199,8 +199,9 @@ export default async function ShowDetailPage({ params, searchParams }: Props) {
     "@context": "https://schema.org",
     "@type": "Event",
     name: show.title,
-    startDate: show.startDate.toISOString(),
-    endDate: show.endDate.toISOString(),
+    // These are calendar dates. Venue hours are stored separately as display text.
+    startDate: show.startDate.toISOString().slice(0, 10),
+    endDate: show.endDate.toISOString().slice(0, 10),
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     description: show.description ?? undefined,

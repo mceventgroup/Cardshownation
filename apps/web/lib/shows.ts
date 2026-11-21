@@ -512,6 +512,34 @@ export async function getShowsByState(stateCode: string, limit = 24) {
   });
 }
 
+export async function getCalendarShows(state: string, from: string, before: string, cities: string[] = []) {
+  const firstDay = new Date(from);
+  const afterLastDay = new Date(before);
+  if (isFixtureMode()) {
+    const citySet = new Set(cities.map(city => city.toLowerCase()));
+    return (await getAllFixtureShows())
+      .filter(show => show.state === state
+        && isUpcomingCalendarShow(show, firstDay)
+        && show.startDate < afterLastDay
+        && (citySet.size === 0 || citySet.has(show.city.toLowerCase())))
+      .sort((left, right) => left.startDate.getTime() - right.startDate.getTime()
+        || left.city.localeCompare(right.city) || left.title.localeCompare(right.title)
+        || left.id.localeCompare(right.id))
+      .map(projectShowCard);
+  }
+
+  return db.show.findMany({
+    where: {
+      ...upcomingShowWhere(firstDay),
+      state,
+      startDate: { lt: afterLastDay },
+      ...(cities.length ? { city: { in: cities, mode: "insensitive" } } : {}),
+    },
+    orderBy: [{ startDate: "asc" }, { city: "asc" }, { title: "asc" }, { id: "asc" }],
+    select: showCardSelect,
+  });
+}
+
 export async function getShowsByCity(
   stateCode: string,
   city: string,

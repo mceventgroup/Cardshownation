@@ -5,6 +5,8 @@ import { getStateByCode } from "@/lib/states";
 import { slugify } from "@/lib/utils";
 import { isFixtureMode } from "@/lib/data-mode";
 import { MIN_INDEXABLE_CITY_SHOWS } from "@/lib/city-seo";
+import { DALLAS_FORT_WORTH_CITIES, DALLAS_FORT_WORTH_PATH, getDallasFortWorthCalendar, getWeekendCalendar, WISCONSIN_WEEKEND_PATH } from "@/lib/local-calendars";
+import { getPublicCalendarShows } from "@/lib/public-directory";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://cardshownation.com";
 
@@ -85,7 +87,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ];
     });
 
-    return [...staticPages, ...statePages, ...cityPages, ...showPages];
+    const weekend = getWeekendCalendar();
+    const metro = getDallasFortWorthCalendar();
+    const [wisconsinShows, dallasShows] = await Promise.allSettled([
+      getPublicCalendarShows("WI", weekend.from, weekend.before),
+      getPublicCalendarShows("TX", metro.from, metro.before, DALLAS_FORT_WORTH_CITIES),
+    ]);
+    const localPages: MetadataRoute.Sitemap = [];
+    if (wisconsinShows.status === "fulfilled" && wisconsinShows.value.length) {
+      localPages.push({ url: BASE_URL + WISCONSIN_WEEKEND_PATH, changeFrequency: "daily" });
+    }
+    if (dallasShows.status === "fulfilled" && dallasShows.value.length) {
+      localPages.push({ url: BASE_URL + DALLAS_FORT_WORTH_PATH, changeFrequency: "daily" });
+    }
+    return [...staticPages, ...statePages, ...cityPages, ...localPages, ...showPages];
   } catch (error) {
     if (process.env.NODE_ENV === "development") {
       console.error("[sitemap] falling back to static pages:", error);
