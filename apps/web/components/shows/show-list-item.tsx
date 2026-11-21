@@ -37,7 +37,7 @@ export function ShowListItem({ show }: { show: ShowCard }) {
           </time>
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 sm:text-sm">
-          <span className="flex items-center gap-1">
+          <span className="flex min-w-0 max-w-full items-center gap-1">
             <MapPin className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
             <span className="truncate">
               {show.city}, {show.state}
