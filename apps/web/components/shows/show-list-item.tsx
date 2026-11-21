@@ -1,12 +1,9 @@
 import Link from "next/link";
 import { ArrowRight, MapPin, Clock } from "lucide-react";
-import { getStateByCode } from "@/lib/states";
 import { formatShowDate } from "@/lib/utils";
 import type { ShowCard } from "@/types";
 
 export function ShowListItem({ show }: { show: ShowCard }) {
-  const stateName = getStateByCode(show.state)?.name ?? show.state;
-
   return (
     <Link
       href={`/shows/${show.slug}`}
@@ -15,10 +12,10 @@ export function ShowListItem({ show }: { show: ShowCard }) {
       {/* Date badge */}
       <div className="w-12 shrink-0 text-center sm:w-14">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-700 sm:text-[11px]">
-          {new Date(show.startDate).toLocaleString("en-US", { month: "short" })}
+          {new Date(show.startDate).toLocaleString("en-US", { month: "short", timeZone: "UTC" })}
         </p>
         <p className="text-base font-bold leading-none text-slate-950 sm:text-lg">
-          {new Date(show.startDate).getDate()}
+          {new Date(show.startDate).getUTCDate()}
         </p>
       </div>
 
@@ -34,6 +31,11 @@ export function ShowListItem({ show }: { show: ShowCard }) {
             </span>
           )}
         </div>
+        <p className="mt-1 text-xs text-slate-600 sm:text-sm">
+          <time dateTime={new Date(show.startDate).toISOString().slice(0, 10)}>
+            {formatShowDate(show.startDate, show.endDate)}
+          </time>
+        </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 sm:text-sm">
           <span className="flex items-center gap-1">
             <MapPin className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />

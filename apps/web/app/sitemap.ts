@@ -1,3 +1,4 @@
+import { upcomingShowWhere } from "@/lib/show-calendar";
 import type { MetadataRoute } from "next";
 import { db } from "@/lib/db";
 import { getStateByCode } from "@/lib/states";
@@ -29,14 +30,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (isFixtureMode()) return staticPages;
 
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const where = upcomingShowWhere();
 
     const shows = await db.show.findMany({
-      where: {
-        status: "APPROVED",
-        endDate: { gte: today },
-      },
+      where,
       select: { slug: true, updatedAt: true },
     });
 
@@ -49,7 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const stateResults = await db.show.groupBy({
       by: ["state"],
-      where: { status: "APPROVED", endDate: { gte: today } },
+      where,
       _count: { state: true },
       _max: { updatedAt: true },
     });
@@ -69,7 +66,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const cityResults = await db.show.groupBy({
       by: ["city", "state"],
-      where: { status: "APPROVED", endDate: { gte: today } },
+      where,
       _count: { city: true },
       _max: { updatedAt: true },
     });

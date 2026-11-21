@@ -15,6 +15,7 @@ import {
 } from "@/lib/fixture-store";
 import { slugify } from "@/lib/utils";
 import { normalizeExternalUrl } from "@/lib/url";
+import { upcomingShowWhere, isUpcomingCalendarShow } from "@/lib/show-calendar";
 
 export const SHOW_CATEGORIES = [
   "Sports Cards",
@@ -188,19 +189,11 @@ const showCardSelect = {
 };
 
 function startOfToday() {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
+  return upcomingShowWhere().endDate.gte;
 }
 
 function upcomingWhere() {
-  const today = startOfToday();
-
-  return {
-    status: "APPROVED" as const,
-    startDate: { gte: today },
-    OR: [{ expiresAt: null }, { expiresAt: { gte: today } }],
-  };
+  return upcomingShowWhere();
 }
 
 function compareKansasPriority(aState: string, bState: string) {
@@ -245,12 +238,7 @@ function sortShows(
 }
 
 function isUpcomingFixtureShow(show: FixtureShow) {
-  const today = startOfToday();
-  return (
-    show.status === "APPROVED" &&
-    show.startDate >= today &&
-    (!show.expiresAt || show.expiresAt >= today)
-  );
+  return isUpcomingCalendarShow(show);
 }
 
 function projectShowCard(show: FixtureShow) {
@@ -367,11 +355,11 @@ export async function getUpcomingShows({
     };
   }
 
-  const today = startOfToday();
   const where: any = upcomingWhere();
+  const today = where.endDate.gte as Date;
   const clauses: Prisma.Sql[] = [
     Prisma.sql`s.status = 'APPROVED'`,
-    Prisma.sql`s."startDate" >= ${today}`,
+    Prisma.sql`s."endDate" >= ${today}`,
     Prisma.sql`(s."expiresAt" IS NULL OR s."expiresAt" >= ${today})`,
   ];
 
@@ -474,7 +462,8 @@ export async function getUpcomingShows({
         CASE WHEN s.state = 'KS' THEN 0 ELSE 1 END ASC,
         s.state ASC,
         s.city ASC,
-        s.title ASC
+        s.title ASC,
+        s.id ASC
       LIMIT ${limit}
       OFFSET ${offset}
     `).then((rows) =>
@@ -1223,7 +1212,7 @@ export async function getNearbyShows({
     FROM "Show" s
     JOIN "Venue" v ON s."venueId" = v.id
     WHERE s.status = 'APPROVED'
-      AND s."startDate" >= ${today}
+      AND s."endDate" >= ${today}
       AND (s."expiresAt" IS NULL OR s."expiresAt" >= ${today})
       AND v.latitude IS NOT NULL
       AND v.longitude IS NOT NULL
